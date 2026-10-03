@@ -1,7 +1,10 @@
 use uuid::Uuid;
 
 use crate::{
-    application::password::hash::{HashPasswordError, hash_password},
+    application::password::{
+        hash::{HashPasswordError, hash_password},
+        verify::{VerifyPasswordError, verify_password},
+    },
     persistence::users::{
         find_by_id::{FindByIdUserError, find_user_by_id},
         save::{SaveUserError, save_user},
@@ -11,11 +14,13 @@ use crate::{
 pub enum SetUserPasswordError {
     UserNotFound,
     HashingError,
+    InvalidCredentials,
     DatabaseError,
 }
 
 pub async fn set_user_password(
     user_id: Uuid,
+    current_password: &str,
     new_password: &str,
 ) -> Result<(), SetUserPasswordError> {
     let user = find_user_by_id(user_id).await.map_err(|e| match e {
@@ -27,7 +32,13 @@ pub async fn set_user_password(
         return Err(SetUserPasswordError::UserNotFound);
     };
 
-    // Hash the new password
+    // ==== Verify the old password ====
+    verify_password(current_password, user.password_hash()).map_err(|e| match e {
+        VerifyPasswordError::HashingError => SetUserPasswordError::HashingError,
+        VerifyPasswordError::InvalidPassword => SetUserPasswordError::InvalidCredentials,
+    })?;
+
+    // ==== Set the new password ====
     let hashed_password = hash_password(new_password).map_err(|e| match e {
         HashPasswordError::HashingError => SetUserPasswordError::HashingError,
     })?;

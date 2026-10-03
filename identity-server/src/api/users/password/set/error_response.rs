@@ -18,6 +18,11 @@ pub enum SetPasswordErrorResponse {
     #[description("The user was not found.")]
     UserNotFound,
 
+    #[status_code(StatusCode::UNAUTHORIZED)]
+    #[error("invalid_credentials")]
+    #[description("The provided credentials are invalid.")]
+    InvalidCredentials,
+
     #[status_code(StatusCode::INTERNAL_SERVER_ERROR)]
     #[error("internal_server_error")]
     #[description("An internal server error occurred.")]

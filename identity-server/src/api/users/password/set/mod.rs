@@ -29,6 +29,9 @@ pub mod request;
         (status = 404, description = "User not found", body = ErrorBody,
             example = json!({"error": "user_not_found", "error_description": "The user was not found."}),
         ),
+        (status = 401, description = "Invalid credentials", body = ErrorBody,
+            example = json!({"error": "invalid_credentials", "error_description": "The provided credentials are invalid."}),
+        ),
         (status = 500, description = "Internal server error", body = ErrorBody,
             example = json!({"error": "internal_server_error", "error_description": "An internal server error occurred."}),
         ),
@@ -37,17 +40,23 @@ pub mod request;
 #[axum::debug_handler]
 pub async fn set_password_endpoint(
     Path(user_id): Path<String>,
-    SetPasswordRequest { new_password }: request::SetPasswordRequest,
+    SetPasswordRequest {
+        current_password,
+        new_password,
+    }: request::SetPasswordRequest,
 ) -> Result<Response, SetPasswordErrorResponse> {
     let Ok(user_id) = uuid::Uuid::parse_str(&user_id) else {
         return Err(SetPasswordErrorResponse::InvalidUserId);
     };
 
-    set_user_password(user_id, &new_password)
+    set_user_password(user_id, &current_password, &new_password)
         .await
         .map_err(|e| match e {
             SetUserPasswordError::DatabaseError => SetPasswordErrorResponse::InternalServerError,
             SetUserPasswordError::HashingError => SetPasswordErrorResponse::InternalServerError,
+            SetUserPasswordError::InvalidCredentials => {
+                SetPasswordErrorResponse::InvalidCredentials
+            }
             SetUserPasswordError::UserNotFound => SetPasswordErrorResponse::UserNotFound,
         })?;
 
