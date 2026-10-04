@@ -8,14 +8,14 @@ A from-scratch implementation of **OAuth 2.1** (and the surrounding RFCs) in Rus
 
 A OAuth server without some system to use it is not very useful. That's why this repo contains multiple projects.
 
-- [`identity-server`](identity-server): a user management service that the auth-server uses to check credentials.
-- [`auth-server`](auth-server): the OAuth authorization server.
+- [`identity-server`](identity-server/README.md): a user management service that the auth-server uses to check credentials.
+- [`auth-server`](auth-server/README.md): the OAuth authorization server.
 
 A [rfc-editor](https://www.rfc-editor.org/) like specification manager, split into three parts:
 
-- [`spec-provider`](spec-provider): a resource server that contains the specs and serves them to clients.
-- [`spec-editor`](spec-editor) (TODO): a client for editing the specs, which calls the spec-provider to save them.
-- [`spec-viewer`](spec-viewer) (TODO): a client for viewing the specs, which calls the spec-provider to read them.
+- `spec-provider`: a resource server that contains the specs and serves them to clients.
+- `spec-editor` (TODO): a client for editing the specs, which calls the spec-provider to save them.
+- `spec-viewer` (TODO): a client for viewing the specs, which calls the spec-provider to read them.
 
 The services are tested together by [`e2e-tests`](e2e-tests), black-box tests against the running stacks.
 
