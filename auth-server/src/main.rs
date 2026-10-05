@@ -12,6 +12,7 @@ mod api;
 mod config;
 mod domain;
 mod persistence;
+mod util;
 mod web;
 
 #[tokio::main]

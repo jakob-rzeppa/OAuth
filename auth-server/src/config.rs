@@ -2,14 +2,20 @@ use std::sync::LazyLock;
 
 struct Config {
     redis_url: String,
+    identity_server_url: String,
     database_url: String,
     app_port: u16,
     access_token_ttl: u32,
+    login_session_ttl: u64,
+    user_session_ttl: u64,
     iss: String,
 }
 
 static CONFIG: LazyLock<Config> = LazyLock::new(|| {
     let redis_url = std::env::var("REDIS_URL").expect("REDIS_URL must be set");
+
+    let identity_server_url =
+        std::env::var("IDENTITY_SERVER_URL").expect("IDENTITY_SERVER_URL must be set");
 
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
 
@@ -23,19 +29,36 @@ static CONFIG: LazyLock<Config> = LazyLock::new(|| {
         .parse()
         .expect("ACCESS_TOKEN_TTL must be a valid duration");
 
+    let login_session_ttl = std::env::var("LOGIN_SESSION_TTL")
+        .expect("LOGIN_SESSION_TTL must be set")
+        .parse()
+        .expect("LOGIN_SESSION_TTL must be a valid duration");
+
+    let user_session_ttl = std::env::var("USER_SESSION_TTL")
+        .expect("USER_SESSION_TTL must be set")
+        .parse()
+        .expect("USER_SESSION_TTL must be a valid duration");
+
     let iss = std::env::var("ISSUER_IDENTIFIER").expect("ISSUER_IDENTIFIER must be set");
 
     Config {
         redis_url,
+        identity_server_url,
         database_url,
         app_port,
         access_token_ttl,
+        login_session_ttl,
+        user_session_ttl,
         iss,
     }
 });
 
 pub fn redis_url() -> &'static str {
     &CONFIG.redis_url
+}
+
+pub fn identity_server_url() -> &'static str {
+    &CONFIG.identity_server_url
 }
 
 pub fn database_url() -> &'static str {
@@ -48,6 +71,16 @@ pub fn app_port() -> u16 {
 
 pub fn access_token_ttl() -> u32 {
     CONFIG.access_token_ttl
+}
+
+#[fnmock::fakeable]
+pub fn login_session_ttl() -> u64 {
+    CONFIG.login_session_ttl
+}
+
+#[fnmock::fakeable]
+pub fn user_session_ttl() -> u64 {
+    CONFIG.user_session_ttl
 }
 
 #[fnmock::fakeable]

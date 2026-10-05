@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Login</title>
+</head>
+<body>
+    <h1>Login</h1>
+
+    <form method="post" action="/login">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="return_to" value="{{ return_to }}">
+
+        <!-- Display error message if it exists -->
+        {% if let Some(error_message) = error_message %}
+            <p style="color: red;">{{ error_message }}</p>
+        {% endif %}
+
+        <label>Username <input type="text" name="user_name" autocomplete="username" {% if let Some(user_name) = user_name %}value="{{ user_name }}" {% endif %}required></label>
+        <label>Password <input type="password" name="password" autocomplete="current-password" required></label>
+
+        <button type="submit">Log in</button>
+    </form>
+</body>
+</html>

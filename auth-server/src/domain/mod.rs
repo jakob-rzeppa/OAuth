@@ -7,4 +7,6 @@ pub mod entity {
     }
 
     pub mod access_token;
+    pub mod login_session;
+    pub mod user_session;
 }

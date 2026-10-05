@@ -1,4 +1,5 @@
 mod authorize;
+mod login;
 
 use axum::{
     Router,
@@ -10,6 +11,7 @@ use axum::{
 pub fn router() -> Router {
     Router::new()
         .merge(authorize::router())
+        .merge(login::router())
         .layer(map_response(set_referrer_policy))
         .layer(map_response(prevent_framing))
 }
