@@ -1,4 +1,3 @@
-mod request;
 mod response;
 
 use crate::{
@@ -11,8 +10,8 @@ use crate::{
     },
     web::login::{
         error_response::LoginErrorResponse,
-        page::{request::LoginPageQuery, response::LoginPageResponse},
-        return_to::is_local_path,
+        page::response::LoginPageResponse,
+        return_to::{ReturnToQuery, is_local_path},
     },
 };
 
@@ -22,7 +21,7 @@ use crate::{
 /// token, which is handed to the browser as a cookie. The CSRF token is also embedded in the form,
 /// so the submit endpoint can check that the form was served together with that cookie.
 pub async fn login_page_endpoint(
-    LoginPageQuery { return_to }: LoginPageQuery,
+    ReturnToQuery { return_to }: ReturnToQuery,
 ) -> Result<LoginPageResponse, LoginErrorResponse> {
     if !is_local_path(&return_to) {
         return Err(LoginErrorResponse::InvalidReturnTo);

@@ -12,7 +12,6 @@ use crate::web::login::{
 
 #[derive(Deserialize)]
 pub struct LoginFormSubmitRequest {
-    pub return_to: String,
     pub csrf_token: String,
 
     pub user_name: String,
@@ -94,14 +93,13 @@ mod tests {
     async fn form_is_read_from_the_urlencoded_body() {
         let request = form_request(
             "application/x-www-form-urlencoded",
-            "csrf_token=c%2Bsrf&return_to=%2Fauthorize%3Fclient_id%3D1&user_name=alice&password=p%26ss",
+            "csrf_token=c%2Bsrf&user_name=alice&password=p%26ss",
         );
 
         let form = LoginFormSubmitRequest::from_request(request, &()).await;
 
         let form = form.ok().expect("expected the form to parse");
         assert_eq!(form.csrf_token, "c+srf");
-        assert_eq!(form.return_to, "/authorize?client_id=1");
         assert_eq!(form.user_name, "alice");
         assert_eq!(form.password, "p&ss");
     }
@@ -110,7 +108,7 @@ mod tests {
     async fn form_fails_when_a_field_is_missing() {
         let request = form_request(
             "application/x-www-form-urlencoded",
-            "csrf_token=c&return_to=%2F&user_name=alice",
+            "csrf_token=c&user_name=alice",
         );
 
         let form = LoginFormSubmitRequest::from_request(request, &()).await;

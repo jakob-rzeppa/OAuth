@@ -18,7 +18,7 @@ use crate::{
         cookie::{LOGIN_SESSION_COOKIE, USER_SESSION_COOKIE, expired_cookie, session_cookie},
         error_response::LoginErrorResponse,
         page::login_page,
-        return_to::is_local_path,
+        return_to::{ReturnToQuery, is_local_path},
         submit::request::{LoginFormSubmitRequest, LoginSessionToken},
     },
 };
@@ -26,16 +26,17 @@ use crate::{
 #[axum::debug_handler]
 pub async fn login_submit_endpoint(
     LoginSessionToken(session_token): LoginSessionToken,
+    ReturnToQuery { return_to }: ReturnToQuery,
     request: LoginFormSubmitRequest,
 ) -> Result<Response, LoginErrorResponse> {
     let LoginFormSubmitRequest {
-        return_to,
         csrf_token,
         user_name,
         password,
     } = request;
 
-    // `return_to` is a form field, so it is as untrusted as the query it was copied from.
+    // `return_to` comes from the query string, so it is as untrusted as the one the page was
+    // served with.
     if !is_local_path(&return_to) {
         return Err(LoginErrorResponse::InvalidReturnTo);
     }
@@ -128,9 +129,14 @@ mod tests {
         },
     };
 
-    fn form(csrf_token: &str, return_to: &str) -> LoginFormSubmitRequest {
-        LoginFormSubmitRequest {
+    fn return_to(return_to: &str) -> ReturnToQuery {
+        ReturnToQuery {
             return_to: return_to.to_string(),
+        }
+    }
+
+    fn form(csrf_token: &str) -> LoginFormSubmitRequest {
+        LoginFormSubmitRequest {
             csrf_token: csrf_token.to_string(),
             user_name: "alice".to_string(),
             password: "secret".to_string(),
@@ -165,7 +171,8 @@ mod tests {
 
         let response = login_submit_endpoint(
             login_session_token(),
-            form("csrf", "/authorize?client_id=1"),
+            return_to("/authorize?client_id=1"),
+            form("csrf"),
         )
         .await
         .ok()
@@ -221,8 +228,12 @@ mod tests {
     async fn fails_with_invalid_csrf_token_when_it_differs_from_the_login_session() {
         take_login_session_fake().setup(|_| Ok(Some(LoginSession::new("csrf".to_string()))));
 
-        let result =
-            login_submit_endpoint(login_session_token(), form("other", "/authorize")).await;
+        let result = login_submit_endpoint(
+            login_session_token(),
+            return_to("/authorize"),
+            form("other"),
+        )
+        .await;
 
         assert!(matches!(result, Err(LoginErrorResponse::InvalidCsrfToken)));
     }
@@ -239,8 +250,12 @@ mod tests {
             "authorize",
             "/ok\r\nSet-Cookie: a=b",
         ] {
-            let result =
-                login_submit_endpoint(login_session_token(), form("wrong-csrf", return_to)).await;
+            let result = login_submit_endpoint(
+                login_session_token(),
+                self::return_to(return_to),
+                form("wrong-csrf"),
+            )
+            .await;
 
             assert!(
                 matches!(result, Err(LoginErrorResponse::InvalidReturnTo)),
@@ -256,10 +271,11 @@ mod tests {
         login_session_ttl_fake().setup(|| 900);
         save_login_session_mock().setup(|_, _, _| Ok(()));
 
-        let response = login_submit_endpoint(login_session_token(), form("csrf", "/authorize"))
-            .await
-            .ok()
-            .expect("expected a successful result");
+        let response =
+            login_submit_endpoint(login_session_token(), return_to("/authorize"), form("csrf"))
+                .await
+                .ok()
+                .expect("expected a successful result");
 
         assert_eq!(response.status(), StatusCode::OK);
         let cookie = response

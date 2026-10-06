@@ -71,9 +71,13 @@ mod tests {
     use super::*;
 
     async fn render(user_name: Option<&str>) -> String {
+        render_with_return_to(user_name, "/authorize").await
+    }
+
+    async fn render_with_return_to(user_name: Option<&str>, return_to: &str) -> String {
         let response = LoginPageResponse {
             csrf_token: "csrf".to_string(),
-            return_to: "/authorize".to_string(),
+            return_to: return_to.to_string(),
             session_token: "token".to_string(),
             session_ttl_seconds: 900,
             user_name: user_name.map(str::to_string),
@@ -84,6 +88,20 @@ mod tests {
             .await
             .unwrap();
         String::from_utf8(body.to_vec()).unwrap()
+    }
+
+    #[tokio::test]
+    async fn posts_back_to_the_url_carrying_return_to_instead_of_a_hidden_field() {
+        let body =
+            render_with_return_to(None, "/authorize?client_id=1&request_uri=urn%3Aabc").await;
+
+        assert!(
+            body.contains(
+                "action=\"/login?return_to=%2Fauthorize%3Fclient_id%3D1%26request_uri%3Durn%253Aabc\""
+            ),
+            "{body}"
+        );
+        assert!(!body.contains("name=\"return_to\""), "{body}");
     }
 
     #[tokio::test]
