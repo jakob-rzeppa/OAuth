@@ -2,7 +2,7 @@
 
 > **identity-server must be running for auth-server to work.** Start its stack first
 > (see `../identity-server/DEV.md`). auth-server reaches it via the port it publishes on
-> the host, at `IDENTITY_SERVER_URL` (`http://127.0.0.1:8080`).
+> the host, at `IDENTITY_SERVER_URL` (`http://host.docker.internal:8080`; `127.0.0.1` would be the container itself).
 
 ## Local production stack
 

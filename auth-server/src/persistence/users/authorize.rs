@@ -29,6 +29,12 @@ struct AuthenticateResponse {
     data: AuthorizedUser,
 }
 
+/// The `{"error": ..., "error_description": ...}` body of an identity-server error response.
+#[derive(Deserialize)]
+struct ErrorResponse {
+    error: String,
+}
+
 /// Check a user name and password against the identity-server (`POST /v1/users/authenticate`).
 #[fnmock::mockable]
 pub async fn authorize_user(
@@ -69,13 +75,25 @@ async fn authorize_user_at(
                 tracing::error!(?error, "Invalid identity-server response");
                 AuthorizeUserError::ServerError
             }),
-        reqwest::StatusCode::UNAUTHORIZED | reqwest::StatusCode::NOT_FOUND => {
-            tracing::debug!(status = %response.status(), "identity-server authenticate failed with invalid credentials");
-            Err(AuthorizeUserError::InvalidCredentials)
-        }
         status => {
-            tracing::error!(%status, "identity-server authenticate failed");
-            Err(AuthorizeUserError::ServerError)
+            let error = response
+                .json::<ErrorResponse>()
+                .await
+                .map(|response| response.error)
+                .map_err(|error| {
+                    tracing::error!(%status, ?error, "Invalid identity-server error response");
+                    AuthorizeUserError::ServerError
+                })?;
+            match error.as_str() {
+                "unauthorized" | "user_not_found" => {
+                    tracing::debug!(%status, %error, "identity-server authenticate failed with invalid credentials");
+                    Err(AuthorizeUserError::InvalidCredentials)
+                }
+                _ => {
+                    tracing::error!(%status, %error, "identity-server authenticate failed");
+                    Err(AuthorizeUserError::ServerError)
+                }
+            }
         }
     }
 }
@@ -157,6 +175,32 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn fails_with_server_error_when_a_credentials_status_has_another_error_code() {
+        let capture = LogCapture::default();
+        let _guard = capture.install();
+        let base_url = identity_server(
+            StatusCode::UNAUTHORIZED,
+            json!({"error": "invalid_request", "error_description": "x"}),
+        )
+        .await;
+
+        let result = authorize_user_at(&base_url, "alice", "secret").await;
+
+        assert_eq!(result, Err(AuthorizeUserError::ServerError));
+        let log = capture.contents();
+        assert!(log.contains("invalid_request"), "{log}");
+    }
+
+    #[tokio::test]
+    async fn fails_with_server_error_when_the_error_response_is_malformed() {
+        let base_url = identity_server(StatusCode::UNAUTHORIZED, json!({"message": "nope"})).await;
+
+        let result = authorize_user_at(&base_url, "alice", "secret").await;
+
+        assert_eq!(result, Err(AuthorizeUserError::ServerError));
+    }
+
+    #[tokio::test]
     async fn fails_with_server_error_when_the_identity_server_fails() {
         let capture = LogCapture::default();
         let _guard = capture.install();
@@ -173,6 +217,7 @@ mod tests {
         assert!(log.contains("ERROR"), "{log}");
         assert!(log.contains("identity-server authenticate failed"), "{log}");
         assert!(log.contains("500"), "{log}");
+        assert!(log.contains("internal_server_error"), "{log}");
     }
 
     #[tokio::test]
