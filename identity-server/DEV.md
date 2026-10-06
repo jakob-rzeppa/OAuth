@@ -13,15 +13,19 @@ The database is on an internal network and is not reachable from the host.
 
 ## Running the dev stack
 
-A plain `docker compose` loads `docker-compose.override.yml` on top of
-`docker-compose.yml`, which switches to the live-reload image and publishes the
-database on `127.0.0.1:5432`.
+`docker-compose.dev.yml` switches to the live-reload image and publishes the database
+on `127.0.0.1:5432`.
 
 Start everything and live-reload on changes:
 
 ```sh
-docker compose -f docker-compose.yml -f docker-compose.dev.yml watch
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up --watch
 ```
+
+This streams the server log, including cargo build errors, to the terminal. Plain
+`watch` also live-reloads but does not show any log; from another terminal use
+`docker compose -f docker-compose.yml -f docker-compose.dev.yml logs -f identity-server`.
+Ctrl+C stops the containers.
 
 Changes to `src/`, `seed/`, `.sqlx/`, `Cargo.toml` and `Cargo.lock` are synced into the
 container, where cargo-watch rebuilds and restarts the server. Changes to `migrations/`

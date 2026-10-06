@@ -1,8 +1,9 @@
 # Development override. Layered on top of docker-compose.yml:
-#   docker compose -f docker-compose.yml -f docker-compose.dev.yml watch
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up --watch
 #
-# `watch` syncs source changes into the container, where cargo-watch rebuilds
-# and restarts the server. Changing a migration re-runs the migrator.
+# `--watch` syncs source changes into the container, where cargo-watch rebuilds
+# and restarts the server, and streams the server log (plain `watch` does not).
+# Changing a migration re-runs the migrator.
 services:
   auth-server-db:
     # Also attach a non-internal network so the port can be published, and

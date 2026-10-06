@@ -24,8 +24,13 @@ on `127.0.0.1:5433` and redis on `127.0.0.1:6379`.
 Start everything and live-reload on changes:
 
 ```sh
-docker compose -f docker-compose.yml -f docker-compose.dev.yml watch
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up --watch
 ```
+
+This streams the server log, including cargo build errors, to the terminal. Plain
+`watch` also live-reloads but does not show any log; from another terminal use
+`docker compose -f docker-compose.yml -f docker-compose.dev.yml logs -f auth-server`.
+Ctrl+C stops the containers.
 
 Changes to `src/`, `seed/`, `templates/`, `.sqlx/`, `Cargo.toml` and `Cargo.lock` are
 synced into the container, where cargo-watch rebuilds and restarts the server. Changes
