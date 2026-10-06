@@ -2,7 +2,7 @@ mod request;
 
 use axum::{
     http::header,
-    response::{IntoResponse, Redirect, Response},
+    response::{AppendHeaders, IntoResponse, Redirect, Response},
 };
 
 use crate::{
@@ -15,7 +15,7 @@ use crate::{
     },
     util::session::{create_session_token, hash_session_token},
     web::login::{
-        cookie::{USER_SESSION_COOKIE, session_cookie},
+        cookie::{LOGIN_SESSION_COOKIE, USER_SESSION_COOKIE, expired_cookie, session_cookie},
         error_response::LoginErrorResponse,
         page::login_page,
         return_to::is_local_path,
@@ -95,8 +95,19 @@ pub async fn login_submit_endpoint(
     let cookie = session_cookie(USER_SESSION_COOKIE, &session_token, session_ttl)
         .ok_or(LoginErrorResponse::DatabaseError)?;
 
+    // The login session was consumed above, so its cookie is of no use any more.
+    let clear_login_session_cookie =
+        expired_cookie(LOGIN_SESSION_COOKIE).ok_or(LoginErrorResponse::DatabaseError)?;
+
     // 303, so the browser follows up with a GET even though this was a POST.
-    Ok(([(header::SET_COOKIE, cookie)], Redirect::to(&return_to)).into_response())
+    Ok((
+        AppendHeaders([
+            (header::SET_COOKIE, cookie),
+            (header::SET_COOKIE, clear_login_session_cookie),
+        ]),
+        Redirect::to(&return_to),
+    )
+        .into_response())
 }
 
 #[cfg(test)]
@@ -166,12 +177,24 @@ mod tests {
             "/authorize?client_id=1"
         );
 
-        let cookie = response
+        let cookies: Vec<&str> = response
             .headers()
-            .get(header::SET_COOKIE)
-            .unwrap()
-            .to_str()
-            .unwrap();
+            .get_all(header::SET_COOKIE)
+            .iter()
+            .map(|value| value.to_str().unwrap())
+            .collect();
+        assert_eq!(cookies.len(), 2, "{cookies:?}");
+
+        // The consumed login session cookie is deleted.
+        assert!(
+            cookies.contains(&"login_session=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Lax"),
+            "{cookies:?}"
+        );
+
+        let cookie = cookies
+            .iter()
+            .find(|cookie| cookie.starts_with("user_session="))
+            .expect("expected a user_session cookie");
         let token = cookie
             .strip_prefix("user_session=")
             .unwrap()

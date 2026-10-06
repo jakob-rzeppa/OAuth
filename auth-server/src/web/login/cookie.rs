@@ -15,6 +15,12 @@ pub(super) fn session_cookie(name: &str, token: &str, max_age_seconds: u64) -> O
     .ok()
 }
 
+/// The `Set-Cookie` value telling the browser to delete the cookie `name`.
+/// The attributes match `session_cookie`, so the browser treats it as the same cookie.
+pub(super) fn expired_cookie(name: &str) -> Option<HeaderValue> {
+    session_cookie(name, "", 0)
+}
+
 /// Finds the cookie `name` in the value of a `Cookie` header (`a=1; b=2`).
 /// An empty value counts as missing.
 pub(super) fn cookie_value<'a>(cookies: &'a str, name: &str) -> Option<&'a str> {
@@ -29,6 +35,16 @@ pub(super) fn cookie_value<'a>(cookies: &'a str, name: &str) -> Option<&'a str> 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn expired_cookie_has_an_empty_value_and_no_lifetime() {
+        let cookie = expired_cookie("login_session").unwrap();
+
+        assert_eq!(
+            cookie,
+            "login_session=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Lax"
+        );
+    }
 
     #[test]
     fn finds_the_cookie_among_others() {
