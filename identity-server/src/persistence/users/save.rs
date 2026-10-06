@@ -15,6 +15,7 @@ const UNIQUE_VIOLATION: &str = "23505";
 
 /// Save changes to a existing user in the database.
 /// If the user does not exist, it will throw a error.
+#[fnmock::fakeable]
 pub async fn save_user(user: &User) -> Result<(), SaveUserError> {
     let mut conn = get_connection()
         .await
@@ -40,16 +41,13 @@ pub async fn save_user(user: &User) -> Result<(), SaveUserError> {
         {
             SaveUserError::UserNameAlreadyExists
         } else {
-            eprintln!("Unknown Database error: {:?}", error);
+            tracing::error!(?error, "Unknown Database error");
             SaveUserError::DatabaseError
         }
     })?;
 
     if result.rows_affected() == 0 {
-        eprintln!(
-            "Tried to save changes to a unknown user with id {}.",
-            user.id()
-        );
+        tracing::warn!(user_id = %user.id(), "tried to save changes to an unknown user");
         return Err(SaveUserError::UserNotFound);
     }
 

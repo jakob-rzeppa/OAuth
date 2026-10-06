@@ -1,4 +1,4 @@
-//! Logging setup. The minimum level comes from `LOG_LEVEL` (see `config::log_level`).
+//! Logging setup. The minimum level comes from `LOG_LEVEL` (see `CONFIG.log_level()`).
 
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::{filter::Targets, layer::SubscriberExt, util::SubscriberInitExt};
@@ -14,9 +14,9 @@ pub fn parse_level(value: &str) -> Result<LevelFilter, String> {
     }
 }
 
-/// Which events are logged: this crate and `tower_http` (the request layer, see `main::app`) at
-/// `level`; every other dependency (hyper, sqlx, reqwest, redis) is capped at `warn`, so `debug`
-/// is not drowned in library internals.
+/// Which events are logged: this crate and `tower_http` (the request layer, see `api::router`) at
+/// `level`; every other dependency (hyper, sqlx) is capped at `warn`, so `debug` is not drowned in
+/// library internals.
 fn filter(level: LevelFilter) -> Targets {
     let dependency_level = if level > LevelFilter::WARN {
         LevelFilter::WARN
@@ -124,7 +124,7 @@ mod tests {
         let capture = LogCapture::default();
         let _guard = capture.install();
 
-        tracing::debug!(client_id = "abc", "hello");
+        tracing::debug!(user_id = "abc", "hello");
 
         let log = capture.contents();
         assert!(log.contains("hello"), "{log}");
@@ -134,7 +134,7 @@ mod tests {
     #[test]
     fn enables_this_crate_and_the_request_layer_at_the_level_and_caps_other_dependencies_at_warn() {
         let debug_filter = filter(LevelFilter::DEBUG);
-        assert!(debug_filter.would_enable("auth_server::api::token", &tracing::Level::DEBUG));
+        assert!(debug_filter.would_enable("identity_server::application", &tracing::Level::DEBUG));
         assert!(debug_filter.would_enable("tower_http::trace::on_request", &tracing::Level::DEBUG));
         assert!(
             !debug_filter.would_enable("hyper_util::client::legacy::pool", &tracing::Level::DEBUG)
@@ -143,8 +143,8 @@ mod tests {
 
         let error_filter = filter(LevelFilter::ERROR);
         assert!(!error_filter.would_enable("sqlx::query", &tracing::Level::WARN));
-        assert!(!error_filter.would_enable("auth_server::api::token", &tracing::Level::WARN));
-        assert!(error_filter.would_enable("auth_server::api::token", &tracing::Level::ERROR));
+        assert!(!error_filter.would_enable("identity_server::application", &tracing::Level::WARN));
+        assert!(error_filter.would_enable("identity_server::application", &tracing::Level::ERROR));
     }
 
     #[test]

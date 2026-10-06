@@ -19,7 +19,7 @@ pub enum DatabaseError {
 
 async fn get_connection() -> Result<PoolConnection<Postgres>, DatabaseError> {
     DB_POOL.acquire().await.map_err(|e| {
-        eprintln!("Database connection error: {:?}", e);
+        tracing::error!(error = ?e, "Database connection error");
         DatabaseError::ConnectionError
     })
 }

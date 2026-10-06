@@ -23,14 +23,14 @@ pub async fn find_all_users() -> Result<Vec<User>, FindAllUsersError> {
     .fetch_all(&mut *conn)
     .await
     .map_err(|error| {
-        eprintln!("Unknown Database error: {:?}", error);
+        tracing::error!(?error, "Unknown Database error");
         FindAllUsersError::DatabaseError
     })?;
 
     row.into_iter()
         .map(|row| {
             row.into_user().map_err(|error| {
-                eprintln!("Invalid user row: {:?}", error);
+                tracing::error!(?error, "Invalid user row");
                 FindAllUsersError::InvalidData
             })
         })

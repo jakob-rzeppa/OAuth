@@ -34,6 +34,23 @@ afterwards rebuilds are incremental.
 
 The database is reachable from the host.
 
+## Logging
+
+`LOG_LEVEL` in `.env` sets the minimum level: `debug`, `info`, `warn` or `error` (any case).
+It applies to identity-server's own events; libraries (hyper, sqlx) are capped at `warn`. A
+level includes every level below it in this table.
+
+| Level | Shows |
+|---|---|
+| `debug` | every request (method, path, status, latency) |
+| `info` | startup, user authenticated, authentication failed, user created / updated / deleted, password changed / reset |
+| `warn` | unexpected behaviour: wrong current password on a password change, operations on unknown user ids, invalid or taken user names, role ids missing from the role store |
+| `error` | database failures, invalid user rows, password hashing failures, and unrecoverable startup failures (the server exits) |
+
+Logs never contain passwords, password hashes, user names, query strings or request bodies;
+users are identified by their id. Read them with `docker compose ... logs -f identity-server`
+(see above).
+
 ## Query metadata (`.sqlx`)
 
 The `query!` macros are checked offline against the metadata in `.sqlx/`, so neither the image build nor the dev container needs a database. **Commit `.sqlx/`**, and regenerate it whenever a query or a migration changes, otherwise the Docker build fails.

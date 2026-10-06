@@ -12,6 +12,7 @@ pub enum RegisterUserError {
 
 const UNIQUE_VIOLATION: &str = "23505";
 
+#[fnmock::fakeable]
 pub async fn register_user(user: &User) -> Result<(), RegisterUserError> {
     let mut conn = get_connection()
         .await
@@ -31,7 +32,7 @@ pub async fn register_user(user: &User) -> Result<(), RegisterUserError> {
             {
                 RegisterUserError::UserNameAlreadyExists
             } else {
-                eprintln!("Unknown Database error: {:?}", error);
+                tracing::error!(?error, "Unknown Database error");
                 RegisterUserError::DatabaseError
             }
         })?;

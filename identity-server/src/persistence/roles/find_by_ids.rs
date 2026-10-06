@@ -2,6 +2,7 @@ use uuid::Uuid;
 
 use crate::{domain::entity::role::Role, persistence::roles::store::roles};
 
+#[fnmock::fakeable]
 pub fn find_roles_by_ids(role_ids: &[Uuid]) -> Vec<Role> {
     let res: Vec<Role> = roles()
         .iter()
@@ -16,9 +17,9 @@ pub fn find_roles_by_ids(role_ids: &[Uuid]) -> Vec<Role> {
             .filter(|id| !found_ids.contains(id))
             .cloned()
             .collect();
-        eprintln!(
-            "Some role ids were not found in the role store: {:?}",
-            missing_ids
+        tracing::warn!(
+            ?missing_ids,
+            "some role ids were not found in the role store"
         );
     }
 
@@ -31,6 +32,7 @@ mod tests {
 
     use uuid::Uuid;
 
+    use crate::logging::testing::LogCapture;
     use crate::persistence::roles::store::roles_fake;
 
     use super::*;
@@ -79,6 +81,8 @@ mod tests {
 
     #[test]
     fn test_find_role_by_id_with_nonexistent_id() {
+        let capture = LogCapture::default();
+        let _guard = capture.install();
         roles_fake().setup(|| &TEST_ROLES);
 
         let roles = find_roles_by_ids(&[
@@ -90,6 +94,14 @@ mod tests {
         assert_eq!(
             roles[0].id(),
             &Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap()
+        );
+
+        let log = capture.contents();
+        assert!(log.contains("WARN"), "{log}");
+        assert!(log.contains("not found in the role store"), "{log}");
+        assert!(
+            log.contains("00000000-0000-0000-0000-000000000004"),
+            "{log}"
         );
     }
 }

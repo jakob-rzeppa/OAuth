@@ -4,6 +4,7 @@ pub enum RemoveUserError {
     DatabaseError,
 }
 
+#[fnmock::fakeable]
 pub async fn remove_user(user: &User) -> Result<(), RemoveUserError> {
     let mut conn = get_connection()
         .await
@@ -14,7 +15,7 @@ pub async fn remove_user(user: &User) -> Result<(), RemoveUserError> {
         .execute(&mut *conn)
         .await
         .map_err(|error| {
-            eprintln!("Unknown Database error: {:?}", error);
+            tracing::error!(?error, "Unknown Database error");
             RemoveUserError::DatabaseError
         })?;
 

@@ -1,10 +1,13 @@
 use std::sync::LazyLock;
 
+use tracing::level_filters::LevelFilter;
+
 pub struct Config {
     database_url: String,
     database_pepper: String,
     temporary_password_length: usize,
     app_port: u16,
+    log_level: LevelFilter,
 }
 
 pub static CONFIG: LazyLock<Config> = LazyLock::new(|| {
@@ -22,11 +25,16 @@ pub static CONFIG: LazyLock<Config> = LazyLock::new(|| {
         .parse()
         .expect("APP_PORT must be a valid port number");
 
+    let log_level =
+        crate::logging::parse_level(&std::env::var("LOG_LEVEL").expect("LOG_LEVEL must be set"))
+            .expect("LOG_LEVEL must be one of debug, info, warn, error");
+
     Config {
         database_url,
         database_pepper,
         temporary_password_length,
         app_port,
+        log_level,
     }
 });
 
@@ -45,5 +53,9 @@ impl Config {
 
     pub fn app_port(&self) -> u16 {
         self.app_port
+    }
+
+    pub fn log_level(&self) -> LevelFilter {
+        self.log_level
     }
 }

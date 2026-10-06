@@ -10,6 +10,7 @@ pub enum FindByUserNameUserError {
     DatabaseError,
 }
 
+#[fnmock::fakeable]
 pub async fn find_user_by_user_name(
     user_name: &str,
 ) -> Result<Option<User>, FindByUserNameUserError> {
@@ -25,13 +26,13 @@ pub async fn find_user_by_user_name(
     .fetch_optional(&mut *conn)
     .await
     .map_err(|error| {
-        eprintln!("Unknown Database error: {:?}", error);
+        tracing::error!(?error, "Unknown Database error");
         FindByUserNameUserError::DatabaseError
     })?;
 
     if let Some(row) = row {
         Ok(Some(row.into_user().map_err(|error| {
-            eprintln!("Invalid user row: {:?}", error);
+            tracing::error!(?error, "Invalid user row");
             FindByUserNameUserError::InvalidData
         })?))
     } else {
