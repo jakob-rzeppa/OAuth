@@ -24,6 +24,7 @@ pub async fn login_page_endpoint(
     ReturnToQuery { return_to }: ReturnToQuery,
 ) -> Result<LoginPageResponse, LoginErrorResponse> {
     if !is_local_path(&return_to) {
+        tracing::warn!("login page rejected: return_to is not a local path");
         return Err(LoginErrorResponse::InvalidReturnTo);
     }
 

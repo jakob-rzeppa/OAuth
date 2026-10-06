@@ -27,7 +27,7 @@ pub async fn find_access_token_by_token_hash(
     .fetch_optional(&mut *conn)
     .await
     .map_err(|error| {
-        eprintln!("Unknown Database error: {:?}", error);
+        tracing::error!(?error, "Unknown Database error");
         FindByTokenHashAccessTokenError::DatabaseError
     })?;
 

@@ -21,7 +21,7 @@ pub async fn remove_access_token(token_hash: &str) -> Result<(), RemoveAccessTok
     .execute(&mut *conn)
     .await
     .map_err(|error| {
-        eprintln!("Unknown Database error: {:?}", error);
+        tracing::error!(?error, "Unknown Database error");
         RemoveAccessTokenError::DatabaseError
     })?;
 

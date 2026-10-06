@@ -23,14 +23,14 @@ pub async fn save_login_session(
         .map_err(|_| SaveLoginSessionError::DatabaseError)?;
 
     let value = serde_json::to_string(&session).map_err(|error| {
-        eprintln!("Failed to serialize login session: {:?}", error);
+        tracing::error!(?error, "Failed to serialize login session");
         SaveLoginSessionError::SerializationError
     })?;
 
     conn.set_ex::<_, _, ()>(key(session_token_hash), value, ttl_seconds)
         .await
         .map_err(|error| {
-            eprintln!("Failed to save login session: {:?}", error);
+            tracing::error!(?error, "Failed to save login session");
             SaveLoginSessionError::DatabaseError
         })
 }

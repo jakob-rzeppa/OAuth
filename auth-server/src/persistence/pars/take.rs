@@ -22,14 +22,14 @@ pub async fn take_par(request_uri: &str) -> Result<Option<AuthorizationRequest>,
         conn.get_del(format!("par:{request_uri}"))
             .await
             .map_err(|error| {
-                eprintln!("Failed to take PAR: {:?}", error);
+                tracing::error!(?error, "Failed to take PAR");
                 TakeParError::DatabaseError
             })?;
 
     value
         .map(|value| {
             serde_json::from_str(&value).map_err(|error| {
-                eprintln!("Invalid PAR data: {:?}", error);
+                tracing::error!(?error, "Invalid PAR data");
                 TakeParError::InvalidData
             })
         })

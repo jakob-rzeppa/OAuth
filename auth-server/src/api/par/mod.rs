@@ -33,7 +33,10 @@ pub async fn authorize_push_endpoint(
         return Err(AuthorizePushErrorResponse::InvalidClientId);
     };
 
-    let client = find_client_by_id(&client_id).ok_or(AuthorizePushErrorResponse::ClientNotFound)?;
+    let client = find_client_by_id(&client_id).ok_or_else(|| {
+        tracing::warn!(%client_id, "pushed authorization request for an unknown client");
+        AuthorizePushErrorResponse::ClientNotFound
+    })?;
 
     let request = AuthorizationRequest::new(
         client_id,

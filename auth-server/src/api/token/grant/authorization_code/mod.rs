@@ -27,10 +27,12 @@ pub async fn handle_authorization_code_grant(
         .await
         .map_err(|_| TokenErrorResponse::DatabaseError);
     let Some(authorization_code) = authorization_code? else {
+        tracing::warn!(%client_id, "token request with an unknown, expired or already used authorization code");
         return Err(TokenErrorResponse::InvalidAuthorizationCode);
     };
 
     if authorization_code.client_id() != &client_id {
+        tracing::warn!(%client_id, "token request for an authorization code issued to a different client");
         return Err(TokenErrorResponse::InvalidClientId);
     }
 
@@ -39,6 +41,7 @@ pub async fn handle_authorization_code_grant(
         &code_verifier,
         authorization_code.code_challenge(),
     ) {
+        tracing::warn!(%client_id, "token request rejected: code_verifier does not match the code_challenge");
         return Err(TokenErrorResponse::InvalidCodeVerifier);
     }
 

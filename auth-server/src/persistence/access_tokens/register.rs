@@ -39,7 +39,7 @@ pub async fn register_access_token(
         {
             RegisterAccessTokenError::TokenAlreadyExists
         } else {
-            eprintln!("Unknown Database error: {:?}", error);
+            tracing::error!(?error, "Unknown Database error");
             RegisterAccessTokenError::DatabaseError
         }
     })?;

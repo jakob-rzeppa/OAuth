@@ -38,13 +38,20 @@ pub async fn authorize_page_endpoint(
     let par = peek_par(&request_uri)
         .await
         .map_err(|_| AuthorizePageErrorResponse::ServerError)?
-        .ok_or(AuthorizePageErrorResponse::RequestNotFound)?;
+        .ok_or_else(|| {
+            tracing::warn!(%client_id, "authorize page requested for an unknown, expired or already used request_uri");
+            AuthorizePageErrorResponse::RequestNotFound
+        })?;
 
     if par.client_id() != &client_id {
+        tracing::warn!(%client_id, "authorize page client_id does not match the pushed request");
         return Err(AuthorizePageErrorResponse::ClientIdMismatch);
     }
 
-    let client = find_client_by_id(&client_id).ok_or(AuthorizePageErrorResponse::ClientNotFound)?;
+    let client = find_client_by_id(&client_id).ok_or_else(|| {
+        tracing::warn!(%client_id, "authorize page requested for an unknown client");
+        AuthorizePageErrorResponse::ClientNotFound
+    })?;
 
     let scope = par.scope().to_string();
 

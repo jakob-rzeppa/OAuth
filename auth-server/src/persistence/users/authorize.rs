@@ -44,6 +44,7 @@ async fn authorize_user_at(
     password: &str,
 ) -> Result<AuthorizedUser, AuthorizeUserError> {
     let url = format!("{}/v1/users/authenticate", base_url.trim_end_matches('/'));
+    tracing::debug!(%url, "calling identity-server authenticate");
 
     let response = reqwest::Client::new()
         .post(url)
@@ -54,9 +55,10 @@ async fn authorize_user_at(
         .send()
         .await
         .map_err(|error| {
-            eprintln!("Failed to reach identity-server: {:?}", error);
+            tracing::error!(?error, "Failed to reach identity-server");
             AuthorizeUserError::ServerError
         })?;
+    tracing::debug!(status = %response.status(), "identity-server authenticate responded");
 
     match response.status() {
         status if status.is_success() => response
@@ -64,14 +66,15 @@ async fn authorize_user_at(
             .await
             .map(|response| response.data)
             .map_err(|error| {
-                eprintln!("Invalid identity-server response: {:?}", error);
+                tracing::error!(?error, "Invalid identity-server response");
                 AuthorizeUserError::ServerError
             }),
         reqwest::StatusCode::UNAUTHORIZED | reqwest::StatusCode::NOT_FOUND => {
+            tracing::debug!(status = %response.status(), "identity-server authenticate failed with invalid credentials");
             Err(AuthorizeUserError::InvalidCredentials)
         }
         status => {
-            eprintln!("identity-server authenticate failed with status {status}");
+            tracing::error!(%status, "identity-server authenticate failed");
             Err(AuthorizeUserError::ServerError)
         }
     }
@@ -84,6 +87,7 @@ mod tests {
     use tokio::net::TcpListener;
 
     use super::*;
+    use crate::logging::testing::LogCapture;
 
     /// Serves `POST /v1/users/authenticate` with a fixed response and returns the base url.
     async fn identity_server(status: StatusCode, body: Value) -> String {
@@ -154,6 +158,8 @@ mod tests {
 
     #[tokio::test]
     async fn fails_with_server_error_when_the_identity_server_fails() {
+        let capture = LogCapture::default();
+        let _guard = capture.install();
         let base_url = identity_server(
             StatusCode::INTERNAL_SERVER_ERROR,
             json!({"error": "internal_server_error", "error_description": "x"}),
@@ -163,13 +169,53 @@ mod tests {
         let result = authorize_user_at(&base_url, "alice", "secret").await;
 
         assert_eq!(result, Err(AuthorizeUserError::ServerError));
+        let log = capture.contents();
+        assert!(log.contains("ERROR"), "{log}");
+        assert!(log.contains("identity-server authenticate failed"), "{log}");
+        assert!(log.contains("500"), "{log}");
     }
 
     #[tokio::test]
     async fn fails_with_server_error_when_the_identity_server_is_unreachable() {
+        let capture = LogCapture::default();
+        let _guard = capture.install();
         // Nothing listens on port 1.
         let result = authorize_user_at("http://127.0.0.1:1", "alice", "secret").await;
 
         assert_eq!(result, Err(AuthorizeUserError::ServerError));
+        let log = capture.contents();
+        assert!(log.contains("ERROR"), "{log}");
+        assert!(log.contains("Failed to reach identity-server"), "{log}");
+    }
+
+    #[tokio::test]
+    async fn logs_the_call_to_the_identity_server_without_the_credentials() {
+        let capture = LogCapture::default();
+        let _guard = capture.install();
+        let base_url = identity_server(
+            StatusCode::OK,
+            json!({"data": {
+                "id": Uuid::new_v4(), "user_name": "alice", "display_name": "Alice",
+                "has_temporary_password": false, "roles": []
+            }}),
+        )
+        .await;
+
+        authorize_user_at(&base_url, "alice", "secret")
+            .await
+            .unwrap();
+
+        let log = capture.contents();
+        assert!(
+            log.contains("calling identity-server authenticate"),
+            "{log}"
+        );
+        assert!(log.contains("/v1/users/authenticate"), "{log}");
+        assert!(
+            log.contains("identity-server authenticate responded"),
+            "{log}"
+        );
+        assert!(!log.contains("secret"), "{log}");
+        assert!(!log.contains("alice"), "{log}");
     }
 }

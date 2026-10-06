@@ -21,14 +21,14 @@ pub async fn take_authorization_code(
         .map_err(|_| TakeAuthorizationCodeError::DatabaseError)?;
 
     let value: Option<String> = conn.get_del(key(request_uri)).await.map_err(|error| {
-        eprintln!("Failed to take authorization code: {:?}", error);
+        tracing::error!(?error, "Failed to take authorization code");
         TakeAuthorizationCodeError::DatabaseError
     })?;
 
     value
         .map(|value| {
             serde_json::from_str(&value).map_err(|error| {
-                eprintln!("Invalid PAR data: {:?}", error);
+                tracing::error!(?error, "Invalid PAR data");
                 TakeAuthorizationCodeError::InvalidData
             })
         })

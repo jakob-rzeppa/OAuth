@@ -38,6 +38,7 @@ pub async fn login_submit_endpoint(
     // `return_to` comes from the query string, so it is as untrusted as the one the page was
     // served with.
     if !is_local_path(&return_to) {
+        tracing::warn!("login submit rejected: return_to is not a local path");
         return Err(LoginErrorResponse::InvalidReturnTo);
     }
 
@@ -51,10 +52,12 @@ pub async fn login_submit_endpoint(
         })?;
 
     let Some(login_session) = login_session else {
+        tracing::warn!("login submit rejected: no valid login session");
         return Err(LoginErrorResponse::MissingSessionCookie);
     };
 
     if csrf_token != login_session.csrf_token() {
+        tracing::warn!("login submit rejected: invalid CSRF token");
         return Err(LoginErrorResponse::InvalidCsrfToken);
     }
 
@@ -66,6 +69,8 @@ pub async fn login_submit_endpoint(
             return Err(LoginErrorResponse::DatabaseError);
         }
         Err(AuthorizeUserError::InvalidCredentials) => {
+            // Expected user behaviour, so INFO. The user name is deliberately not logged.
+            tracing::info!("login failed: invalid credentials");
             return Ok(login_page(
                 return_to,
                 Some(user_name),
@@ -100,6 +105,8 @@ pub async fn login_submit_endpoint(
     let clear_login_session_cookie =
         expired_cookie(LOGIN_SESSION_COOKIE).ok_or(LoginErrorResponse::DatabaseError)?;
 
+    tracing::info!(user_id = %user.id, "user logged in");
+
     // 303, so the browser follows up with a GET even though this was a POST.
     Ok((
         AppendHeaders([
@@ -122,6 +129,7 @@ mod tests {
     use crate::{
         config::{login_session_ttl_fake, user_session_ttl_fake},
         domain::entity::login_session::LoginSession,
+        logging::testing::LogCapture,
         persistence::{
             login_session::{save::save_login_session_mock, take::take_login_session_fake},
             user_session::save::save_user_session_mock,
@@ -149,6 +157,8 @@ mod tests {
 
     #[tokio::test]
     async fn redirects_to_return_to_and_sets_the_user_session_cookie() {
+        let capture = LogCapture::default();
+        let _guard = capture.install();
         let user_id = Uuid::new_v4();
         let saved = Arc::new(Mutex::new(None));
         let saved_in_mock = saved.clone();
@@ -222,10 +232,20 @@ mod tests {
         assert_eq!(hash, hash_session_token(token));
         assert_eq!(session, UserSession::new(user_id));
         assert_eq!(ttl_seconds, 1800);
+
+        let log = capture.contents();
+        assert!(log.contains("INFO"), "{log}");
+        assert!(log.contains("user logged in"), "{log}");
+        assert!(log.contains(&user_id.to_string()), "{log}");
+        assert!(!log.contains(token), "{log}");
+        assert!(!log.contains("alice"), "{log}");
+        assert!(!log.contains("secret"), "{log}");
     }
 
     #[tokio::test]
     async fn fails_with_invalid_csrf_token_when_it_differs_from_the_login_session() {
+        let capture = LogCapture::default();
+        let _guard = capture.install();
         take_login_session_fake().setup(|_| Ok(Some(LoginSession::new("csrf".to_string()))));
 
         let result = login_submit_endpoint(
@@ -236,6 +256,11 @@ mod tests {
         .await;
 
         assert!(matches!(result, Err(LoginErrorResponse::InvalidCsrfToken)));
+
+        let log = capture.contents();
+        assert!(log.contains("WARN"), "{log}");
+        assert!(log.contains("CSRF"), "{log}");
+        assert!(!log.contains("other"), "{log}");
     }
 
     #[tokio::test]
@@ -266,6 +291,8 @@ mod tests {
 
     #[tokio::test]
     async fn shows_the_login_page_again_when_the_credentials_are_invalid() {
+        let capture = LogCapture::default();
+        let _guard = capture.install();
         take_login_session_fake().setup(|_| Ok(Some(LoginSession::new("csrf".to_string()))));
         authorize_user_mock().setup(|_, _| Err(AuthorizeUserError::InvalidCredentials));
         login_session_ttl_fake().setup(|| 900);
@@ -285,5 +312,12 @@ mod tests {
             .to_str()
             .unwrap();
         assert!(cookie.starts_with("login_session="), "{cookie}");
+
+        let log = capture.contents();
+        assert!(log.contains("INFO"), "{log}");
+        assert!(log.contains("login failed"), "{log}");
+        assert!(!log.contains("WARN"), "{log}");
+        assert!(!log.contains("alice"), "{log}");
+        assert!(!log.contains("secret"), "{log}");
     }
 }

@@ -8,7 +8,7 @@ pub(super) enum RedisError {
 pub(super) async fn get_redis_connection() -> Result<redis::aio::MultiplexedConnection, RedisError>
 {
     let client = redis::Client::open(redis_url()).map_err(|error| {
-        eprintln!("Failed to create redis client: {:?}", error);
+        tracing::error!(?error, "Failed to create redis client");
         RedisError::ConnectionError
     })?;
 
@@ -16,7 +16,7 @@ pub(super) async fn get_redis_connection() -> Result<redis::aio::MultiplexedConn
         .get_multiplexed_async_connection()
         .await
         .map_err(|error| {
-            eprintln!("Failed to connect to redis: {:?}", error);
+            tracing::error!(?error, "Failed to connect to redis");
             RedisError::ConnectionError
         })
 }

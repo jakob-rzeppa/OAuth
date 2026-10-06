@@ -1,5 +1,7 @@
 use std::sync::LazyLock;
 
+use tracing::level_filters::LevelFilter;
+
 struct Config {
     redis_url: String,
     identity_server_url: String,
@@ -9,6 +11,7 @@ struct Config {
     login_session_ttl: u64,
     user_session_ttl: u64,
     iss: String,
+    log_level: LevelFilter,
 }
 
 static CONFIG: LazyLock<Config> = LazyLock::new(|| {
@@ -41,6 +44,10 @@ static CONFIG: LazyLock<Config> = LazyLock::new(|| {
 
     let iss = std::env::var("ISSUER_IDENTIFIER").expect("ISSUER_IDENTIFIER must be set");
 
+    let log_level =
+        crate::logging::parse_level(&std::env::var("LOG_LEVEL").expect("LOG_LEVEL must be set"))
+            .expect("LOG_LEVEL must be one of debug, info, warn, error");
+
     Config {
         redis_url,
         identity_server_url,
@@ -50,6 +57,7 @@ static CONFIG: LazyLock<Config> = LazyLock::new(|| {
         login_session_ttl,
         user_session_ttl,
         iss,
+        log_level,
     }
 });
 
@@ -86,4 +94,8 @@ pub fn user_session_ttl() -> u64 {
 #[fnmock::fakeable]
 pub fn iss() -> &'static str {
     &CONFIG.iss
+}
+
+pub fn log_level() -> LevelFilter {
+    CONFIG.log_level
 }

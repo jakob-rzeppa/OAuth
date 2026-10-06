@@ -39,6 +39,22 @@ few minutes; afterwards rebuilds are incremental.
 
 The database and redis are reachable from the host.
 
+## Logging
+
+`LOG_LEVEL` in `.env` sets the minimum level: `debug`, `info`, `warn` or `error` (any case).
+It applies to auth-server's own events; libraries (hyper, sqlx, reqwest, redis) are capped at
+`warn`. A level includes every level below it in this table.
+
+| Level | Shows |
+|---|---|
+| `debug` | every request (method, path, status, latency), calls to the identity-server |
+| `info` | startup, user logged in, authorization code issued, access token issued, consent denied, failed login |
+| `warn` | unexpected behaviour: unknown client, unregistered `redirect_uri`, disallowed scope, unknown or reused `request_uri` / authorization code, invalid CSRF token or PKCE verifier, unsupported `grant_type` |
+| `error` | database, redis and identity-server failures, and unrecoverable startup failures (the server exits) |
+
+Logs never contain tokens, codes, `request_uri`, cookies, passwords, user names or query
+strings. Read them with `docker compose ... logs -f auth-server` (see above).
+
 ## Query metadata (`.sqlx`)
 
 The `query!` macros are checked offline against the metadata in `.sqlx/`

@@ -41,12 +41,15 @@ pub async fn authorize_submit_endpoint(
     let request = take_par(&request_uri)
         .await
         .map_err(|_| page_error(AuthorizeSubmitPageErrorResponse::ServerError))?
-        .ok_or(page_error(
-            AuthorizeSubmitPageErrorResponse::RequestNotFound,
-        ))?;
+        .ok_or_else(|| {
+            tracing::warn!(%client_id, "authorization submitted for an unknown, expired or already used request_uri");
+            page_error(AuthorizeSubmitPageErrorResponse::RequestNotFound)
+        })?;
 
-    let client = find_client_by_id(&client_id)
-        .ok_or(page_error(AuthorizeSubmitPageErrorResponse::ClientNotFound))?;
+    let client = find_client_by_id(&client_id).ok_or_else(|| {
+        tracing::warn!(%client_id, "authorization submitted for an unknown client");
+        page_error(AuthorizeSubmitPageErrorResponse::ClientNotFound)
+    })?;
 
     let ValidatedAuthorizationRequest {
         client_id,
@@ -61,6 +64,7 @@ pub async fn authorize_submit_endpoint(
 
     // We only check the decision afer a full validation run, so we only return a redirect error if the request, client etc. are valid.
     if decision == false {
+        tracing::info!(%client_id, "consent denied");
         return Err(AuthorizeSubmitErrorResponse::Redirect {
             error: AuthorizeSubmitRedirectErrorResponse::AccessDenied,
             redirect_uri,
@@ -71,6 +75,7 @@ pub async fn authorize_submit_endpoint(
     // With the request validated and the user's approval, we can now generate an authorization code and return it to the client.
 
     let code = generate_auth_code();
+    let issued_scope = scope.clone();
 
     let authorization_code = AuthorizationCode::new(
         code.clone(),
@@ -87,6 +92,8 @@ pub async fn authorize_submit_endpoint(
             redirect_uri: redirect_uri.clone(),
             state: state.clone(),
         })?;
+
+    tracing::info!(%client_id, scope = %issued_scope, "authorization code issued");
 
     Ok(AuthorizeSubmitResponse {
         code,
@@ -111,6 +118,7 @@ mod tests {
     use crate::{
         config::iss_fake,
         domain::entity::{authorization_code::request::AuthorizationRequest, client::Client},
+        logging::testing::LogCapture,
         persistence::{
             authorization_codes::save::{SaveAuthorizationCodeError, save_authorization_code_mock},
             clients::find_by_id::find_client_by_id_fake,
@@ -155,6 +163,8 @@ mod tests {
 
     #[tokio::test]
     async fn succeeds_and_returns_code_with_ttl_for_a_valid_request() {
+        let capture = LogCapture::default();
+        let _guard = capture.install();
         let client_id = Uuid::new_v4();
         let request_uri = "urn:authorize:request_uri:test";
         let client = make_client(client_id);
@@ -192,6 +202,18 @@ mod tests {
 
         take_mock.assert();
         save_mock.assert();
+
+        let log = capture.contents();
+        assert!(log.contains("INFO"), "{log}");
+        assert!(log.contains("authorization code issued"), "{log}");
+        assert!(log.contains(&client_id.to_string()), "{log}");
+        assert!(log.contains("read write"), "{log}");
+        assert!(!log.contains("test-code"), "{log}");
+        assert!(
+            !log.contains("E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"),
+            "{log}"
+        );
+        assert!(!log.contains(request_uri), "{log}");
     }
 
     #[tokio::test]
@@ -219,6 +241,8 @@ mod tests {
 
     #[tokio::test]
     async fn fails_when_pushed_request_is_not_found() {
+        let capture = LogCapture::default();
+        let _guard = capture.install();
         let request_uri = "urn:authorize:request_uri:missing";
 
         let take_mock = take_par_mock();
@@ -238,6 +262,14 @@ mod tests {
 
         take_mock.assert();
         save_mock.assert();
+
+        let log = capture.contents();
+        assert!(log.contains("WARN"), "{log}");
+        assert!(
+            log.contains("unknown, expired or already used request_uri"),
+            "{log}"
+        );
+        assert!(!log.contains(request_uri), "{log}");
     }
 
     #[tokio::test]
@@ -268,6 +300,8 @@ mod tests {
 
     #[tokio::test]
     async fn fails_with_page_error_when_redirect_uri_is_not_registered() {
+        let capture = LogCapture::default();
+        let _guard = capture.install();
         let client_id = Uuid::new_v4();
         let client = make_client(client_id);
         let request_uri = "urn:authorize:request_uri:test";
@@ -291,6 +325,11 @@ mod tests {
 
         take_mock.assert();
         save_mock.assert();
+
+        let log = capture.contents();
+        assert!(log.contains("WARN"), "{log}");
+        assert!(log.contains("redirect_uri is not registered"), "{log}");
+        assert!(!log.contains("evil.example.com"), "{log}");
     }
 
     #[tokio::test]
@@ -326,6 +365,8 @@ mod tests {
 
     #[tokio::test]
     async fn fails_with_redirect_server_error_when_save_authorization_code_fails() {
+        let capture = LogCapture::default();
+        let _guard = capture.install();
         let client_id = Uuid::new_v4();
         let request_uri = "urn:authorize:request_uri:test";
         let client = make_client(client_id);
@@ -355,10 +396,14 @@ mod tests {
 
         take_mock.assert();
         save_mock.assert();
+
+        assert!(!capture.contents().contains("authorization code issued"));
     }
 
     #[tokio::test]
     async fn consumes_par_and_redirects_with_access_denied_when_user_denies() {
+        let capture = LogCapture::default();
+        let _guard = capture.install();
         let client_id = Uuid::new_v4();
         let request_uri = "urn:authorize:request_uri:test";
         let client = make_client(client_id);
@@ -390,5 +435,10 @@ mod tests {
 
         take_mock.assert();
         save_mock.assert();
+
+        let log = capture.contents();
+        assert!(log.contains("INFO"), "{log}");
+        assert!(log.contains("consent denied"), "{log}");
+        assert!(log.contains(&client_id.to_string()), "{log}");
     }
 }

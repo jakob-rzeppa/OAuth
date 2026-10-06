@@ -48,6 +48,10 @@ impl AuthorizationRequest {
 
         // ==== redirect_uri ====
         if !client.has_redirect_uri(self.redirect_uri()) {
+            tracing::warn!(
+                %self.client_id,
+                "authorization request rejected: redirect_uri is not registered for the client"
+            );
             return Err(ValidationError::fatal(
                 FatalValidationError::InvalidRedirectUri,
             ));
@@ -71,6 +75,10 @@ impl AuthorizationRequest {
 
         // ==== scope ====
         if !client.has_scope(self.scope()) {
+            tracing::warn!(
+                %self.client_id,
+                "authorization request rejected: scope is not allowed for the client"
+            );
             return Err(ValidationError::redirectable(
                 RedirectableValidationError::InvalidScope,
                 self.redirect_uri().to_string(),

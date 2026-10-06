@@ -24,14 +24,14 @@ pub async fn take_login_session(
         .get_del(key(session_token_hash))
         .await
         .map_err(|error| {
-            eprintln!("Failed to take login session: {:?}", error);
+            tracing::error!(?error, "Failed to take login session");
             TakeLoginSessionError::DatabaseError
         })?;
 
     value
         .map(|value| {
             serde_json::from_str(&value).map_err(|error| {
-                eprintln!("Invalid login session data: {:?}", error);
+                tracing::error!(?error, "Invalid login session data");
                 TakeLoginSessionError::InvalidData
             })
         })

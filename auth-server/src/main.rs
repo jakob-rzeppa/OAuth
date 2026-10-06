@@ -2,46 +2,66 @@ use std::net::SocketAddr;
 
 use axum::{
     Router,
-    http::{HeaderValue, header},
+    body::Body,
+    http::{HeaderValue, Request, header},
     middleware::map_response,
     response::Response,
 };
 use tokio::net::TcpListener;
+use tower_http::trace::{DefaultOnFailure, DefaultOnRequest, DefaultOnResponse, TraceLayer};
+use tracing::Level;
 
 mod api;
 mod config;
 mod domain;
+mod logging;
 mod persistence;
 mod util;
 mod web;
 
 #[tokio::main]
 async fn main() {
-    println!("[STARTUP] Application starting...");
+    logging::init(config::log_level());
 
-    println!("[STARTUP] Building router...");
+    tracing::info!("application starting");
     let app = app();
 
     // Specify the address to bind to (0.0.0.0 to listen on all interfaces)
     let addr = SocketAddr::from(([0, 0, 0, 0], config::app_port()));
 
     // Create listener on address
-    println!("[STARTUP] Binding to address: {}", addr);
-    let listener = TcpListener::bind(addr)
-        .await
-        .expect(format!("[STARTUP] Failed to create TCP listener: {}", addr).as_str());
+    let listener = TcpListener::bind(addr).await.unwrap_or_else(|error| {
+        tracing::error!(%addr, ?error, "failed to bind the TCP listener");
+        std::process::exit(1)
+    });
 
     // Start the Axum server
-    println!("[STARTUP] Server running at {}", addr);
-    axum::serve(listener, app)
-        .await
-        .expect("[STARTUP] Failed to launch server");
+    tracing::info!(%addr, "server listening");
+    if let Err(error) = axum::serve(listener, app).await {
+        tracing::error!(?error, "server stopped unexpectedly");
+        std::process::exit(1);
+    }
 }
 
 fn app() -> Router {
     api::router()
         .merge(web::router())
         .layer(map_response(set_cache_control))
+        // Outermost, so it sees the final response. Only the method and path are recorded: the
+        // query string of `/authorize` carries the `request_uri`, which must not end up in the log.
+        .layer(
+            TraceLayer::new_for_http()
+                .make_span_with(|request: &Request<Body>| {
+                    tracing::debug_span!(
+                        "request",
+                        method = %request.method(),
+                        path = %request.uri().path(),
+                    )
+                })
+                .on_request(DefaultOnRequest::new().level(Level::DEBUG))
+                .on_response(DefaultOnResponse::new().level(Level::DEBUG))
+                .on_failure(DefaultOnFailure::new().level(Level::DEBUG)),
+        )
 }
 
 /// Keep every response out of browser and intermediary caches. They carry tokens,
@@ -99,5 +119,25 @@ mod tests {
             response.headers().get(header::CACHE_CONTROL).unwrap(),
             "no-store"
         );
+    }
+
+    #[tokio::test]
+    async fn logs_requests_at_debug_with_the_path_but_without_the_query_string() {
+        let capture = logging::testing::LogCapture::default();
+        let _guard = capture.install();
+
+        // The invalid client_id is rejected before touching any persistence.
+        let request =
+            Request::get("/authorize?client_id=not-a-uuid&request_uri=urn:secret-request-uri")
+                .body(Body::empty())
+                .unwrap();
+        app().oneshot(request).await.unwrap();
+
+        let log = capture.contents();
+        assert!(log.contains("path=/authorize"), "{log}");
+        assert!(log.contains("started processing request"), "{log}");
+        assert!(log.contains("finished processing request"), "{log}");
+        assert!(!log.contains("secret-request-uri"), "{log}");
+        assert!(!log.contains("not-a-uuid"), "{log}");
     }
 }

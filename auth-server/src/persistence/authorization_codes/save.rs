@@ -21,14 +21,14 @@ pub async fn save_authorization_code(
         .map_err(|_| SaveAuthorizationCodeError::DatabaseError)?;
 
     let value = serde_json::to_string(&code).map_err(|error| {
-        eprintln!("Failed to serialize PAR: {:?}", error);
+        tracing::error!(?error, "Failed to serialize PAR");
         SaveAuthorizationCodeError::SerializationError
     })?;
 
     conn.set_ex::<_, _, ()>(key(code.code()), value, ttl_seconds)
         .await
         .map_err(|error| {
-            eprintln!("Failed to save authorization code: {:?}", error);
+            tracing::error!(?error, "Failed to save authorization code");
             SaveAuthorizationCodeError::DatabaseError
         })
 }

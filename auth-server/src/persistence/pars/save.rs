@@ -22,14 +22,14 @@ pub async fn save_par(
         .map_err(|_| SaveParError::DatabaseError)?;
 
     let value = serde_json::to_string(&par).map_err(|error| {
-        eprintln!("Failed to serialize PAR: {:?}", error);
+        tracing::error!(?error, "Failed to serialize PAR");
         SaveParError::SerializationError
     })?;
 
     conn.set_ex::<_, _, ()>(key(request_uri), value, ttl_seconds)
         .await
         .map_err(|error| {
-            eprintln!("Failed to save PAR: {:?}", error);
+            tracing::error!(?error, "Failed to save PAR");
             SaveParError::DatabaseError
         })
 }

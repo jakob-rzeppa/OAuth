@@ -23,14 +23,14 @@ pub async fn peek_par(request_uri: &str) -> Result<Option<AuthorizationRequest>,
         .get(format!("par:{request_uri}"))
         .await
         .map_err(|error| {
-            eprintln!("Failed to peek PAR: {:?}", error);
+            tracing::error!(?error, "Failed to peek PAR");
             PeekParError::DatabaseError
         })?;
 
     value
         .map(|value| {
             serde_json::from_str(&value).map_err(|error| {
-                eprintln!("Invalid PAR data: {:?}", error);
+                tracing::error!(?error, "Invalid PAR data");
                 PeekParError::InvalidData
             })
         })
