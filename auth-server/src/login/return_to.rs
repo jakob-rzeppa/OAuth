@@ -1,7 +1,7 @@
 use axum::extract::FromRequestParts;
 use serde::Deserialize;
 
-use crate::{login::error_response::LoginErrorResponse, util::extract::parse_query};
+use crate::login::error_response::LoginErrorResponse;
 
 #[derive(Deserialize)]
 pub struct ReturnToQuery {
@@ -15,10 +15,11 @@ impl<S: Send + Sync> FromRequestParts<S> for ReturnToQuery {
         parts: &mut axum::http::request::Parts,
         _state: &S,
     ) -> Result<Self, Self::Rejection> {
-        if parts.uri.query().is_none() {
-            return Err(LoginErrorResponse::InvalidReturnTo);
-        }
-        parse_query(parts).ok_or(LoginErrorResponse::MalformedRequest)
+        let query = parts
+            .uri
+            .query()
+            .ok_or(LoginErrorResponse::InvalidReturnTo)?;
+        serde_urlencoded::from_str(query).map_err(|_| LoginErrorResponse::MalformedRequest)
     }
 }
 

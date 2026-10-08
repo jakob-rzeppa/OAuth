@@ -1,4 +1,5 @@
 use axum::{
+    extract::rejection::{FormRejection, QueryRejection},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
@@ -37,6 +38,18 @@ impl From<RequireUserSessionError> for AuthorizeErrorPage {
             }
             RequireUserSessionError::ServerError => AuthorizeErrorPage::ServerError,
         }
+    }
+}
+
+impl From<QueryRejection> for AuthorizeErrorPage {
+    fn from(_: QueryRejection) -> Self {
+        AuthorizeErrorPage::MalformedRequest
+    }
+}
+
+impl From<FormRejection> for AuthorizeErrorPage {
+    fn from(_: FormRejection) -> Self {
+        AuthorizeErrorPage::MalformedRequest
     }
 }
 

@@ -1,31 +1,23 @@
 use axum::{
-    extract::{FromRequest, FromRequestParts, Request},
+    Form,
+    extract::{FromRequest, FromRequestParts},
     http::header,
 };
 use serde::Deserialize;
 
 use crate::{
     login::{LOGIN_SESSION_COOKIE, error_response::LoginErrorResponse},
-    util::{cookie::cookie_value, extract::parse_form},
+    util::cookie::cookie_value,
 };
 
-#[derive(Deserialize)]
+/// Read from the request body, so it has to be the last extractor of a handler.
+#[derive(Deserialize, FromRequest)]
+#[from_request(via(Form), rejection(LoginErrorResponse))]
 pub struct LoginFormSubmitRequest {
     pub csrf_token: String,
 
     pub user_name: String,
     pub password: String,
-}
-
-/// Reads the form from the request body, so it has to be the last extractor of a handler.
-impl<S: Send + Sync> FromRequest<S> for LoginFormSubmitRequest {
-    type Rejection = LoginErrorResponse;
-
-    async fn from_request(request: Request, state: &S) -> Result<Self, Self::Rejection> {
-        parse_form(request, state)
-            .await
-            .ok_or(LoginErrorResponse::MalformedRequest)
-    }
 }
 
 /// The login session token, read from the login session cookie.
@@ -51,7 +43,7 @@ impl<S: Send + Sync> FromRequestParts<S> for LoginSessionToken {
 
 #[cfg(test)]
 mod tests {
-    use axum::body::Body;
+    use axum::{body::Body, extract::Request};
 
     use super::*;
 

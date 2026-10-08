@@ -1,8 +1,10 @@
-use api_macros::ApiRequest;
+use axum::{Json, extract::FromRequest};
+use serde::Deserialize;
 
 use crate::token::error_response::TokenErrorResponse;
 
-#[ApiRequest(TokenErrorResponse::InvalidRequestBody)]
+#[derive(Deserialize, FromRequest)]
+#[from_request(via(Json), rejection(TokenErrorResponse))]
 pub struct TokenRequest {
     pub grant_type: String,
     pub client_id: String,

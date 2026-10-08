@@ -1,4 +1,5 @@
 use api_macros::ApiErrorResponse;
+use axum::extract::rejection::JsonRejection;
 
 #[ApiErrorResponse]
 pub enum AuthorizePushErrorResponse {
@@ -56,4 +57,10 @@ pub enum AuthorizePushErrorResponse {
     #[error("server_error")]
     #[description("An internal server error occurred.")]
     InternalServerError,
+}
+
+impl From<JsonRejection> for AuthorizePushErrorResponse {
+    fn from(_: JsonRejection) -> Self {
+        AuthorizePushErrorResponse::InvalidRequestBody
+    }
 }

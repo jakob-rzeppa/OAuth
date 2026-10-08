@@ -1,8 +1,10 @@
-use api_macros::ApiRequest;
+use axum::{Json, extract::FromRequest};
+use serde::Deserialize;
 
 use crate::par::error_response::AuthorizePushErrorResponse;
 
-#[ApiRequest(AuthorizePushErrorResponse::InvalidRequestBody)]
+#[derive(Deserialize, FromRequest)]
+#[from_request(via(Json), rejection(AuthorizePushErrorResponse))]
 pub struct AuthorizePushRequest {
     pub client_id: String,
     pub redirect_uri: String,

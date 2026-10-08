@@ -1,4 +1,5 @@
 use api_macros::ApiErrorResponse;
+use axum::extract::rejection::JsonRejection;
 use axum::http::StatusCode;
 
 #[ApiErrorResponse]
@@ -14,4 +15,10 @@ pub enum IntrospectionErrorResponse {
     #[error("server_error")]
     #[description("Internal server error.")]
     DatabaseError,
+}
+
+impl From<JsonRejection> for IntrospectionErrorResponse {
+    fn from(_: JsonRejection) -> Self {
+        IntrospectionErrorResponse::InvalidRequestBody
+    }
 }

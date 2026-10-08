@@ -1,4 +1,5 @@
 use axum::{
+    extract::rejection::FormRejection,
     http::StatusCode,
     response::{IntoResponse, Response},
 };
@@ -13,6 +14,12 @@ pub enum LoginErrorResponse {
     InvalidCsrfToken,
 
     DatabaseError,
+}
+
+impl From<FormRejection> for LoginErrorResponse {
+    fn from(_: FormRejection) -> Self {
+        LoginErrorResponse::MalformedRequest
+    }
 }
 
 impl IntoResponse for LoginErrorResponse {

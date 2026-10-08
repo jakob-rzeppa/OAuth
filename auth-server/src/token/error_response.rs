@@ -1,4 +1,5 @@
 use api_macros::ApiErrorResponse;
+use axum::extract::rejection::JsonRejection;
 
 #[ApiErrorResponse]
 pub enum TokenErrorResponse {
@@ -41,4 +42,10 @@ pub enum TokenErrorResponse {
     #[error("invalid_grant")]
     #[description("Invalid code verifier.")]
     InvalidCodeVerifier,
+}
+
+impl From<JsonRejection> for TokenErrorResponse {
+    fn from(_: JsonRejection) -> Self {
+        TokenErrorResponse::InvalidRequestBody
+    }
 }
