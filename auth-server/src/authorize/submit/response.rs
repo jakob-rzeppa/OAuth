@@ -1,7 +1,4 @@
-use axum::{
-    http::{StatusCode, header},
-    response::{IntoResponse, Response},
-};
+use axum::response::{IntoResponse, Redirect, Response};
 use url::Url;
 
 use crate::authorize::error_page::AuthorizeErrorPage;
@@ -24,6 +21,32 @@ impl IntoResponse for AuthorizeSubmitResponse {
             .append_pair("state", &self.state)
             .append_pair("expires_in", &self.expires_in.to_string())
             .append_pair("iss", &self.iss);
-        (StatusCode::FOUND, [(header::LOCATION, url.as_str())]).into_response()
+        // 303, so the browser follows up with a GET even though this was a POST.
+        Redirect::to(url.as_str()).into_response()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::http::{StatusCode, header};
+
+    #[test]
+    fn redirects_to_the_client_with_see_other() {
+        let response = AuthorizeSubmitResponse {
+            code: "the-code".to_string(),
+            redirect_uri: "https://example.com/callback".to_string(),
+            state: "the-state".to_string(),
+            expires_in: 300,
+            iss: "https://issuer.example".to_string(),
+        }
+        .into_response();
+
+        assert_eq!(response.status(), StatusCode::SEE_OTHER);
+        let location = response.headers()[header::LOCATION].to_str().unwrap();
+        assert!(
+            location.starts_with("https://example.com/callback?code=the-code&state=the-state"),
+            "{location}"
+        );
     }
 }

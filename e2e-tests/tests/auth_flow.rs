@@ -83,7 +83,7 @@ async fn auth_flow() {
         .await
         .unwrap();
 
-    assert_eq!(authorize_res.status(), 302);
+    assert_eq!(authorize_res.status(), 303);
     let location = authorize_res
         .headers()
         .get("location")
