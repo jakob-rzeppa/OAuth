@@ -1,11 +1,31 @@
-//! Reading the `#[status_code(..)]`, `#[error(..)]` and `#[description(..)]`
-//! helper attributes off a variant.
+//! Reading the helper attributes off a variant: `#[status_code(..)]`, `#[error(..)]`,
+//! `#[code(..)]`, `#[description(..)]`, `#[server_error]` and `#[into_response]`.
 
-use syn::{Attribute, Error, LitStr, Variant, spanned::Spanned};
+use syn::{Attribute, Error, LitStr, Meta, Variant, spanned::Spanned};
 
 use super::combine;
 
-const HELPERS: [&str; 3] = ["status_code", "error", "description"];
+const HELPERS: [&str; 6] = [
+    "status_code",
+    "error",
+    "code",
+    "description",
+    "server_error",
+    "into_response",
+];
+
+/// All occurrences of `name` on `variant`.
+pub fn find<'a>(variant: &'a Variant, name: &'a str) -> impl Iterator<Item = &'a Attribute> {
+    variant
+        .attrs
+        .iter()
+        .filter(move |attr| attr.path().is_ident(name))
+}
+
+/// Whether `variant` carries `name`.
+pub fn has(variant: &Variant, name: &str) -> bool {
+    find(variant, name).next().is_some()
+}
 
 /// Reads the single occurrence of `name` on `variant`, recording a problem in
 /// `errors` if it is missing or repeated.
@@ -15,14 +35,36 @@ pub fn required<T>(
     errors: &mut Option<Error>,
     parse: impl Fn(&Attribute) -> Result<T, Error>,
 ) -> Option<T> {
+    let found = optional(variant, name, errors, parse);
+
+    if !has(variant, name) {
+        combine(
+            errors,
+            Error::new(
+                variant.ident.span(),
+                format!(
+                    "missing `#[{name}(..)]` attribute on variant `{}`",
+                    variant.ident
+                ),
+            ),
+        );
+    }
+
+    found
+}
+
+/// Reads the occurrence of `name` on `variant` if there is one, recording a problem in
+/// `errors` if it is repeated or can't be parsed.
+pub fn optional<T>(
+    variant: &Variant,
+    name: &str,
+    errors: &mut Option<Error>,
+    parse: impl Fn(&Attribute) -> Result<T, Error>,
+) -> Option<T> {
     let mut found = None;
     let mut seen = false;
 
-    for attr in variant
-        .attrs
-        .iter()
-        .filter(|attr| attr.path().is_ident(name))
-    {
+    for attr in find(variant, name) {
         if seen {
             combine(
                 errors,
@@ -40,20 +82,40 @@ pub fn required<T>(
         }
     }
 
-    if !seen {
-        combine(
-            errors,
-            Error::new(
-                variant.ident.span(),
-                format!(
-                    "missing `#[{name}(..)]` attribute on variant `{}`",
-                    variant.ident
-                ),
-            ),
-        );
-    }
-
     found
+}
+
+/// Reports every attribute in `names` present on `variant` as not allowed together
+/// with `marker`.
+pub fn forbid(variant: &Variant, marker: &str, names: &[&str], errors: &mut Option<Error>) {
+    for name in names {
+        for attr in find(variant, name) {
+            combine(
+                errors,
+                Error::new_spanned(
+                    attr,
+                    format!("`#[{name}(..)]` can't be combined with `#[{marker}]`"),
+                ),
+            );
+        }
+    }
+}
+
+/// Checks that a marker attribute (`#[server_error]`, `#[into_response]`) has no arguments.
+pub fn marker(attr: &Attribute) -> Result<(), Error> {
+    match &attr.meta {
+        Meta::Path(_) => Ok(()),
+        _ => Err(Error::new(
+            attr.span(),
+            format!(
+                "`#[{}]` takes no arguments",
+                attr.path()
+                    .get_ident()
+                    .map(ToString::to_string)
+                    .unwrap_or_default()
+            ),
+        )),
+    }
 }
 
 /// Parses an attribute whose body must be exactly one format string.

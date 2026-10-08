@@ -11,15 +11,27 @@ use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use syn::{Error, Expr, ItemEnum, ItemStruct};
 
+use api_error_response::ErrorResponseArgs;
 use api_response::ApiResponseArgs;
-use headers::Headers;
 
 /// Generates an [`axum::response::IntoResponse`] implementation for an error enum.
 ///
-/// Every variant must carry all three of `#[status_code(..)]`, `#[error(..)]` and
-/// `#[description(..)]` - there are no defaults. The error code and description are
-/// format strings in the style of `thiserror`, so they may interpolate the variant's
-/// own fields: named fields by name (`{email}`), tuple fields by position (`{0}`).
+/// Every variant is described by one of:
+///
+/// - `#[status_code(..)]`, `#[error(..)]` and `#[description(..)]`. The error code and
+///   description are format strings in the style of `thiserror`, so they may interpolate
+///   the variant's own fields: named fields by name (`{email}`), tuple fields by
+///   position (`{0}`).
+/// - `#[code(..)]` and `#[description(..)]`. `code` is an expression of a type with
+///   `fn status(&self) -> StatusCode` and `fn as_str(&self) -> &str` methods, typically
+///   an enum of the error codes a protocol defines, so the status always matches the code.
+/// - `#[server_error]` on a tuple variant with one field, the source of the failure.
+///   It responds with a 500, the code `server_error` and a generic description; the
+///   source is logged with `tracing::error!` (so the crate must depend on `tracing`)
+///   and never shown to the client. A `From<Source>` implementation is generated, so
+///   `?` converts the source into the variant.
+/// - `#[into_response]` on a tuple variant with one field implementing
+///   [`axum::response::IntoResponse`], which becomes the whole response (e.g. a redirect).
 ///
 /// ```ignore
 /// #[ApiErrorResponse]
@@ -28,39 +40,47 @@ use headers::Headers;
 ///     #[error("invalid_request")]
 ///     #[description("Invalid request body.")]
 ///     InvalidBody,
+///
+///     #[code(OAuthErrorCode::InvalidClient)]
+///     #[description("The client was not found.")]
+///     ClientNotFound,
+///
+///     #[server_error]
+///     ServerError(InternalError),
 /// }
 /// ```
 ///
 /// The response body is `{"error": <code>, "error_description": <description>}`.
 ///
-/// The macro optionally takes `headers(<name> => <value>, ..)`, which adds the given
-/// headers to the response of every variant. Each name is a
-/// [`axum::http::HeaderName`] expression and each value anything convertible into an
-/// [`axum::http::HeaderValue`].
+/// The macro optionally takes, in any order:
+///
+/// - `headers(<name> => <value>, ..)`, which adds the given headers to the response of
+///   every variant. Each name is a [`axum::http::HeaderName`] expression and each value
+///   anything convertible into an [`axum::http::HeaderValue`].
+/// - `render = <path>`, a function `fn(StatusCode, &str, &str) -> Response` that renders
+///   the status, error code and description instead of the JSON body, e.g. as an HTML page.
 ///
 /// ```ignore
 /// #[ApiErrorResponse(headers(axum::http::header::CACHE_CONTROL => "no-store"))]
 /// pub enum CreateUserErrorResponse { /* .. */ }
+///
+/// #[ApiErrorResponse(render = crate::util::html::render_error_page)]
+/// pub enum LoginErrorResponse { /* .. */ }
 /// ```
 #[proc_macro_attribute]
 pub fn ApiErrorResponse(attr: TokenStream, item: TokenStream) -> TokenStream {
-    let headers = if attr.is_empty() {
-        Headers::default()
+    let args = if attr.is_empty() {
+        ErrorResponseArgs::default()
     } else {
-        let attr = TokenStream2::from(attr);
-        match syn::parse2::<Headers>(attr.clone()) {
-            Ok(headers) => headers,
-            Err(_) => {
-                return Error::new_spanned(attr, "`ApiErrorResponse` only accepts `headers(..)`")
-                    .to_compile_error()
-                    .into();
-            }
+        match syn::parse2::<ErrorResponseArgs>(TokenStream2::from(attr)) {
+            Ok(args) => args,
+            Err(err) => return err.to_compile_error().into(),
         }
     };
 
     let item = syn::parse_macro_input!(item as ItemEnum);
 
-    match api_error_response::expand(headers, item) {
+    match api_error_response::expand(args, item) {
         Ok(tokens) => tokens.into(),
         Err(err) => err.to_compile_error().into(),
     }
