@@ -1,11 +1,11 @@
 use axum::{Json, extract::FromRequest};
 use serde::Deserialize;
 
-use crate::par::error_response::AuthorizePushErrorResponse;
+use crate::par::error_response::ParErrorResponse;
 
 #[derive(Deserialize, FromRequest)]
-#[from_request(via(Json), rejection(AuthorizePushErrorResponse))]
-pub struct AuthorizePushRequest {
+#[from_request(via(Json), rejection(ParErrorResponse))]
+pub struct ParRequest {
     pub client_id: String,
     pub redirect_uri: String,
     pub response_type: String,

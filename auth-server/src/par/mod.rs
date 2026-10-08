@@ -7,10 +7,7 @@ use crate::{
         AuthorizationRequest,
         validate::{FatalValidationError, RedirectableValidationError, ValidationError},
     },
-    par::{
-        error_response::AuthorizePushErrorResponse, request::AuthorizePushRequest,
-        response::AuthorizePushResponse,
-    },
+    par::{error_response::ParErrorResponse, request::ParRequest, response::ParResponse},
     persistence::{clients::find_by_id::find_client_by_id, pars::save::save_par},
 };
 
@@ -19,11 +16,11 @@ mod request;
 mod response;
 
 pub fn router() -> Router {
-    Router::new().route("/par", post(authorize_push_endpoint))
+    Router::new().route("/par", post(par_endpoint))
 }
 
-pub async fn authorize_push_endpoint(
-    AuthorizePushRequest {
+pub async fn par_endpoint(
+    ParRequest {
         client_id,
         redirect_uri,
         response_type,
@@ -31,15 +28,15 @@ pub async fn authorize_push_endpoint(
         state,
         code_challenge,
         code_challenge_method,
-    }: AuthorizePushRequest,
-) -> Result<AuthorizePushResponse, AuthorizePushErrorResponse> {
+    }: ParRequest,
+) -> Result<ParResponse, ParErrorResponse> {
     let Ok(client_id) = Uuid::parse_str(&client_id) else {
-        return Err(AuthorizePushErrorResponse::InvalidClientId);
+        return Err(ParErrorResponse::InvalidClientId);
     };
 
     let client = find_client_by_id(&client_id).ok_or_else(|| {
         tracing::warn!(%client_id, "pushed authorization request for an unknown client");
-        AuthorizePushErrorResponse::ClientNotFound
+        ParErrorResponse::ClientNotFound
     })?;
 
     let request = AuthorizationRequest::new(
@@ -56,26 +53,20 @@ pub async fn authorize_push_endpoint(
         .validate_against_client(&client)
         .map_err(|err| match err {
             ValidationError::Fatal { error } => match error {
-                FatalValidationError::ClientIdMismatch => {
-                    AuthorizePushErrorResponse::InternalServerError
-                }
-                FatalValidationError::InvalidRedirectUri => {
-                    AuthorizePushErrorResponse::InvalidRedirectUri
-                }
-                FatalValidationError::InvalidState => AuthorizePushErrorResponse::InvalidState,
+                FatalValidationError::ClientIdMismatch => ParErrorResponse::InternalServerError,
+                FatalValidationError::InvalidRedirectUri => ParErrorResponse::InvalidRedirectUri,
+                FatalValidationError::InvalidState => ParErrorResponse::InvalidState,
             },
             ValidationError::Redirectable { error, .. } => match error {
                 RedirectableValidationError::InvalidResponseType => {
-                    AuthorizePushErrorResponse::InvalidResponseType
+                    ParErrorResponse::InvalidResponseType
                 }
-                RedirectableValidationError::InvalidScope => {
-                    AuthorizePushErrorResponse::InvalidScope
-                }
+                RedirectableValidationError::InvalidScope => ParErrorResponse::InvalidScope,
                 RedirectableValidationError::InvalidCodeChallengeMethod => {
-                    AuthorizePushErrorResponse::InvalidCodeChallengeMethod
+                    ParErrorResponse::InvalidCodeChallengeMethod
                 }
                 RedirectableValidationError::InvalidCodeChallenge => {
-                    AuthorizePushErrorResponse::InvalidCodeChallenge
+                    ParErrorResponse::InvalidCodeChallenge
                 }
             },
         })?;
@@ -85,9 +76,9 @@ pub async fn authorize_push_endpoint(
 
     save_par(&request_uri, request, ttl_seconds)
         .await
-        .map_err(|_| AuthorizePushErrorResponse::DatabaseError)?;
+        .map_err(|_| ParErrorResponse::DatabaseError)?;
 
-    Ok(AuthorizePushResponse {
+    Ok(ParResponse {
         request_uri,
         expires_in: ttl_seconds,
     })
@@ -127,8 +118,8 @@ mod tests {
         )
     }
 
-    fn valid_request(client_id: Uuid) -> AuthorizePushRequest {
-        AuthorizePushRequest {
+    fn valid_request(client_id: Uuid) -> ParRequest {
+        ParRequest {
             client_id: client_id.to_string(),
             redirect_uri: "https://example.com/callback".to_string(),
             response_type: "code".to_string(),
@@ -156,7 +147,7 @@ mod tests {
         generate_request_uri_fake().setup(|| "urn:authorize:request_uri:test".to_string());
         Config::par_ttl_fake().setup(|| PAR_TTL_SECONDS);
 
-        let result = authorize_push_endpoint(valid_request(client_id)).await;
+        let result = par_endpoint(valid_request(client_id)).await;
 
         let Ok(response) = result else {
             panic!("expected a successful result");
@@ -170,24 +161,18 @@ mod tests {
         let mut request = valid_request(Uuid::new_v4());
         request.client_id = "not-a-uuid".to_string();
 
-        let result = authorize_push_endpoint(request).await;
+        let result = par_endpoint(request).await;
 
-        assert!(matches!(
-            result,
-            Err(AuthorizePushErrorResponse::InvalidClientId)
-        ));
+        assert!(matches!(result, Err(ParErrorResponse::InvalidClientId)));
     }
 
     #[tokio::test]
     async fn fails_when_client_is_not_found() {
         find_client_by_id_fake().setup(|_| None);
 
-        let result = authorize_push_endpoint(valid_request(Uuid::new_v4())).await;
+        let result = par_endpoint(valid_request(Uuid::new_v4())).await;
 
-        assert!(matches!(
-            result,
-            Err(AuthorizePushErrorResponse::ClientNotFound)
-        ));
+        assert!(matches!(result, Err(ParErrorResponse::ClientNotFound)));
     }
 
     #[tokio::test]
@@ -198,12 +183,9 @@ mod tests {
 
         let mut request = valid_request(client_id);
         request.redirect_uri = "https://evil.example.com/callback".to_string();
-        let result = authorize_push_endpoint(request).await;
+        let result = par_endpoint(request).await;
 
-        assert!(matches!(
-            result,
-            Err(AuthorizePushErrorResponse::InvalidRedirectUri)
-        ));
+        assert!(matches!(result, Err(ParErrorResponse::InvalidRedirectUri)));
     }
 
     #[tokio::test]
@@ -216,11 +198,8 @@ mod tests {
         generate_request_uri_fake().setup(|| "urn:authorize:request_uri:test".to_string());
         Config::par_ttl_fake().setup(|| PAR_TTL_SECONDS);
 
-        let result = authorize_push_endpoint(valid_request(client_id)).await;
+        let result = par_endpoint(valid_request(client_id)).await;
 
-        assert!(matches!(
-            result,
-            Err(AuthorizePushErrorResponse::DatabaseError)
-        ));
+        assert!(matches!(result, Err(ParErrorResponse::DatabaseError)));
     }
 }

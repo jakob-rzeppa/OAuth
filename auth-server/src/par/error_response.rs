@@ -2,7 +2,7 @@ use api_macros::ApiErrorResponse;
 use axum::extract::rejection::JsonRejection;
 
 #[ApiErrorResponse]
-pub enum AuthorizePushErrorResponse {
+pub enum ParErrorResponse {
     #[status_code(axum::http::StatusCode::BAD_REQUEST)]
     #[error("invalid_request")]
     #[description("Invalid request body.")]
@@ -59,8 +59,8 @@ pub enum AuthorizePushErrorResponse {
     InternalServerError,
 }
 
-impl From<JsonRejection> for AuthorizePushErrorResponse {
+impl From<JsonRejection> for ParErrorResponse {
     fn from(_: JsonRejection) -> Self {
-        AuthorizePushErrorResponse::InvalidRequestBody
+        ParErrorResponse::InvalidRequestBody
     }
 }
