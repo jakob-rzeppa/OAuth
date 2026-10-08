@@ -58,13 +58,17 @@ mod tests {
     use super::access_token::generate_access_token_mock;
     use super::*;
     use crate::{
-        domain::entity::{access_token::AccessToken, authorization_code::code::AuthorizationCode},
+        domain::entity::{
+            access_token::AccessToken, authorization_code::code::AuthorizationCode, client::Client,
+        },
         logging::testing::LogCapture,
         persistence::{
             access_tokens::register::{RegisterAccessTokenError, register_access_token_fake},
             authorization_codes::take::take_authorization_code_fake,
+            clients::find_by_id::find_client_by_id_fake,
         },
     };
+    use axum::{http::StatusCode, response::IntoResponse};
     use uuid::Uuid;
 
     // The RFC 7636 appendix B example pair.
@@ -80,8 +84,21 @@ mod tests {
         }
     }
 
+    /// Every client_id is a registered client.
+    fn fake_registered_client() {
+        find_client_by_id_fake().setup(|id| {
+            Some(Client::new(
+                *id,
+                "Test Client".to_string(),
+                vec!["https://example.com/callback".to_string()],
+                vec!["read".to_string(), "write".to_string()],
+            ))
+        });
+    }
+
     /// An authorization code the grant accepts for `token_request`, and a generated token.
     fn setup_valid_grant(client_id: Uuid, user_id: Option<Uuid>) {
+        fake_registered_client();
         take_authorization_code_fake().setup(move |_| {
             Ok(Some(AuthorizationCode::new(
                 "the-code".to_string(),
@@ -185,5 +202,47 @@ mod tests {
         assert!(log.contains("code_verifier does not match"), "{log}");
         assert!(!log.contains("a-wrong-verifier"), "{log}");
         assert!(!log.contains("access token issued"), "{log}");
+    }
+
+    #[tokio::test]
+    async fn rejects_a_malformed_client_id_as_invalid_request() {
+        let request = TokenRequest {
+            client_id: "not-a-uuid".to_string(),
+            ..token_request(Uuid::new_v4())
+        };
+
+        let result = token_endpoint(request).await;
+
+        let Err(error) = result else {
+            panic!("expected an error");
+        };
+        assert!(matches!(error, TokenErrorResponse::InvalidClientId));
+        assert_eq!(error.into_response().status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn rejects_an_unknown_client_as_invalid_client() {
+        find_client_by_id_fake().setup(|_| None);
+        take_authorization_code_fake().setup(|_| panic!("the code must not be consumed"));
+
+        let result = token_endpoint(token_request(Uuid::new_v4())).await;
+
+        let Err(error) = result else {
+            panic!("expected an error");
+        };
+        assert!(matches!(error, TokenErrorResponse::ClientNotFound));
+        assert_eq!(error.into_response().status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn rejects_a_code_issued_to_another_client_as_invalid_grant() {
+        setup_valid_grant(Uuid::new_v4(), None);
+
+        let result = token_endpoint(token_request(Uuid::new_v4())).await;
+
+        assert!(matches!(
+            result,
+            Err(TokenErrorResponse::InvalidAuthorizationCode)
+        ));
     }
 }

@@ -9,9 +9,14 @@ pub enum TokenErrorResponse {
     InvalidRequestBody,
 
     #[status_code(axum::http::StatusCode::BAD_REQUEST)]
-    #[error("invalid_client")]
-    #[description("Invalid client ID.")]
+    #[error("invalid_request")]
+    #[description("The client_id parameter is missing or invalid.")]
     InvalidClientId,
+
+    #[status_code(axum::http::StatusCode::UNAUTHORIZED)]
+    #[error("invalid_client")]
+    #[description("The client was not found.")]
+    ClientNotFound,
 
     #[status_code(axum::http::StatusCode::BAD_REQUEST)]
     #[error("unsupported_grant_type")]

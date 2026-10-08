@@ -2,7 +2,9 @@ use uuid::Uuid;
 
 use crate::{
     domain::entity::access_token::AccessToken,
-    persistence::authorization_codes::take::take_authorization_code,
+    persistence::{
+        authorization_codes::take::take_authorization_code, clients::find_by_id::find_client_by_id,
+    },
     token::{
         access_token::generate_access_token, error_response::TokenErrorResponse,
         pkce::verify_code_challenge, request::TokenRequest,
@@ -15,6 +17,11 @@ pub async fn handle_authorization_code_grant(
     let Some(client_id) = Uuid::parse_str(&request.client_id).ok() else {
         return Err(TokenErrorResponse::InvalidClientId);
     };
+
+    if find_client_by_id(&client_id).is_none() {
+        tracing::warn!(%client_id, "token request for an unknown client");
+        return Err(TokenErrorResponse::ClientNotFound);
+    }
 
     let Some(code) = &request.code else {
         return Err(TokenErrorResponse::MissingAuthorizationCode);
@@ -33,7 +40,7 @@ pub async fn handle_authorization_code_grant(
 
     if authorization_code.client_id() != &client_id {
         tracing::warn!(%client_id, "token request for an authorization code issued to a different client");
-        return Err(TokenErrorResponse::InvalidClientId);
+        return Err(TokenErrorResponse::InvalidAuthorizationCode);
     }
 
     if !verify_code_challenge(
