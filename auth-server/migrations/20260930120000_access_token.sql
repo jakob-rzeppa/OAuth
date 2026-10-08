@@ -6,6 +6,8 @@ CREATE TABLE IF NOT EXISTS "access_tokens" (
 
     "client_id"     UUID            NOT NULL,
 
+    "sub"           UUID            NULL,
+
     -- Issued at
     "iat"           TIMESTAMPTZ     NOT NULL,
     -- Expires at

@@ -103,7 +103,7 @@ mod tests {
     }
 
     /// An authorization code the grant accepts for `token_request`, and a generated token.
-    fn setup_valid_grant(client_id: Uuid) {
+    fn setup_valid_grant(client_id: Uuid, user_id: Option<Uuid>) {
         take_authorization_code_fake().setup(move |_| {
             Ok(Some(AuthorizationCode::new(
                 "the-code".to_string(),
@@ -114,13 +114,14 @@ mod tests {
                 "S256".to_string(),
             )))
         });
-        generate_access_token_mock().setup(move |_, _| {
+        generate_access_token_mock().setup(move |_, _, _| {
             (
                 "secret-token-value".to_string(),
                 AccessToken::new(
                     "token-hash".to_string(),
                     "bearer".to_string(),
                     client_id,
+                    user_id,
                     chrono::Utc::now(),
                     chrono::Utc::now() + chrono::Duration::seconds(3600),
                     "read write".to_string(),
@@ -134,7 +135,8 @@ mod tests {
         let capture = LogCapture::default();
         let _guard = capture.install();
         let client_id = Uuid::new_v4();
-        setup_valid_grant(client_id);
+        let user_id = Some(Uuid::new_v4());
+        setup_valid_grant(client_id, user_id);
         register_access_token_fake().setup(|_| Ok(()));
 
         let result = token_endpoint(token_request(client_id)).await;
@@ -157,7 +159,8 @@ mod tests {
         let capture = LogCapture::default();
         let _guard = capture.install();
         let client_id = Uuid::new_v4();
-        setup_valid_grant(client_id);
+        let user_id = Some(Uuid::new_v4());
+        setup_valid_grant(client_id, user_id);
         register_access_token_fake().setup(|_| Err(RegisterAccessTokenError::DatabaseError));
 
         let result = token_endpoint(token_request(client_id)).await;
@@ -189,7 +192,8 @@ mod tests {
         let capture = LogCapture::default();
         let _guard = capture.install();
         let client_id = Uuid::new_v4();
-        setup_valid_grant(client_id);
+        let user_id = Some(Uuid::new_v4());
+        setup_valid_grant(client_id, user_id);
         let request = TokenRequest {
             code_verifier: Some("a-wrong-verifier".to_string()),
             ..token_request(client_id)

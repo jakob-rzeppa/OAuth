@@ -8,6 +8,8 @@ pub enum IntrospectionResponse {
         client_id: Uuid,
         token_type: String,
 
+        sub: Option<Uuid>,
+
         iat: DateTime<Utc>,
         exp: DateTime<Utc>,
         iss: String,
@@ -22,6 +24,7 @@ impl IntoResponse for IntrospectionResponse {
                 scope,
                 client_id,
                 token_type,
+                sub,
                 iat,
                 exp,
                 iss,
@@ -31,6 +34,7 @@ impl IntoResponse for IntrospectionResponse {
                     "scope": scope,
                     "client_id": client_id,
                     "token_type": token_type,
+                    "sub": sub,
                     "iat": iat.timestamp(),
                     "exp": exp.timestamp(),
                     "iss": iss,

@@ -21,7 +21,7 @@ pub async fn find_access_token_by_token_hash(
 
     let row: Option<AccessTokenRow> = query_as!(
         AccessTokenRow,
-        "SELECT token_hash, token_type, client_id, iat, exp, scope FROM access_tokens WHERE token_hash = $1",
+        "SELECT token_hash, token_type, client_id, sub, iat, exp, scope FROM access_tokens WHERE token_hash = $1",
         token_hash
     )
     .fetch_optional(&mut *conn)

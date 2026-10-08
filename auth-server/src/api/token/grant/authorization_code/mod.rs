@@ -46,7 +46,8 @@ pub async fn handle_authorization_code_grant(
     }
 
     Ok(generate_access_token(
-        &client_id,
+        client_id,
+        Some(authorization_code.sub().clone()),
         authorization_code.scope(),
     ))
 }

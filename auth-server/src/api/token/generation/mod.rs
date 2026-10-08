@@ -13,7 +13,11 @@ use crate::{config::access_token_ttl, domain::entity::access_token::AccessToken}
 /// 1. A `String` representing the generated access token.
 /// 2. The AccessToken entity
 #[fnmock::mockable]
-pub fn generate_access_token(client_id: &Uuid, scope: &str) -> (String, AccessToken) {
+pub fn generate_access_token(
+    client_id: Uuid,
+    user_id: Option<Uuid>,
+    scope: &str,
+) -> (String, AccessToken) {
     let iat = Utc::now();
     let exp = iat + chrono::Duration::seconds(access_token_ttl().into());
 
@@ -24,7 +28,8 @@ pub fn generate_access_token(client_id: &Uuid, scope: &str) -> (String, AccessTo
     let access_token = AccessToken::new(
         token_hash,
         "bearer".to_string(),
-        *client_id,
+        client_id,
+        user_id,
         Utc::now(),
         exp,
         scope.to_string(),

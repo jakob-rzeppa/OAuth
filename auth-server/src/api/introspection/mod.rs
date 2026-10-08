@@ -35,6 +35,7 @@ pub async fn introspection_endpoint(
         scope: access_token.scope().to_string(),
         client_id: *access_token.client_id(),
         token_type: access_token.token_type().to_string(),
+        sub: access_token.sub().cloned(),
         iat: *access_token.iat(),
         exp: *access_token.exp(),
         iss: config::iss().to_string(),
