@@ -10,6 +10,8 @@ struct Config {
     access_token_ttl: u32,
     login_session_ttl: u64,
     user_session_ttl: u64,
+    par_ttl: u64,
+    authorization_code_ttl: u64,
     iss: String,
     log_level: LevelFilter,
 }
@@ -42,6 +44,16 @@ static CONFIG: LazyLock<Config> = LazyLock::new(|| {
         .parse()
         .expect("USER_SESSION_TTL must be a valid duration");
 
+    let par_ttl = std::env::var("PAR_TTL")
+        .expect("PAR_TTL must be set")
+        .parse()
+        .expect("PAR_TTL must be a valid duration");
+
+    let authorization_code_ttl = std::env::var("AUTHORIZATION_CODE_TTL")
+        .expect("AUTHORIZATION_CODE_TTL must be set")
+        .parse()
+        .expect("AUTHORIZATION_CODE_TTL must be a valid duration");
+
     let iss = std::env::var("ISSUER_IDENTIFIER").expect("ISSUER_IDENTIFIER must be set");
 
     let log_level =
@@ -56,6 +68,8 @@ static CONFIG: LazyLock<Config> = LazyLock::new(|| {
         access_token_ttl,
         login_session_ttl,
         user_session_ttl,
+        par_ttl,
+        authorization_code_ttl,
         iss,
         log_level,
     }
@@ -89,6 +103,16 @@ pub fn login_session_ttl() -> u64 {
 #[fnmock::fakeable]
 pub fn user_session_ttl() -> u64 {
     CONFIG.user_session_ttl
+}
+
+#[fnmock::fakeable]
+pub fn par_ttl() -> u64 {
+    CONFIG.par_ttl
+}
+
+#[fnmock::fakeable]
+pub fn authorization_code_ttl() -> u64 {
+    CONFIG.authorization_code_ttl
 }
 
 #[fnmock::fakeable]

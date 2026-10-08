@@ -2,6 +2,7 @@ use axum::{Router, routing::post};
 use uuid::Uuid;
 
 use crate::{
+    config::par_ttl,
     domain::entity::authorization_code::request::{
         AuthorizationRequest,
         validate::{FatalValidationError, RedirectableValidationError, ValidationError},
@@ -20,8 +21,6 @@ mod response;
 pub fn router() -> Router {
     Router::new().route("/par", post(authorize_push_endpoint))
 }
-
-const PAR_TTL_SECONDS: u64 = 180; // 3 minutes
 
 pub async fn authorize_push_endpoint(
     AuthorizePushRequest {
@@ -82,14 +81,15 @@ pub async fn authorize_push_endpoint(
         })?;
 
     let request_uri = generate_request_uri();
+    let ttl_seconds = par_ttl();
 
-    save_par(&request_uri, request, PAR_TTL_SECONDS)
+    save_par(&request_uri, request, ttl_seconds)
         .await
         .map_err(|_| AuthorizePushErrorResponse::DatabaseError)?;
 
     Ok(AuthorizePushResponse {
         request_uri,
-        expires_in: PAR_TTL_SECONDS,
+        expires_in: ttl_seconds,
     })
 }
 
@@ -109,12 +109,15 @@ fn generate_request_uri() -> String {
 mod tests {
     use super::*;
     use crate::{
+        config::par_ttl_fake,
         domain::entity::client::Client,
         persistence::{
             clients::find_by_id::find_client_by_id_fake,
             pars::save::{SaveParError, save_par_fake},
         },
     };
+
+    const PAR_TTL_SECONDS: u64 = 180;
 
     fn make_client(id: Uuid) -> Client {
         Client::new(
@@ -152,6 +155,7 @@ mod tests {
             Ok(())
         });
         generate_request_uri_fake().setup(|| "urn:authorize:request_uri:test".to_string());
+        par_ttl_fake().setup(|| PAR_TTL_SECONDS);
 
         let result = authorize_push_endpoint(valid_request(client_id)).await;
 
@@ -211,6 +215,7 @@ mod tests {
         find_client_by_id_fake().setup(move |_| Some(client.clone()));
         save_par_fake().setup(|_, _, _| Err(SaveParError::DatabaseError));
         generate_request_uri_fake().setup(|| "urn:authorize:request_uri:test".to_string());
+        par_ttl_fake().setup(|| PAR_TTL_SECONDS);
 
         let result = authorize_push_endpoint(valid_request(client_id)).await;
 
