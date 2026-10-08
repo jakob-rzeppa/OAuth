@@ -1,66 +1,60 @@
 use api_macros::ApiErrorResponse;
 use axum::extract::rejection::JsonRejection;
 
+use crate::{
+    domain::entity::authorization_code::request::validate::{
+        FatalValidationError, ValidationError,
+    },
+    error::InternalError,
+    util::oauth_error::OAuthErrorCode,
+};
+
 #[ApiErrorResponse]
 pub enum ParErrorResponse {
-    #[status_code(axum::http::StatusCode::BAD_REQUEST)]
-    #[error("invalid_request")]
+    #[code(OAuthErrorCode::InvalidRequest)]
     #[description("Invalid request body.")]
     InvalidRequestBody,
 
-    #[status_code(axum::http::StatusCode::BAD_REQUEST)]
-    #[error("invalid_request")]
+    #[code(OAuthErrorCode::InvalidRequest)]
     #[description("The client_id parameter is missing or invalid.")]
     InvalidClientId,
 
-    #[status_code(axum::http::StatusCode::UNAUTHORIZED)]
-    #[error("invalid_client")]
+    #[code(OAuthErrorCode::InvalidClient)]
     #[description("The client was not found.")]
     ClientNotFound,
 
-    #[status_code(axum::http::StatusCode::BAD_REQUEST)]
-    #[error("invalid_request")]
-    #[description("The redirect_uri parameter is missing or invalid.")]
-    InvalidRedirectUri,
+    /// The pushed request failed validation against the client.
+    #[code(code)]
+    #[description("{description}")]
+    InvalidAuthorizationRequest {
+        code: OAuthErrorCode,
+        description: &'static str,
+    },
 
-    #[status_code(axum::http::StatusCode::BAD_REQUEST)]
-    #[error("unsupported_response_type")]
-    #[description("The response_type parameter is missing or invalid.")]
-    InvalidResponseType,
-
-    #[status_code(axum::http::StatusCode::BAD_REQUEST)]
-    #[error("invalid_scope")]
-    #[description("The scope parameter is missing or invalid.")]
-    InvalidScope,
-
-    #[status_code(axum::http::StatusCode::BAD_REQUEST)]
-    #[error("invalid_request")]
-    #[description("The state parameter is missing or invalid.")]
-    InvalidState,
-
-    #[status_code(axum::http::StatusCode::BAD_REQUEST)]
-    #[error("invalid_request")]
-    #[description("The code_challenge_method parameter is missing or invalid.")]
-    InvalidCodeChallengeMethod,
-
-    #[status_code(axum::http::StatusCode::BAD_REQUEST)]
-    #[error("invalid_request")]
-    #[description("The code_challenge parameter is missing or invalid.")]
-    InvalidCodeChallenge,
-
-    #[status_code(axum::http::StatusCode::INTERNAL_SERVER_ERROR)]
-    #[error("server_error")]
-    #[description("A database error occurred.")]
-    DatabaseError,
-
-    #[status_code(axum::http::StatusCode::INTERNAL_SERVER_ERROR)]
-    #[error("server_error")]
-    #[description("An internal server error occurred.")]
-    InternalServerError,
+    #[server_error]
+    ServerError(InternalError),
 }
 
 impl From<JsonRejection> for ParErrorResponse {
     fn from(_: JsonRejection) -> Self {
         ParErrorResponse::InvalidRequestBody
+    }
+}
+
+impl From<ValidationError> for ParErrorResponse {
+    fn from(error: ValidationError) -> Self {
+        match error {
+            // The request is built from the client it is validated against.
+            ValidationError::Fatal {
+                error: FatalValidationError::ClientIdMismatch,
+            } => InternalError::Invariant(
+                "a pushed authorization request was validated against another client",
+            )
+            .into(),
+            error => ParErrorResponse::InvalidAuthorizationRequest {
+                code: error.oauth_code(),
+                description: error.description(),
+            },
+        }
     }
 }

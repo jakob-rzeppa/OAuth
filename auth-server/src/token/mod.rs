@@ -33,9 +33,7 @@ pub async fn token_endpoint(request: TokenRequest) -> Result<TokenResponse, Toke
         }
     };
 
-    register_access_token(&access_token_entity)
-        .await
-        .map_err(|_| TokenErrorResponse::DatabaseError)?;
+    register_access_token(&access_token_entity).await?;
 
     let expires_in = access_token_entity.exp().timestamp() - Utc::now().timestamp();
     tracing::info!(
@@ -61,9 +59,10 @@ mod tests {
         domain::entity::{
             access_token::AccessToken, authorization_code::code::AuthorizationCode, client::Client,
         },
+        error::InternalError,
         logging::testing::LogCapture,
         persistence::{
-            access_tokens::register::{RegisterAccessTokenError, register_access_token_fake},
+            access_tokens::register::register_access_token_fake,
             authorization_codes::take::take_authorization_code_fake,
             clients::find_by_id::find_client_by_id_fake,
         },
@@ -156,7 +155,7 @@ mod tests {
         let client_id = Uuid::new_v4();
         let user_id = Some(Uuid::new_v4());
         setup_valid_grant(client_id, user_id);
-        register_access_token_fake().setup(|_| Err(RegisterAccessTokenError::DatabaseError));
+        register_access_token_fake().setup(|_| Err(InternalError::Invariant("postgres is down")));
 
         let result = token_endpoint(token_request(client_id)).await;
 
@@ -244,5 +243,30 @@ mod tests {
             result,
             Err(TokenErrorResponse::InvalidAuthorizationCode)
         ));
+    }
+
+    #[tokio::test]
+    async fn logs_a_server_error_with_its_source_without_showing_it_to_the_client() {
+        let capture = LogCapture::default();
+        let _guard = capture.install();
+        let client_id = Uuid::new_v4();
+        setup_valid_grant(client_id, None);
+        register_access_token_fake().setup(|_| Err(InternalError::Invariant("postgres is down")));
+
+        let Err(error) = token_endpoint(token_request(client_id)).await else {
+            panic!("expected an error");
+        };
+        let response = error.into_response();
+
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body = String::from_utf8(body.to_vec()).unwrap();
+        assert!(body.contains("server_error"), "{body}");
+        assert!(!body.contains("postgres is down"), "{body}");
+        let log = capture.contents();
+        assert!(log.contains("ERROR"), "{log}");
+        assert!(log.contains("postgres is down"), "{log}");
     }
 }

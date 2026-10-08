@@ -30,10 +30,7 @@ pub async fn handle_authorization_code_grant(
         return Err(TokenErrorResponse::MissingCodeVerifier);
     };
 
-    let authorization_code = take_authorization_code(&code)
-        .await
-        .map_err(|_| TokenErrorResponse::DatabaseError);
-    let Some(authorization_code) = authorization_code? else {
+    let Some(authorization_code) = take_authorization_code(code).await? else {
         tracing::warn!(%client_id, "token request with an unknown, expired or already used authorization code");
         return Err(TokenErrorResponse::InvalidAuthorizationCode);
     };

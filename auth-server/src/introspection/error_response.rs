@@ -1,20 +1,18 @@
 use api_macros::ApiErrorResponse;
 use axum::extract::rejection::JsonRejection;
-use axum::http::StatusCode;
+
+use crate::{error::InternalError, util::oauth_error::OAuthErrorCode};
 
 #[ApiErrorResponse]
 pub enum IntrospectionErrorResponse {
-    #[status_code(StatusCode::BAD_REQUEST)]
-    #[error("invalid_request")]
+    #[code(OAuthErrorCode::InvalidRequest)]
     #[description(
         "The request is missing a required parameter, includes an invalid parameter value, or is otherwise malformed."
     )]
     InvalidRequestBody,
 
-    #[status_code(axum::http::StatusCode::INTERNAL_SERVER_ERROR)]
-    #[error("server_error")]
-    #[description("Internal server error.")]
-    DatabaseError,
+    #[server_error]
+    ServerError(InternalError),
 }
 
 impl From<JsonRejection> for IntrospectionErrorResponse {

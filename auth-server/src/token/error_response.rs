@@ -1,52 +1,44 @@
 use api_macros::ApiErrorResponse;
 use axum::extract::rejection::JsonRejection;
 
+use crate::{error::InternalError, util::oauth_error::OAuthErrorCode};
+
 #[ApiErrorResponse]
 pub enum TokenErrorResponse {
-    #[status_code(axum::http::StatusCode::BAD_REQUEST)]
-    #[error("invalid_request")]
+    #[code(OAuthErrorCode::InvalidRequest)]
     #[description("Invalid request body.")]
     InvalidRequestBody,
 
-    #[status_code(axum::http::StatusCode::BAD_REQUEST)]
-    #[error("invalid_request")]
+    #[code(OAuthErrorCode::InvalidRequest)]
     #[description("The client_id parameter is missing or invalid.")]
     InvalidClientId,
 
-    #[status_code(axum::http::StatusCode::UNAUTHORIZED)]
-    #[error("invalid_client")]
+    #[code(OAuthErrorCode::InvalidClient)]
     #[description("The client was not found.")]
     ClientNotFound,
 
-    #[status_code(axum::http::StatusCode::BAD_REQUEST)]
-    #[error("unsupported_grant_type")]
+    #[code(OAuthErrorCode::UnsupportedGrantType)]
     #[description("Unsupported grant type.")]
     UnsupportedGrantType,
 
-    #[status_code(axum::http::StatusCode::BAD_REQUEST)]
-    #[error("invalid_grant")]
+    #[code(OAuthErrorCode::InvalidGrant)]
     #[description("Missing authorization code.")]
     MissingAuthorizationCode,
 
-    #[status_code(axum::http::StatusCode::BAD_REQUEST)]
-    #[error("invalid_grant")]
+    #[code(OAuthErrorCode::InvalidGrant)]
     #[description("Missing code verifier.")]
     MissingCodeVerifier,
 
-    #[status_code(axum::http::StatusCode::INTERNAL_SERVER_ERROR)]
-    #[error("server_error")]
-    #[description("Internal server error.")]
-    DatabaseError,
-
-    #[status_code(axum::http::StatusCode::BAD_REQUEST)]
-    #[error("invalid_grant")]
+    #[code(OAuthErrorCode::InvalidGrant)]
     #[description("Invalid or expired authorization code.")]
     InvalidAuthorizationCode,
 
-    #[status_code(axum::http::StatusCode::BAD_REQUEST)]
-    #[error("invalid_grant")]
+    #[code(OAuthErrorCode::InvalidGrant)]
     #[description("Invalid code verifier.")]
     InvalidCodeVerifier,
+
+    #[server_error]
+    ServerError(InternalError),
 }
 
 impl From<JsonRejection> for TokenErrorResponse {

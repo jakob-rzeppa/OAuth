@@ -34,8 +34,8 @@ checksum = "940b3a0ca603d1eade50a4846a2afffd5ef57a9feac2c0e2ec2e14f9ead76000"
 
 [[package]]
 name = "api-macros"
-version = "0.1.1"
-source = "git+https://github.com/jakob-rzeppa/Auth.git?branch=main#6a1c50d9577c2832da23fc5b6bf4751204c20626"
+version = "0.1.2"
+source = "git+https://github.com/jakob-rzeppa/Auth.git?branch=main#f693b22e3e88fc82f9e5da026cd38e08aea72288"
 dependencies = [
  "proc-macro2",
  "quote",

@@ -16,6 +16,7 @@ use crate::config::Config;
 
 mod config;
 mod domain;
+mod error;
 mod logging;
 mod persistence;
 mod security;

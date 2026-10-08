@@ -5,7 +5,7 @@ use axum::{
 use uuid::Uuid;
 
 use crate::{
-    config::Config, domain::entity::user_session::UserSession,
+    config::Config, domain::entity::user_session::UserSession, error::InternalError,
     persistence::user_session::access::access_user_session, security::session::UserSessionToken,
     util::token::hash_token,
 };
@@ -31,7 +31,13 @@ impl IntoResponse for LoginRedirect {
 
 pub enum RequireUserSessionError {
     LoginRequired(LoginRedirect),
-    ServerError,
+    Internal(InternalError),
+}
+
+impl From<InternalError> for RequireUserSessionError {
+    fn from(error: InternalError) -> Self {
+        RequireUserSessionError::Internal(error)
+    }
 }
 
 /// Make sure the user is logged in and has a valid session (which is renewed by this call).
@@ -51,10 +57,8 @@ pub async fn require_user_session(
     let session_token = session_token.ok_or_else(login_required)?;
     let session_token_hash = hash_token(session_token.token());
 
-    // The persistence layer already logs the underlying error.
     access_user_session(&session_token_hash, Config::user_session_ttl())
-        .await
-        .map_err(|_| RequireUserSessionError::ServerError)?
+        .await?
         .ok_or_else(|| {
             tracing::warn!("Expired or invalid user session token was received.");
             login_required()
@@ -65,8 +69,7 @@ pub async fn require_user_session(
 mod tests {
     use super::*;
     use crate::{
-        logging::testing::LogCapture,
-        persistence::user_session::access::{AccessUserSessionError, access_user_session_fake},
+        logging::testing::LogCapture, persistence::user_session::access::access_user_session_fake,
     };
 
     const REQUEST_URI: &str = "urn:authorize:request_uri:test";
@@ -127,13 +130,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn fails_with_server_error_when_access_user_session_fails() {
+    async fn fails_with_an_internal_error_when_access_user_session_fails() {
         Config::user_session_ttl_fake().setup(|| 1800);
-        access_user_session_fake().setup(|_, _| Err(AccessUserSessionError::DatabaseError));
+        access_user_session_fake().setup(|_, _| Err(InternalError::Invariant("redis is down")));
 
         let result = require_user_session(token(), Uuid::new_v4(), REQUEST_URI).await;
 
-        assert!(matches!(result, Err(RequireUserSessionError::ServerError)));
+        assert!(matches!(result, Err(RequireUserSessionError::Internal(_))));
     }
 
     #[test]

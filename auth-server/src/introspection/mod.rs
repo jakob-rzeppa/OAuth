@@ -23,9 +23,7 @@ pub async fn introspection_endpoint(
     IntrospectionRequest { token }: IntrospectionRequest,
 ) -> Result<IntrospectionResponse, IntrospectionErrorResponse> {
     let token_hash = hash_token(&token);
-    let access_token = find_access_token_by_token_hash(&token_hash)
-        .await
-        .map_err(|_| IntrospectionErrorResponse::DatabaseError)?;
+    let access_token = find_access_token_by_token_hash(&token_hash).await?;
 
     let Some(access_token) = access_token else {
         return Ok(IntrospectionResponse::Inactive);

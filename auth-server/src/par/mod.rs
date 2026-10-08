@@ -3,10 +3,7 @@ use uuid::Uuid;
 
 use crate::{
     config::Config,
-    domain::entity::authorization_code::request::{
-        AuthorizationRequest,
-        validate::{FatalValidationError, RedirectableValidationError, ValidationError},
-    },
+    domain::entity::authorization_code::request::AuthorizationRequest,
     par::{error_response::ParErrorResponse, request::ParRequest, response::ParResponse},
     persistence::{clients::find_by_id::find_client_by_id, pars::save::save_par},
 };
@@ -49,34 +46,12 @@ pub async fn par_endpoint(
         code_challenge_method,
     );
 
-    request
-        .validate_against_client(&client)
-        .map_err(|err| match err {
-            ValidationError::Fatal { error } => match error {
-                FatalValidationError::ClientIdMismatch => ParErrorResponse::InternalServerError,
-                FatalValidationError::InvalidRedirectUri => ParErrorResponse::InvalidRedirectUri,
-                FatalValidationError::InvalidState => ParErrorResponse::InvalidState,
-            },
-            ValidationError::Redirectable { error, .. } => match error {
-                RedirectableValidationError::InvalidResponseType => {
-                    ParErrorResponse::InvalidResponseType
-                }
-                RedirectableValidationError::InvalidScope => ParErrorResponse::InvalidScope,
-                RedirectableValidationError::InvalidCodeChallengeMethod => {
-                    ParErrorResponse::InvalidCodeChallengeMethod
-                }
-                RedirectableValidationError::InvalidCodeChallenge => {
-                    ParErrorResponse::InvalidCodeChallenge
-                }
-            },
-        })?;
+    request.validate_against_client(&client)?;
 
     let request_uri = generate_request_uri();
     let ttl_seconds = Config::par_ttl();
 
-    save_par(&request_uri, request, ttl_seconds)
-        .await
-        .map_err(|_| ParErrorResponse::DatabaseError)?;
+    save_par(&request_uri, request, ttl_seconds).await?;
 
     Ok(ParResponse {
         request_uri,
@@ -101,10 +76,9 @@ mod tests {
     use super::*;
     use crate::{
         domain::entity::client::Client,
-        persistence::{
-            clients::find_by_id::find_client_by_id_fake,
-            pars::save::{SaveParError, save_par_fake},
-        },
+        error::InternalError,
+        persistence::{clients::find_by_id::find_client_by_id_fake, pars::save::save_par_fake},
+        util::oauth_error::OAuthErrorCode,
     };
 
     const PAR_TTL_SECONDS: u64 = 180;
@@ -185,21 +159,27 @@ mod tests {
         request.redirect_uri = "https://evil.example.com/callback".to_string();
         let result = par_endpoint(request).await;
 
-        assert!(matches!(result, Err(ParErrorResponse::InvalidRedirectUri)));
+        assert!(matches!(
+            result,
+            Err(ParErrorResponse::InvalidAuthorizationRequest {
+                code: OAuthErrorCode::InvalidRequest,
+                ..
+            })
+        ));
     }
 
     #[tokio::test]
-    async fn fails_with_database_error_when_save_par_fails() {
+    async fn fails_with_server_error_when_save_par_fails() {
         let client_id = Uuid::new_v4();
         let client = make_client(client_id);
 
         find_client_by_id_fake().setup(move |_| Some(client.clone()));
-        save_par_fake().setup(|_, _, _| Err(SaveParError::DatabaseError));
+        save_par_fake().setup(|_, _, _| Err(InternalError::Invariant("redis is down")));
         generate_request_uri_fake().setup(|| "urn:authorize:request_uri:test".to_string());
         Config::par_ttl_fake().setup(|| PAR_TTL_SECONDS);
 
         let result = par_endpoint(valid_request(client_id)).await;
 
-        assert!(matches!(result, Err(ParErrorResponse::DatabaseError)));
+        assert!(matches!(result, Err(ParErrorResponse::ServerError(_))));
     }
 }

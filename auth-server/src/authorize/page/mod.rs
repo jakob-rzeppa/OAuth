@@ -40,10 +40,7 @@ pub async fn authorize_page_endpoint(
     // Only the user themselves may see (and later submit) the request, so log in before showing it.
     require_user_session(session_token, client_id, &request_uri).await?;
 
-    let par = peek_par(&request_uri)
-        .await
-        .map_err(|_| AuthorizeErrorPage::ServerError)?
-        .ok_or_else(|| {
+    let par = peek_par(&request_uri).await?.ok_or_else(|| {
             tracing::warn!(%client_id, "authorize page requested for an unknown, expired or already used request_uri");
             AuthorizeErrorPage::RequestNotFound
         })?;
@@ -72,8 +69,8 @@ pub async fn authorize_page_endpoint(
 mod tests {
     use super::*;
     use crate::{
-        config::Config,
-        persistence::user_session::access::{AccessUserSessionError, access_user_session_fake},
+        config::Config, error::InternalError,
+        persistence::user_session::access::access_user_session_fake,
         security::require_session::LoginRedirect,
     };
     use axum::response::IntoResponse;
@@ -119,11 +116,11 @@ mod tests {
     #[tokio::test]
     async fn fails_with_server_error_when_access_user_session_fails() {
         Config::user_session_ttl_fake().setup(|| 1800);
-        access_user_session_fake().setup(|_, _| Err(AccessUserSessionError::DatabaseError));
+        access_user_session_fake().setup(|_, _| Err(InternalError::Invariant("redis is down")));
 
         let result = authorize_page_endpoint(session_token(), query(Uuid::new_v4())).await;
 
-        assert!(matches!(result, Err(AuthorizeErrorPage::ServerError)));
+        assert!(matches!(result, Err(AuthorizeErrorPage::ServerError(_))));
     }
 
     #[tokio::test]

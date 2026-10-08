@@ -6,6 +6,7 @@ use axum::{
 };
 
 use crate::{
+    error::InternalError,
     login::{
         LOGIN_SESSION_COOKIE,
         error_response::LoginErrorResponse,
@@ -14,10 +15,10 @@ use crate::{
         submit::request::{LoginFormSubmitRequest, LoginSessionToken},
     },
     persistence::{
-        login_session::take::{TakeLoginSessionError, take_login_session},
+        login_session::take::take_login_session,
         users::authorize::{AuthorizeUserError, authorize_user},
     },
-    security::session::{UserSessionError, create_user_session},
+    security::session::create_user_session,
     util::{cookie::expired_cookie, token::hash_token},
 };
 
@@ -41,15 +42,7 @@ pub async fn login_submit_endpoint(
     }
 
     let login_session_token_hash = hash_token(&session_token);
-    let login_session = take_login_session(&login_session_token_hash)
-        .await
-        .map_err(|e| match e {
-            TakeLoginSessionError::DatabaseError | TakeLoginSessionError::InvalidData => {
-                LoginErrorResponse::DatabaseError
-            }
-        })?;
-
-    let Some(login_session) = login_session else {
+    let Some(login_session) = take_login_session(&login_session_token_hash).await? else {
         tracing::warn!("login submit rejected: no valid login session");
         return Err(LoginErrorResponse::MissingSessionCookie);
     };
@@ -63,9 +56,7 @@ pub async fn login_submit_endpoint(
 
     let user = match authorize_res {
         Ok(data) => data,
-        Err(AuthorizeUserError::ServerError) => {
-            return Err(LoginErrorResponse::DatabaseError);
-        }
+        Err(AuthorizeUserError::Internal(error)) => return Err(error.into()),
         Err(AuthorizeUserError::InvalidCredentials) => {
             // Expected user behaviour, so INFO. The user name is deliberately not logged.
             tracing::info!("login failed: invalid credentials");
@@ -81,15 +72,12 @@ pub async fn login_submit_endpoint(
 
     // Allow temporary passwords for now.
 
-    let session_cookie = create_user_session(user.id)
-        .await
-        .map_err(|err| match err {
-            UserSessionError::DatabaseError => LoginErrorResponse::DatabaseError,
-        })?;
+    let session_cookie = create_user_session(user.id).await?;
 
     // The login session was consumed above, so its cookie is of no use any more.
-    let clear_login_session_cookie =
-        expired_cookie(LOGIN_SESSION_COOKIE).ok_or(LoginErrorResponse::DatabaseError)?;
+    let clear_login_session_cookie = expired_cookie(LOGIN_SESSION_COOKIE).ok_or(
+        InternalError::Invariant("the expired login session cookie is not a valid header value"),
+    )?;
 
     tracing::info!(user_id = %user.id, "user logged in");
 

@@ -4,7 +4,8 @@ use uuid::Uuid;
 use crate::{
     config::Config,
     domain::entity::user_session::UserSession,
-    persistence::user_session::save::{SaveUserSessionError, save_user_session},
+    error::InternalError,
+    persistence::user_session::save::save_user_session,
     util::{
         cookie::{cookie_value, session_cookie},
         token::{hash_token, random_token},
@@ -45,12 +46,8 @@ impl OptionalFromRequestParts<()> for UserSessionToken {
     }
 }
 
-pub enum UserSessionError {
-    DatabaseError,
-}
-
 /// Creates a new user session for the given user ID, saves it to the database, and returns a cookie header value.
-pub async fn create_user_session(user_id: Uuid) -> Result<HeaderValue, UserSessionError> {
+pub async fn create_user_session(user_id: Uuid) -> Result<HeaderValue, InternalError> {
     let session_token = random_token();
     let session_ttl = Config::user_session_ttl();
     let user_session_entity = UserSession::new(user_id);
@@ -60,14 +57,9 @@ pub async fn create_user_session(user_id: Uuid) -> Result<HeaderValue, UserSessi
         user_session_entity,
         session_ttl,
     )
-    .await
-    .map_err(|e| match e {
-        SaveUserSessionError::DatabaseError => UserSessionError::DatabaseError,
-        SaveUserSessionError::SerializationError => UserSessionError::DatabaseError,
-    })?;
+    .await?;
 
-    let cookie = session_cookie(USER_SESSION_COOKIE, &session_token, session_ttl)
-        .ok_or(UserSessionError::DatabaseError)?;
-
-    Ok(cookie)
+    session_cookie(USER_SESSION_COOKIE, &session_token, session_ttl).ok_or(
+        InternalError::Invariant("the user session cookie is not a valid header value"),
+    )
 }

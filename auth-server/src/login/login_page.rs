@@ -8,7 +8,7 @@ use crate::{
     config::Config,
     domain::entity::login_session::LoginSession,
     login::{LOGIN_SESSION_COOKIE, error_response::LoginErrorResponse},
-    persistence::login_session::save::{SaveLoginSessionError, save_login_session},
+    persistence::login_session::save::save_login_session,
     util::{
         cookie::session_cookie,
         csrf::create_csrf_token,
@@ -33,12 +33,7 @@ pub(super) async fn render_login_page(
         LoginSession::new(csrf_token.clone()),
         session_ttl_seconds,
     )
-    .await
-    .map_err(|error| match error {
-        SaveLoginSessionError::DatabaseError | SaveLoginSessionError::SerializationError => {
-            LoginErrorResponse::DatabaseError
-        }
-    })?;
+    .await?;
 
     Ok(LoginPageResponse {
         csrf_token,

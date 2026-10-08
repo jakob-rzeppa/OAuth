@@ -2,7 +2,7 @@ use crate::{
     authorize::{
         error_page::AuthorizeErrorPage,
         submit::{
-            error_response::{AuthorizeSubmitErrorResponse, AuthorizeSubmitRedirectErrorResponse},
+            error_response::{AuthorizeSubmitErrorResponse, ClientRedirectError},
             request::AuthorizeSubmitRequest,
             response::AuthorizeSubmitResponse,
         },
@@ -57,18 +57,12 @@ pub async fn authorize_submit_endpoint(
         state,
         code_challenge,
         code_challenge_method,
-    } = request
-        .validate_and_unpack(&client)
-        .map_err(AuthorizeSubmitErrorResponse::from)?;
+    } = request.validate_and_unpack(&client)?;
 
     // We only check the decision afer a full validation run, so we only return a redirect error if the request, client etc. are valid.
     if decision == false {
         tracing::info!(%client_id, "consent denied");
-        return Err(AuthorizeSubmitErrorResponse::Redirect {
-            error: AuthorizeSubmitRedirectErrorResponse::AccessDenied,
-            redirect_uri,
-            state,
-        });
+        return Err(ClientRedirectError::access_denied(redirect_uri, state).into());
     }
 
     // With the request validated and the user's approval, we can now generate an authorization code and return it to the client.
@@ -87,11 +81,9 @@ pub async fn authorize_submit_endpoint(
 
     let ttl_seconds = Config::authorization_code_ttl();
 
-    save_authorization_code(authorization_code, ttl_seconds)
-        .await
-        .map_err(|_| {
-            AuthorizeSubmitErrorResponse::server_error_redirect(redirect_uri.clone(), state.clone())
-        })?;
+    if let Err(error) = save_authorization_code(authorization_code, ttl_seconds).await {
+        return Err(ClientRedirectError::server_error(error, redirect_uri, state).into());
+    }
 
     tracing::info!(%client_id, scope = %issued_scope, "authorization code issued");
 
@@ -112,13 +104,14 @@ mod tests {
             authorization_code::request::AuthorizationRequest, client::Client,
             user_session::UserSession,
         },
+        error::InternalError,
         logging::testing::LogCapture,
         persistence::{
-            authorization_codes::save::{SaveAuthorizationCodeError, save_authorization_code_mock},
-            clients::find_by_id::find_client_by_id_fake,
-            pars::take::{TakeParError, take_par_mock},
-            user_session::access::{AccessUserSessionError, access_user_session_fake},
+            authorization_codes::save::save_authorization_code_mock,
+            clients::find_by_id::find_client_by_id_fake, pars::take::take_par_mock,
+            user_session::access::access_user_session_fake,
         },
+        util::oauth_error::OAuthErrorCode,
     };
     use fnmock::predicate;
     use uuid::Uuid;
@@ -238,7 +231,7 @@ mod tests {
         let request_uri = "urn:authorize:request_uri:test";
 
         let take_mock = take_par_mock();
-        take_mock.setup(|_| Err(TakeParError::DatabaseError));
+        take_mock.setup(|_| Err(InternalError::Invariant("redis is down")));
         take_mock.expect(predicate::eq(request_uri)).once();
         let save_mock = save_authorization_code_mock();
         save_mock.expect_never();
@@ -250,7 +243,7 @@ mod tests {
         assert!(matches!(
             result,
             Err(AuthorizeSubmitErrorResponse::Page {
-                error: AuthorizeErrorPage::ServerError
+                error: AuthorizeErrorPage::ServerError(_)
             })
         ));
 
@@ -347,7 +340,10 @@ mod tests {
         assert!(matches!(
             result,
             Err(AuthorizeSubmitErrorResponse::Page {
-                error: AuthorizeErrorPage::InvalidRedirectUri
+                error: AuthorizeErrorPage::InvalidAuthorizationRequest {
+                    code: OAuthErrorCode::InvalidRequest,
+                    ..
+                }
             })
         ));
 
@@ -379,11 +375,12 @@ mod tests {
             authorize_submit_endpoint(session_token(), submit_request(client_id, request_uri))
                 .await;
 
-        let Err(AuthorizeSubmitErrorResponse::Redirect {
-            error: AuthorizeSubmitRedirectErrorResponse::InvalidScope,
+        let Err(AuthorizeSubmitErrorResponse::Redirect(ClientRedirectError {
+            code: OAuthErrorCode::InvalidScope,
             redirect_uri,
             state,
-        }) = result
+            ..
+        })) = result
         else {
             panic!("expected an invalid_scope redirect error");
         };
@@ -411,18 +408,19 @@ mod tests {
         random_token_fake().setup(|| "test-code".to_string());
         Config::authorization_code_ttl_fake().setup(|| CODE_TTL_SECONDS);
         let save_mock = save_authorization_code_mock();
-        save_mock.setup(|_, _| Err(SaveAuthorizationCodeError::DatabaseError));
+        save_mock.setup(|_, _| Err(InternalError::Invariant("redis is down")));
         save_mock.expect_once();
 
         let result =
             authorize_submit_endpoint(session_token(), submit_request(client_id, request_uri))
                 .await;
 
-        let Err(AuthorizeSubmitErrorResponse::Redirect {
-            error: AuthorizeSubmitRedirectErrorResponse::ServerError,
+        let Err(AuthorizeSubmitErrorResponse::Redirect(ClientRedirectError {
+            code: OAuthErrorCode::ServerError,
             redirect_uri,
             state,
-        }) = result
+            ..
+        })) = result
         else {
             panic!("expected a server_error redirect error");
         };
@@ -461,11 +459,12 @@ mod tests {
         )
         .await;
 
-        let Err(AuthorizeSubmitErrorResponse::Redirect {
-            error: AuthorizeSubmitRedirectErrorResponse::AccessDenied,
+        let Err(AuthorizeSubmitErrorResponse::Redirect(ClientRedirectError {
+            code: OAuthErrorCode::AccessDenied,
             redirect_uri,
             state,
-        }) = result
+            ..
+        })) = result
         else {
             panic!("expected an access_denied redirect error");
         };
@@ -545,7 +544,7 @@ mod tests {
     #[tokio::test]
     async fn fails_with_server_error_when_access_user_session_fails() {
         Config::user_session_ttl_fake().setup(|| 1800);
-        access_user_session_fake().setup(|_, _| Err(AccessUserSessionError::DatabaseError));
+        access_user_session_fake().setup(|_, _| Err(InternalError::Invariant("redis is down")));
         let take_mock = take_par_mock();
         take_mock.expect_never();
         let save_mock = save_authorization_code_mock();
@@ -560,7 +559,7 @@ mod tests {
         assert!(matches!(
             result,
             Err(AuthorizeSubmitErrorResponse::Page {
-                error: AuthorizeErrorPage::ServerError
+                error: AuthorizeErrorPage::ServerError(_)
             })
         ));
         take_mock.assert();
