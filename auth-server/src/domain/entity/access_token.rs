@@ -1,6 +1,9 @@
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
+/// The only token type this server issues.
+pub const BEARER: &str = "bearer";
+
 pub struct AccessToken {
     token_hash: String,
 

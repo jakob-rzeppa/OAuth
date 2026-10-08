@@ -7,7 +7,7 @@ use uuid::Uuid;
 use crate::{
     config::user_session_ttl, domain::entity::user_session::UserSession,
     persistence::user_session::access::access_user_session, security::session::UserSessionToken,
-    util::session::hash_session_token,
+    util::token::hash_token,
 };
 
 /// Redirects the user to the login and back to the authorization request afterwards.
@@ -49,7 +49,7 @@ pub async fn require_user_session(
     };
 
     let session_token = session_token.ok_or_else(login_required)?;
-    let session_token_hash = hash_session_token(session_token.token());
+    let session_token_hash = hash_token(session_token.token());
 
     // The persistence layer already logs the underlying error.
     access_user_session(&session_token_hash, user_session_ttl())

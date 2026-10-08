@@ -6,19 +6,24 @@ use axum::{
     http::{HeaderValue, Request, header},
     middleware::map_response,
     response::Response,
+    routing::get,
 };
 use tokio::net::TcpListener;
 use tower_http::trace::{DefaultOnFailure, DefaultOnRequest, DefaultOnResponse, TraceLayer};
 use tracing::Level;
 
-mod api;
 mod config;
 mod domain;
 mod logging;
 mod persistence;
 mod security;
 mod util;
-mod web;
+
+mod authorize;
+mod introspection;
+mod login;
+mod par;
+mod token;
 
 #[tokio::main]
 async fn main() {
@@ -45,8 +50,13 @@ async fn main() {
 }
 
 fn app() -> Router {
-    api::router()
-        .merge(web::router())
+    Router::new()
+        .route("/health", get(|| async { "ok" }))
+        .merge(par::router())
+        .merge(token::router())
+        .merge(introspection::router())
+        .merge(authorize::router())
+        .merge(login::router())
         .layer(map_response(set_cache_control))
         // Outermost, so it sees the final response. Only the method and path are recorded: the
         // query string of `/authorize` carries the `request_uri`, which must not end up in the log.

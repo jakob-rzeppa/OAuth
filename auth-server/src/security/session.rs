@@ -7,7 +7,7 @@ use crate::{
     persistence::user_session::save::{SaveUserSessionError, save_user_session},
     util::{
         cookie::{cookie_value, session_cookie},
-        session::{create_session_token, hash_session_token},
+        token::{hash_token, random_token},
     },
 };
 
@@ -51,12 +51,12 @@ pub enum UserSessionError {
 
 /// Creates a new user session for the given user ID, saves it to the database, and returns a cookie header value.
 pub async fn create_user_session(user_id: Uuid) -> Result<HeaderValue, UserSessionError> {
-    let session_token = create_session_token();
+    let session_token = random_token();
     let session_ttl = user_session_ttl();
     let user_session_entity = UserSession::new(user_id);
 
     save_user_session(
-        &hash_session_token(&session_token),
+        &hash_token(&session_token),
         user_session_entity,
         session_ttl,
     )
