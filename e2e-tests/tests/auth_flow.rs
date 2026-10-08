@@ -122,7 +122,7 @@ async fn auth_flow() {
         .await
         .unwrap();
 
-    assert_eq!(token_res.status(), 201);
+    assert_eq!(token_res.status(), 200);
     assert_eq!(token_res.headers()["cache-control"], "no-store");
     let token: Value = token_res.json().await.unwrap();
     assert_fields(

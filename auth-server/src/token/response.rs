@@ -1,7 +1,7 @@
 use api_macros::ApiResponse;
 use axum::http::StatusCode;
 
-#[ApiResponse(StatusCode::CREATED)]
+#[ApiResponse(StatusCode::OK)]
 pub struct TokenResponse {
     pub access_token: String,
     pub token_type: String,
