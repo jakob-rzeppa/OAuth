@@ -2,7 +2,56 @@ use std::sync::LazyLock;
 
 use tracing::level_filters::LevelFilter;
 
-struct Config {
+pub struct Config;
+
+#[fnmock::fakeable]
+impl Config {
+    pub fn redis_url() -> &'static str {
+        &CONFIG.redis_url
+    }
+
+    pub fn identity_server_url() -> &'static str {
+        &CONFIG.identity_server_url
+    }
+
+    pub fn database_url() -> &'static str {
+        &CONFIG.database_url
+    }
+
+    pub fn app_port() -> u16 {
+        CONFIG.app_port
+    }
+
+    pub fn access_token_ttl() -> u32 {
+        CONFIG.access_token_ttl
+    }
+
+    pub fn login_session_ttl() -> u64 {
+        CONFIG.login_session_ttl
+    }
+
+    pub fn user_session_ttl() -> u64 {
+        CONFIG.user_session_ttl
+    }
+
+    pub fn par_ttl() -> u64 {
+        CONFIG.par_ttl
+    }
+
+    pub fn authorization_code_ttl() -> u64 {
+        CONFIG.authorization_code_ttl
+    }
+
+    pub fn iss() -> &'static str {
+        &CONFIG.iss
+    }
+
+    pub fn log_level() -> LevelFilter {
+        CONFIG.log_level
+    }
+}
+
+struct ConfigValues {
     redis_url: String,
     identity_server_url: String,
     database_url: String,
@@ -16,7 +65,7 @@ struct Config {
     log_level: LevelFilter,
 }
 
-static CONFIG: LazyLock<Config> = LazyLock::new(|| {
+static CONFIG: LazyLock<ConfigValues> = LazyLock::new(|| {
     let redis_url = std::env::var("REDIS_URL").expect("REDIS_URL must be set");
 
     let identity_server_url =
@@ -60,7 +109,7 @@ static CONFIG: LazyLock<Config> = LazyLock::new(|| {
         crate::logging::parse_level(&std::env::var("LOG_LEVEL").expect("LOG_LEVEL must be set"))
             .expect("LOG_LEVEL must be one of debug, info, warn, error");
 
-    Config {
+    ConfigValues {
         redis_url,
         identity_server_url,
         database_url,
@@ -74,52 +123,3 @@ static CONFIG: LazyLock<Config> = LazyLock::new(|| {
         log_level,
     }
 });
-
-pub fn redis_url() -> &'static str {
-    &CONFIG.redis_url
-}
-
-pub fn identity_server_url() -> &'static str {
-    &CONFIG.identity_server_url
-}
-
-pub fn database_url() -> &'static str {
-    &CONFIG.database_url
-}
-
-pub fn app_port() -> u16 {
-    CONFIG.app_port
-}
-
-pub fn access_token_ttl() -> u32 {
-    CONFIG.access_token_ttl
-}
-
-#[fnmock::fakeable]
-pub fn login_session_ttl() -> u64 {
-    CONFIG.login_session_ttl
-}
-
-#[fnmock::fakeable]
-pub fn user_session_ttl() -> u64 {
-    CONFIG.user_session_ttl
-}
-
-#[fnmock::fakeable]
-pub fn par_ttl() -> u64 {
-    CONFIG.par_ttl
-}
-
-#[fnmock::fakeable]
-pub fn authorization_code_ttl() -> u64 {
-    CONFIG.authorization_code_ttl
-}
-
-#[fnmock::fakeable]
-pub fn iss() -> &'static str {
-    &CONFIG.iss
-}
-
-pub fn log_level() -> LevelFilter {
-    CONFIG.log_level
-}

@@ -12,6 +12,8 @@ use tokio::net::TcpListener;
 use tower_http::trace::{DefaultOnFailure, DefaultOnRequest, DefaultOnResponse, TraceLayer};
 use tracing::Level;
 
+use crate::config::Config;
+
 mod config;
 mod domain;
 mod logging;
@@ -27,13 +29,13 @@ mod token;
 
 #[tokio::main]
 async fn main() {
-    logging::init(config::log_level());
+    logging::init(Config::log_level());
 
     tracing::info!("application starting");
     let app = app();
 
     // Specify the address to bind to (0.0.0.0 to listen on all interfaces)
-    let addr = SocketAddr::from(([0, 0, 0, 0], config::app_port()));
+    let addr = SocketAddr::from(([0, 0, 0, 0], Config::app_port()));
 
     // Create listener on address
     let listener = TcpListener::bind(addr).await.unwrap_or_else(|error| {

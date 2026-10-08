@@ -1,4 +1,4 @@
-//! Logging setup. The minimum level comes from `LOG_LEVEL` (see `config::log_level`).
+//! Logging setup. The minimum level comes from `LOG_LEVEL` (see `Config::log_level`).
 
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::{filter::Targets, layer::SubscriberExt, util::SubscriberInitExt};

@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::config::identity_server_url;
+use crate::config::Config;
 
 /// The user an identity-server `authenticate` call vouched for.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -41,7 +41,7 @@ pub async fn authorize_user(
     user_name: &str,
     password: &str,
 ) -> Result<AuthorizedUser, AuthorizeUserError> {
-    authorize_user_at(identity_server_url(), user_name, password).await
+    authorize_user_at(Config::identity_server_url(), user_name, password).await
 }
 
 async fn authorize_user_at(

@@ -1,7 +1,7 @@
 use axum::{Router, routing::post};
 
 use crate::{
-    config,
+    config::Config,
     introspection::{
         error_response::IntrospectionErrorResponse, request::IntrospectionRequest,
         response::IntrospectionResponse,
@@ -42,6 +42,6 @@ pub async fn introspection_endpoint(
         sub: access_token.sub().cloned(),
         iat: *access_token.iat(),
         exp: *access_token.exp(),
-        iss: config::iss().to_string(),
+        iss: Config::iss().to_string(),
     })
 }

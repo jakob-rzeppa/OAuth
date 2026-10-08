@@ -2,7 +2,7 @@ use chrono::Utc;
 use uuid::Uuid;
 
 use crate::{
-    config::access_token_ttl,
+    config::Config,
     domain::entity::access_token::{AccessToken, BEARER},
     util::token::{hash_token, random_token},
 };
@@ -20,7 +20,7 @@ pub(super) fn generate_access_token(
     scope: &str,
 ) -> (String, AccessToken) {
     let iat = Utc::now();
-    let exp = iat + chrono::Duration::seconds(access_token_ttl().into());
+    let exp = iat + chrono::Duration::seconds(Config::access_token_ttl().into());
 
     // Generate a unique token
     let token = random_token();

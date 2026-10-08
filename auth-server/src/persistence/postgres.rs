@@ -2,10 +2,10 @@ use std::sync::LazyLock;
 
 use sqlx::{Pool, Postgres, pool::PoolConnection};
 
-use crate::config;
+use crate::config::Config;
 
 static DB_POOL: LazyLock<Pool<Postgres>> = LazyLock::new(|| {
-    Pool::<Postgres>::connect_lazy(config::database_url()).expect("Failed to create database pool")
+    Pool::<Postgres>::connect_lazy(Config::database_url()).expect("Failed to create database pool")
 });
 
 #[derive(Debug)]

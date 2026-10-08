@@ -72,7 +72,7 @@ pub async fn authorize_page_endpoint(
 mod tests {
     use super::*;
     use crate::{
-        config::user_session_ttl_fake,
+        config::Config,
         persistence::user_session::access::{AccessUserSessionError, access_user_session_fake},
         security::require_session::LoginRedirect,
     };
@@ -108,7 +108,7 @@ mod tests {
 
     #[tokio::test]
     async fn redirects_to_login_when_the_session_is_expired() {
-        user_session_ttl_fake().setup(|| 1800);
+        Config::user_session_ttl_fake().setup(|| 1800);
         access_user_session_fake().setup(|_, _| Ok(None));
 
         let result = authorize_page_endpoint(session_token(), query(Uuid::new_v4())).await;
@@ -118,7 +118,7 @@ mod tests {
 
     #[tokio::test]
     async fn fails_with_server_error_when_access_user_session_fails() {
-        user_session_ttl_fake().setup(|| 1800);
+        Config::user_session_ttl_fake().setup(|| 1800);
         access_user_session_fake().setup(|_, _| Err(AccessUserSessionError::DatabaseError));
 
         let result = authorize_page_endpoint(session_token(), query(Uuid::new_v4())).await;

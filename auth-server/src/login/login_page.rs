@@ -5,7 +5,7 @@ use axum::{
 };
 
 use crate::{
-    config::login_session_ttl,
+    config::Config,
     domain::entity::login_session::LoginSession,
     login::{LOGIN_SESSION_COOKIE, error_response::LoginErrorResponse},
     persistence::login_session::save::{SaveLoginSessionError, save_login_session},
@@ -26,7 +26,7 @@ pub(super) async fn render_login_page(
 ) -> Result<LoginPageResponse, LoginErrorResponse> {
     let session_token = random_token();
     let csrf_token = create_csrf_token();
-    let session_ttl_seconds = login_session_ttl();
+    let session_ttl_seconds = Config::login_session_ttl();
 
     save_login_session(
         &hash_token(&session_token),

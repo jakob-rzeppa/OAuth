@@ -3,7 +3,7 @@ use url::Url;
 
 use crate::{
     authorize::error_page::AuthorizeErrorPage,
-    config::iss,
+    config::Config,
     domain::entity::authorization_code::request::validate::{
         FatalValidationError, RedirectableValidationError, ValidationError,
     },
@@ -138,7 +138,7 @@ impl IntoResponse for AuthorizeSubmitErrorResponse {
                     .append_pair("error", error.code())
                     .append_pair("error_description", error.description())
                     .append_pair("state", &state)
-                    .append_pair("iss", iss());
+                    .append_pair("iss", Config::iss());
                 Redirect::to(&url.to_string()).into_response()
             }
         }

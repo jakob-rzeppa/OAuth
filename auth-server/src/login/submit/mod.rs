@@ -113,7 +113,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        config::{login_session_ttl_fake, user_session_ttl_fake},
+        config::Config,
         domain::entity::{login_session::LoginSession, user_session::UserSession},
         logging::testing::LogCapture,
         persistence::{
@@ -159,7 +159,7 @@ mod tests {
                 has_temporary_password: false,
             })
         });
-        user_session_ttl_fake().setup(|| 1800);
+        Config::user_session_ttl_fake().setup(|| 1800);
         save_user_session_mock().setup(move |hash, session, ttl_seconds| {
             *saved_in_mock.lock().unwrap() = Some((hash.to_string(), session, ttl_seconds));
             Ok(())
@@ -281,7 +281,7 @@ mod tests {
         let _guard = capture.install();
         take_login_session_fake().setup(|_| Ok(Some(LoginSession::new("csrf".to_string()))));
         authorize_user_mock().setup(|_, _| Err(AuthorizeUserError::InvalidCredentials));
-        login_session_ttl_fake().setup(|| 900);
+        Config::login_session_ttl_fake().setup(|| 900);
         save_login_session_mock().setup(|_, _, _| Ok(()));
 
         let response =

@@ -5,7 +5,7 @@ use axum::{
 use uuid::Uuid;
 
 use crate::{
-    config::user_session_ttl, domain::entity::user_session::UserSession,
+    config::Config, domain::entity::user_session::UserSession,
     persistence::user_session::access::access_user_session, security::session::UserSessionToken,
     util::token::hash_token,
 };
@@ -52,7 +52,7 @@ pub async fn require_user_session(
     let session_token_hash = hash_token(session_token.token());
 
     // The persistence layer already logs the underlying error.
-    access_user_session(&session_token_hash, user_session_ttl())
+    access_user_session(&session_token_hash, Config::user_session_ttl())
         .await
         .map_err(|_| RequireUserSessionError::ServerError)?
         .ok_or_else(|| {
@@ -65,7 +65,6 @@ pub async fn require_user_session(
 mod tests {
     use super::*;
     use crate::{
-        config::user_session_ttl_fake,
         logging::testing::LogCapture,
         persistence::user_session::access::{AccessUserSessionError, access_user_session_fake},
     };
@@ -84,7 +83,7 @@ mod tests {
     #[tokio::test]
     async fn returns_the_session_for_a_valid_token() {
         let user_id = Uuid::new_v4();
-        user_session_ttl_fake().setup(|| 1800);
+        Config::user_session_ttl_fake().setup(|| 1800);
         access_user_session_fake().setup(move |_, _| Ok(Some(UserSession::new(user_id))));
 
         let result = require_user_session(token(), Uuid::new_v4(), REQUEST_URI).await;
@@ -109,7 +108,7 @@ mod tests {
     async fn requires_login_and_logs_a_warning_when_the_session_is_expired() {
         let capture = LogCapture::default();
         let _guard = capture.install();
-        user_session_ttl_fake().setup(|| 1800);
+        Config::user_session_ttl_fake().setup(|| 1800);
         access_user_session_fake().setup(|_, _| Ok(None));
 
         let result = require_user_session(token(), Uuid::new_v4(), REQUEST_URI).await;
@@ -129,7 +128,7 @@ mod tests {
 
     #[tokio::test]
     async fn fails_with_server_error_when_access_user_session_fails() {
-        user_session_ttl_fake().setup(|| 1800);
+        Config::user_session_ttl_fake().setup(|| 1800);
         access_user_session_fake().setup(|_, _| Err(AccessUserSessionError::DatabaseError));
 
         let result = require_user_session(token(), Uuid::new_v4(), REQUEST_URI).await;

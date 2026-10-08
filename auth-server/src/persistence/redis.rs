@@ -1,4 +1,4 @@
-use crate::config::redis_url;
+use crate::config::Config;
 
 #[derive(Debug)]
 pub(super) enum RedisError {
@@ -7,7 +7,7 @@ pub(super) enum RedisError {
 
 pub(super) async fn get_redis_connection() -> Result<redis::aio::MultiplexedConnection, RedisError>
 {
-    let client = redis::Client::open(redis_url()).map_err(|error| {
+    let client = redis::Client::open(Config::redis_url()).map_err(|error| {
         tracing::error!(?error, "Failed to create redis client");
         RedisError::ConnectionError
     })?;

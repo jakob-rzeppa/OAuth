@@ -2,7 +2,7 @@ use axum::{Router, routing::post};
 use uuid::Uuid;
 
 use crate::{
-    config::par_ttl,
+    config::Config,
     domain::entity::authorization_code::request::{
         AuthorizationRequest,
         validate::{FatalValidationError, RedirectableValidationError, ValidationError},
@@ -81,7 +81,7 @@ pub async fn authorize_push_endpoint(
         })?;
 
     let request_uri = generate_request_uri();
-    let ttl_seconds = par_ttl();
+    let ttl_seconds = Config::par_ttl();
 
     save_par(&request_uri, request, ttl_seconds)
         .await
@@ -109,7 +109,6 @@ fn generate_request_uri() -> String {
 mod tests {
     use super::*;
     use crate::{
-        config::par_ttl_fake,
         domain::entity::client::Client,
         persistence::{
             clients::find_by_id::find_client_by_id_fake,
@@ -155,7 +154,7 @@ mod tests {
             Ok(())
         });
         generate_request_uri_fake().setup(|| "urn:authorize:request_uri:test".to_string());
-        par_ttl_fake().setup(|| PAR_TTL_SECONDS);
+        Config::par_ttl_fake().setup(|| PAR_TTL_SECONDS);
 
         let result = authorize_push_endpoint(valid_request(client_id)).await;
 
@@ -215,7 +214,7 @@ mod tests {
         find_client_by_id_fake().setup(move |_| Some(client.clone()));
         save_par_fake().setup(|_, _, _| Err(SaveParError::DatabaseError));
         generate_request_uri_fake().setup(|| "urn:authorize:request_uri:test".to_string());
-        par_ttl_fake().setup(|| PAR_TTL_SECONDS);
+        Config::par_ttl_fake().setup(|| PAR_TTL_SECONDS);
 
         let result = authorize_push_endpoint(valid_request(client_id)).await;
 

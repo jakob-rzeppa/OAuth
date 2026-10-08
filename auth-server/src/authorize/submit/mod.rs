@@ -7,7 +7,7 @@ use crate::{
             response::AuthorizeSubmitResponse,
         },
     },
-    config::{authorization_code_ttl, iss},
+    config::Config,
     domain::entity::authorization_code::{
         code::AuthorizationCode, request::validate::ValidatedAuthorizationRequest,
     },
@@ -85,7 +85,7 @@ pub async fn authorize_submit_endpoint(
         code_challenge_method,
     );
 
-    let ttl_seconds = authorization_code_ttl();
+    let ttl_seconds = Config::authorization_code_ttl();
 
     save_authorization_code(authorization_code, ttl_seconds)
         .await
@@ -100,7 +100,7 @@ pub async fn authorize_submit_endpoint(
         redirect_uri,
         state,
         expires_in: ttl_seconds,
-        iss: iss().to_string(),
+        iss: Config::iss().to_string(),
     })
 }
 
@@ -108,7 +108,6 @@ pub async fn authorize_submit_endpoint(
 mod tests {
     use super::*;
     use crate::{
-        config::{authorization_code_ttl_fake, iss_fake, user_session_ttl_fake},
         domain::entity::{
             authorization_code::request::AuthorizationRequest, client::Client,
             user_session::UserSession,
@@ -135,7 +134,7 @@ mod tests {
     /// Fakes a valid user session for the returned user.
     fn fake_valid_session() -> Uuid {
         let user_id = Uuid::new_v4();
-        user_session_ttl_fake().setup(|| 1800);
+        Config::user_session_ttl_fake().setup(|| 1800);
         access_user_session_fake().setup(move |_, _| Ok(Some(UserSession::new(user_id))));
         user_id
     }
@@ -188,8 +187,8 @@ mod tests {
         take_mock.expect(predicate::eq(request_uri)).once();
         find_client_by_id_fake().setup(move |_| Some(client.clone()));
         random_token_fake().setup(|| "test-code".to_string());
-        authorization_code_ttl_fake().setup(|| CODE_TTL_SECONDS);
-        iss_fake().setup(|| "test-issuer");
+        Config::authorization_code_ttl_fake().setup(|| CODE_TTL_SECONDS);
+        Config::iss_fake().setup(|| "test-issuer");
         let save_mock = save_authorization_code_mock();
         save_mock.setup(|_, _| Ok(()));
         save_mock
@@ -410,7 +409,7 @@ mod tests {
         take_mock.expect(predicate::eq(request_uri)).once();
         find_client_by_id_fake().setup(move |_| Some(client.clone()));
         random_token_fake().setup(|| "test-code".to_string());
-        authorization_code_ttl_fake().setup(|| CODE_TTL_SECONDS);
+        Config::authorization_code_ttl_fake().setup(|| CODE_TTL_SECONDS);
         let save_mock = save_authorization_code_mock();
         save_mock.setup(|_, _| Err(SaveAuthorizationCodeError::DatabaseError));
         save_mock.expect_once();
@@ -512,7 +511,7 @@ mod tests {
         let client_id = Uuid::new_v4();
         let request_uri = "urn:authorize:request_uri:test";
 
-        user_session_ttl_fake().setup(|| 1800);
+        Config::user_session_ttl_fake().setup(|| 1800);
         access_user_session_fake().setup(|_, _| Ok(None));
         let take_mock = take_par_mock();
         take_mock.expect_never();
@@ -545,7 +544,7 @@ mod tests {
 
     #[tokio::test]
     async fn fails_with_server_error_when_access_user_session_fails() {
-        user_session_ttl_fake().setup(|| 1800);
+        Config::user_session_ttl_fake().setup(|| 1800);
         access_user_session_fake().setup(|_, _| Err(AccessUserSessionError::DatabaseError));
         let take_mock = take_par_mock();
         take_mock.expect_never();

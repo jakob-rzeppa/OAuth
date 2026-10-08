@@ -2,7 +2,7 @@ use axum::{extract::OptionalFromRequestParts, http::HeaderValue};
 use uuid::Uuid;
 
 use crate::{
-    config::user_session_ttl,
+    config::Config,
     domain::entity::user_session::UserSession,
     persistence::user_session::save::{SaveUserSessionError, save_user_session},
     util::{
@@ -52,7 +52,7 @@ pub enum UserSessionError {
 /// Creates a new user session for the given user ID, saves it to the database, and returns a cookie header value.
 pub async fn create_user_session(user_id: Uuid) -> Result<HeaderValue, UserSessionError> {
     let session_token = random_token();
-    let session_ttl = user_session_ttl();
+    let session_ttl = Config::user_session_ttl();
     let user_session_entity = UserSession::new(user_id);
 
     save_user_session(
