@@ -10,6 +10,8 @@ use crate::{
         authorization_codes::save::save_authorization_code, clients::find_by_id::find_client_by_id,
         pars::take::take_par,
     },
+    security::require_session::require_user_session,
+    security::session::UserSessionToken,
     web::authorize::submit::{
         error_response::{
             AuthorizeSubmitErrorResponse, AuthorizeSubmitPageErrorResponse,
@@ -28,27 +30,28 @@ const CODE_TTL_SECONDS: u64 = 300; // 5 minutes
 
 #[axum::debug_handler]
 pub async fn authorize_submit_endpoint(
+    session_token: Option<UserSessionToken>,
     AuthorizeSubmitRequest {
         request_uri,
         client_id,
         decision,
     }: AuthorizeSubmitRequest,
 ) -> Result<AuthorizeSubmitResponse, AuthorizeSubmitErrorResponse> {
-    let page_error = |error| AuthorizeSubmitErrorResponse::Page { error };
+    // Make sure the user is logged in and has a valid session.
+    // If not, return a redirect to the login page.
+    let session = require_user_session(session_token, client_id, &request_uri).await?;
+    let user_id = session.user_id();
 
     // Consume the pushed authorization request always, even if the user denied the request or the CSRF token is invalid.
     // Every invalid request is treated as a attack and the request is consumed.
-    let request = take_par(&request_uri)
-        .await
-        .map_err(|_| page_error(AuthorizeSubmitPageErrorResponse::ServerError))?
-        .ok_or_else(|| {
-            tracing::warn!(%client_id, "authorization submitted for an unknown, expired or already used request_uri");
-            page_error(AuthorizeSubmitPageErrorResponse::RequestNotFound)
-        })?;
+    let request = take_par(&request_uri).await?.ok_or_else(|| {
+        tracing::warn!(%client_id, "authorization submitted for an unknown, expired or already used request_uri");
+        AuthorizeSubmitPageErrorResponse::RequestNotFound
+    })?;
 
     let client = find_client_by_id(&client_id).ok_or_else(|| {
         tracing::warn!(%client_id, "authorization submitted for an unknown client");
-        page_error(AuthorizeSubmitPageErrorResponse::ClientNotFound)
+        AuthorizeSubmitPageErrorResponse::ClientNotFound
     })?;
 
     let ValidatedAuthorizationRequest {
@@ -81,16 +84,15 @@ pub async fn authorize_submit_endpoint(
         code.clone(),
         client_id,
         scope,
+        user_id,
         code_challenge,
         code_challenge_method,
     );
 
     save_authorization_code(authorization_code, CODE_TTL_SECONDS)
         .await
-        .map_err(|_| AuthorizeSubmitErrorResponse::Redirect {
-            error: AuthorizeSubmitRedirectErrorResponse::ServerError,
-            redirect_uri: redirect_uri.clone(),
-            state: state.clone(),
+        .map_err(|_| {
+            AuthorizeSubmitErrorResponse::server_error_redirect(redirect_uri.clone(), state.clone())
         })?;
 
     tracing::info!(%client_id, scope = %issued_scope, "authorization code issued");
@@ -116,17 +118,33 @@ fn generate_auth_code() -> String {
 mod tests {
     use super::*;
     use crate::{
-        config::iss_fake,
-        domain::entity::{authorization_code::request::AuthorizationRequest, client::Client},
+        config::{iss_fake, user_session_ttl_fake},
+        domain::entity::{
+            authorization_code::request::AuthorizationRequest, client::Client,
+            user_session::UserSession,
+        },
         logging::testing::LogCapture,
         persistence::{
             authorization_codes::save::{SaveAuthorizationCodeError, save_authorization_code_mock},
             clients::find_by_id::find_client_by_id_fake,
             pars::take::{TakeParError, take_par_mock},
+            user_session::access::{AccessUserSessionError, access_user_session_fake},
         },
     };
     use fnmock::predicate;
     use uuid::Uuid;
+
+    fn session_token() -> Option<UserSessionToken> {
+        Some(UserSessionToken::new("session-token".to_string()))
+    }
+
+    /// Fakes a valid user session for the returned user.
+    fn fake_valid_session() -> Uuid {
+        let user_id = Uuid::new_v4();
+        user_session_ttl_fake().setup(|| 1800);
+        access_user_session_fake().setup(move |_, _| Ok(Some(UserSession::new(user_id))));
+        user_id
+    }
 
     fn make_client(id: Uuid) -> Client {
         Client::new(
@@ -163,6 +181,7 @@ mod tests {
 
     #[tokio::test]
     async fn succeeds_and_returns_code_with_ttl_for_a_valid_request() {
+        let user_id = fake_valid_session();
         let capture = LogCapture::default();
         let _guard = capture.install();
         let client_id = Uuid::new_v4();
@@ -182,6 +201,7 @@ mod tests {
             .expectf(move |code: &AuthorizationCode, ttl_seconds: &u64| {
                 code.code() == "test-code"
                     && code.client_id() == &client_id
+                    && code.sub() == &user_id
                     && code.scope() == "read write"
                     && code.code_challenge() == "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"
                     && code.code_challenge_method() == "S256"
@@ -189,7 +209,9 @@ mod tests {
             })
             .once();
 
-        let result = authorize_submit_endpoint(submit_request(client_id, request_uri)).await;
+        let result =
+            authorize_submit_endpoint(session_token(), submit_request(client_id, request_uri))
+                .await;
 
         let Ok(response) = result else {
             panic!("expected a successful result");
@@ -218,6 +240,7 @@ mod tests {
 
     #[tokio::test]
     async fn fails_with_server_error_when_take_par_fails() {
+        fake_valid_session();
         let request_uri = "urn:authorize:request_uri:test";
 
         let take_mock = take_par_mock();
@@ -226,7 +249,9 @@ mod tests {
         let save_mock = save_authorization_code_mock();
         save_mock.expect_never();
 
-        let result = authorize_submit_endpoint(submit_request(Uuid::new_v4(), request_uri)).await;
+        let result =
+            authorize_submit_endpoint(session_token(), submit_request(Uuid::new_v4(), request_uri))
+                .await;
 
         assert!(matches!(
             result,
@@ -241,6 +266,7 @@ mod tests {
 
     #[tokio::test]
     async fn fails_when_pushed_request_is_not_found() {
+        fake_valid_session();
         let capture = LogCapture::default();
         let _guard = capture.install();
         let request_uri = "urn:authorize:request_uri:missing";
@@ -251,7 +277,9 @@ mod tests {
         let save_mock = save_authorization_code_mock();
         save_mock.expect_never();
 
-        let result = authorize_submit_endpoint(submit_request(Uuid::new_v4(), request_uri)).await;
+        let result =
+            authorize_submit_endpoint(session_token(), submit_request(Uuid::new_v4(), request_uri))
+                .await;
 
         assert!(matches!(
             result,
@@ -274,6 +302,7 @@ mod tests {
 
     #[tokio::test]
     async fn fails_when_client_is_not_found() {
+        fake_valid_session();
         let client_id = Uuid::new_v4();
         let request_uri = "urn:authorize:request_uri:test";
         let request = make_request(client_id);
@@ -285,7 +314,9 @@ mod tests {
         let save_mock = save_authorization_code_mock();
         save_mock.expect_never();
 
-        let result = authorize_submit_endpoint(submit_request(client_id, request_uri)).await;
+        let result =
+            authorize_submit_endpoint(session_token(), submit_request(client_id, request_uri))
+                .await;
 
         assert!(matches!(
             result,
@@ -300,6 +331,7 @@ mod tests {
 
     #[tokio::test]
     async fn fails_with_page_error_when_redirect_uri_is_not_registered() {
+        fake_valid_session();
         let capture = LogCapture::default();
         let _guard = capture.install();
         let client_id = Uuid::new_v4();
@@ -314,7 +346,9 @@ mod tests {
         let save_mock = save_authorization_code_mock();
         save_mock.expect_never();
 
-        let result = authorize_submit_endpoint(submit_request(client_id, request_uri)).await;
+        let result =
+            authorize_submit_endpoint(session_token(), submit_request(client_id, request_uri))
+                .await;
 
         assert!(matches!(
             result,
@@ -334,6 +368,7 @@ mod tests {
 
     #[tokio::test]
     async fn fails_with_redirect_error_when_scope_is_not_allowed() {
+        fake_valid_session();
         let client_id = Uuid::new_v4();
         let client = make_client(client_id);
         let request_uri = "urn:authorize:request_uri:test";
@@ -346,7 +381,9 @@ mod tests {
         let save_mock = save_authorization_code_mock();
         save_mock.expect_never();
 
-        let result = authorize_submit_endpoint(submit_request(client_id, request_uri)).await;
+        let result =
+            authorize_submit_endpoint(session_token(), submit_request(client_id, request_uri))
+                .await;
 
         let Err(AuthorizeSubmitErrorResponse::Redirect {
             error: AuthorizeSubmitRedirectErrorResponse::InvalidScope,
@@ -365,6 +402,7 @@ mod tests {
 
     #[tokio::test]
     async fn fails_with_redirect_server_error_when_save_authorization_code_fails() {
+        fake_valid_session();
         let capture = LogCapture::default();
         let _guard = capture.install();
         let client_id = Uuid::new_v4();
@@ -381,7 +419,9 @@ mod tests {
         save_mock.setup(|_, _| Err(SaveAuthorizationCodeError::DatabaseError));
         save_mock.expect_once();
 
-        let result = authorize_submit_endpoint(submit_request(client_id, request_uri)).await;
+        let result =
+            authorize_submit_endpoint(session_token(), submit_request(client_id, request_uri))
+                .await;
 
         let Err(AuthorizeSubmitErrorResponse::Redirect {
             error: AuthorizeSubmitRedirectErrorResponse::ServerError,
@@ -402,6 +442,7 @@ mod tests {
 
     #[tokio::test]
     async fn consumes_par_and_redirects_with_access_denied_when_user_denies() {
+        fake_valid_session();
         let capture = LogCapture::default();
         let _guard = capture.install();
         let client_id = Uuid::new_v4();
@@ -416,10 +457,13 @@ mod tests {
         let save_mock = save_authorization_code_mock();
         save_mock.expect_never();
 
-        let result = authorize_submit_endpoint(AuthorizeSubmitRequest {
-            decision: false,
-            ..submit_request(client_id, request_uri)
-        })
+        let result = authorize_submit_endpoint(
+            session_token(),
+            AuthorizeSubmitRequest {
+                decision: false,
+                ..submit_request(client_id, request_uri)
+            },
+        )
         .await;
 
         let Err(AuthorizeSubmitErrorResponse::Redirect {
@@ -440,5 +484,86 @@ mod tests {
         assert!(log.contains("INFO"), "{log}");
         assert!(log.contains("consent denied"), "{log}");
         assert!(log.contains(&client_id.to_string()), "{log}");
+    }
+
+    #[tokio::test]
+    async fn redirects_to_login_without_a_session_token() {
+        let take_mock = take_par_mock();
+        take_mock.expect_never();
+        let save_mock = save_authorization_code_mock();
+        save_mock.expect_never();
+
+        let result = authorize_submit_endpoint(
+            None,
+            submit_request(Uuid::new_v4(), "urn:authorize:request_uri:test"),
+        )
+        .await;
+
+        assert!(matches!(
+            result,
+            Err(AuthorizeSubmitErrorResponse::LoginRequired(_))
+        ));
+        take_mock.assert();
+        save_mock.assert();
+    }
+
+    #[tokio::test]
+    async fn redirects_to_login_without_consuming_the_par_when_the_session_is_expired() {
+        let capture = LogCapture::default();
+        let _guard = capture.install();
+        let client_id = Uuid::new_v4();
+        let request_uri = "urn:authorize:request_uri:test";
+
+        user_session_ttl_fake().setup(|| 1800);
+        access_user_session_fake().setup(|_, _| Ok(None));
+        let take_mock = take_par_mock();
+        take_mock.expect_never();
+        let save_mock = save_authorization_code_mock();
+        save_mock.expect_never();
+
+        let result =
+            authorize_submit_endpoint(session_token(), submit_request(client_id, request_uri))
+                .await;
+
+        let Err(AuthorizeSubmitErrorResponse::LoginRequired(redirect)) = result else {
+            panic!("expected a login required error");
+        };
+        assert_eq!(redirect.client_id, client_id);
+        assert_eq!(redirect.request_uri, request_uri);
+        take_mock.assert();
+        save_mock.assert();
+
+        let log = capture.contents();
+        assert!(log.contains("WARN"), "{log}");
+        assert!(
+            log.contains("Expired or invalid user session token"),
+            "{log}"
+        );
+        assert!(!log.contains("session-token"), "{log}");
+    }
+
+    #[tokio::test]
+    async fn fails_with_server_error_when_access_user_session_fails() {
+        user_session_ttl_fake().setup(|| 1800);
+        access_user_session_fake().setup(|_, _| Err(AccessUserSessionError::DatabaseError));
+        let take_mock = take_par_mock();
+        take_mock.expect_never();
+        let save_mock = save_authorization_code_mock();
+        save_mock.expect_never();
+
+        let result = authorize_submit_endpoint(
+            session_token(),
+            submit_request(Uuid::new_v4(), "urn:authorize:request_uri:test"),
+        )
+        .await;
+
+        assert!(matches!(
+            result,
+            Err(AuthorizeSubmitErrorResponse::Page {
+                error: AuthorizeSubmitPageErrorResponse::ServerError
+            })
+        ));
+        take_mock.assert();
+        save_mock.assert();
     }
 }

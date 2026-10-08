@@ -9,6 +9,8 @@ pub struct AuthorizationCode {
 
     scope: String,
 
+    sub: Uuid,
+
     code_challenge: String,
     code_challenge_method: String,
 }
@@ -18,6 +20,7 @@ impl AuthorizationCode {
         code: String,
         client_id: Uuid,
         scope: String,
+        sub: Uuid,
         code_challenge: String,
         code_challenge_method: String,
     ) -> Self {
@@ -25,6 +28,7 @@ impl AuthorizationCode {
             code,
             client_id,
             scope,
+            sub,
             code_challenge,
             code_challenge_method,
         }
@@ -40,6 +44,10 @@ impl AuthorizationCode {
 
     pub fn scope(&self) -> &str {
         &self.scope
+    }
+
+    pub fn sub(&self) -> &Uuid {
+        &self.sub
     }
 
     pub fn code_challenge(&self) -> &str {

@@ -4,7 +4,7 @@ use axum::{
     response::{Html, IntoResponse, Response},
 };
 
-use crate::web::login::cookie::{LOGIN_SESSION_COOKIE, session_cookie};
+use crate::{util::cookie::session_cookie, web::login::LOGIN_SESSION_COOKIE};
 
 pub struct LoginPageResponse {
     pub csrf_token: String,

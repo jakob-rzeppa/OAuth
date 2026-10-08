@@ -6,16 +6,14 @@ use axum::{
 };
 
 use crate::{
-    config::user_session_ttl,
-    domain::entity::user_session::UserSession,
     persistence::{
         login_session::take::{TakeLoginSessionError, take_login_session},
-        user_session::save::{SaveUserSessionError, save_user_session},
         users::authorize::{AuthorizeUserError, authorize_user},
     },
-    util::session::{create_session_token, hash_session_token},
+    security::session::{UserSessionError, create_user_session},
+    util::{cookie::expired_cookie, session::hash_session_token},
     web::login::{
-        cookie::{LOGIN_SESSION_COOKIE, USER_SESSION_COOKIE, expired_cookie, session_cookie},
+        LOGIN_SESSION_COOKIE,
         error_response::LoginErrorResponse,
         page::login_page,
         return_to::{ReturnToQuery, is_local_path},
@@ -83,23 +81,11 @@ pub async fn login_submit_endpoint(
 
     // Allow temporary passwords for now.
 
-    let session_token = create_session_token();
-    let session_ttl = user_session_ttl();
-    let user_session_entity = UserSession::new(user.id);
-
-    save_user_session(
-        &hash_session_token(&session_token),
-        user_session_entity,
-        session_ttl,
-    )
-    .await
-    .map_err(|e| match e {
-        SaveUserSessionError::DatabaseError => LoginErrorResponse::DatabaseError,
-        SaveUserSessionError::SerializationError => LoginErrorResponse::DatabaseError,
-    })?;
-
-    let cookie = session_cookie(USER_SESSION_COOKIE, &session_token, session_ttl)
-        .ok_or(LoginErrorResponse::DatabaseError)?;
+    let session_cookie = create_user_session(user.id)
+        .await
+        .map_err(|err| match err {
+            UserSessionError::DatabaseError => LoginErrorResponse::DatabaseError,
+        })?;
 
     // The login session was consumed above, so its cookie is of no use any more.
     let clear_login_session_cookie =
@@ -110,7 +96,7 @@ pub async fn login_submit_endpoint(
     // 303, so the browser follows up with a GET even though this was a POST.
     Ok((
         AppendHeaders([
-            (header::SET_COOKIE, cookie),
+            (header::SET_COOKIE, session_cookie),
             (header::SET_COOKIE, clear_login_session_cookie),
         ]),
         Redirect::to(&return_to),
@@ -128,7 +114,7 @@ mod tests {
     use super::*;
     use crate::{
         config::{login_session_ttl_fake, user_session_ttl_fake},
-        domain::entity::login_session::LoginSession,
+        domain::entity::{login_session::LoginSession, user_session::UserSession},
         logging::testing::LogCapture,
         persistence::{
             login_session::{save::save_login_session_mock, take::take_login_session_fake},

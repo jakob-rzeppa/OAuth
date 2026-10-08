@@ -16,6 +16,7 @@ mod config;
 mod domain;
 mod logging;
 mod persistence;
+mod security;
 mod util;
 mod web;
 

@@ -10,6 +10,8 @@ use crate::{
     domain::entity::authorization_code::request::validate::{
         FatalValidationError, RedirectableValidationError, ValidationError,
     },
+    persistence::pars::take::TakeParError,
+    security::require_session::{LoginRedirect, RequireUserSessionError},
 };
 
 pub enum AuthorizeSubmitRedirectErrorResponse {
@@ -39,6 +41,43 @@ pub enum AuthorizeSubmitErrorResponse {
     Page {
         error: AuthorizeSubmitPageErrorResponse,
     },
+    /// The user has no valid session, so they are sent to the login and back to the authorization afterwards.
+    LoginRequired(LoginRedirect),
+}
+
+impl AuthorizeSubmitErrorResponse {
+    pub fn server_error_redirect(redirect_uri: String, state: String) -> Self {
+        AuthorizeSubmitErrorResponse::Redirect {
+            error: AuthorizeSubmitRedirectErrorResponse::ServerError,
+            redirect_uri,
+            state,
+        }
+    }
+}
+
+impl From<AuthorizeSubmitPageErrorResponse> for AuthorizeSubmitErrorResponse {
+    fn from(error: AuthorizeSubmitPageErrorResponse) -> Self {
+        AuthorizeSubmitErrorResponse::Page { error }
+    }
+}
+
+impl From<RequireUserSessionError> for AuthorizeSubmitErrorResponse {
+    fn from(error: RequireUserSessionError) -> Self {
+        match error {
+            RequireUserSessionError::LoginRequired(redirect) => {
+                AuthorizeSubmitErrorResponse::LoginRequired(redirect)
+            }
+            RequireUserSessionError::ServerError => {
+                AuthorizeSubmitPageErrorResponse::ServerError.into()
+            }
+        }
+    }
+}
+
+impl From<TakeParError> for AuthorizeSubmitErrorResponse {
+    fn from(_: TakeParError) -> Self {
+        AuthorizeSubmitPageErrorResponse::ServerError.into()
+    }
 }
 
 impl From<ValidationError> for AuthorizeSubmitErrorResponse {
@@ -187,6 +226,28 @@ impl IntoResponse for AuthorizeSubmitErrorResponse {
                     .append_pair("iss", iss());
                 Redirect::to(&url.to_string()).into_response()
             }
+            AuthorizeSubmitErrorResponse::LoginRequired(redirect) => redirect.into_response(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn persistence_errors_become_page_server_errors() {
+        assert!(matches!(
+            AuthorizeSubmitErrorResponse::from(TakeParError::DatabaseError),
+            AuthorizeSubmitErrorResponse::Page {
+                error: AuthorizeSubmitPageErrorResponse::ServerError
+            }
+        ));
+        assert!(matches!(
+            AuthorizeSubmitErrorResponse::from(RequireUserSessionError::ServerError),
+            AuthorizeSubmitErrorResponse::Page {
+                error: AuthorizeSubmitPageErrorResponse::ServerError
+            }
+        ));
     }
 }

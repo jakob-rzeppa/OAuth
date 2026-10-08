@@ -109,6 +109,7 @@ mod tests {
                 "the-code".to_string(),
                 client_id,
                 "read write".to_string(),
+                Uuid::new_v4(),
                 CODE_CHALLENGE.to_string(),
                 "S256".to_string(),
             )))

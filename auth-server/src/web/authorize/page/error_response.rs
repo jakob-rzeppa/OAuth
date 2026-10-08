@@ -4,6 +4,8 @@ use axum::{
     response::{Html, IntoResponse, Response},
 };
 
+use crate::security::require_session::{LoginRedirect, RequireUserSessionError};
+
 pub enum AuthorizePageErrorResponse {
     MalformedRequest,
 
@@ -17,6 +19,20 @@ pub enum AuthorizePageErrorResponse {
     ClientIdMismatch,
 
     ServerError,
+
+    /// The user has no valid session, so they are sent to the login and back to the authorization afterwards.
+    LoginRequired(LoginRedirect),
+}
+
+impl From<RequireUserSessionError> for AuthorizePageErrorResponse {
+    fn from(error: RequireUserSessionError) -> Self {
+        match error {
+            RequireUserSessionError::LoginRequired(redirect) => {
+                AuthorizePageErrorResponse::LoginRequired(redirect)
+            }
+            RequireUserSessionError::ServerError => AuthorizePageErrorResponse::ServerError,
+        }
+    }
 }
 
 #[derive(Template)]
@@ -69,6 +85,9 @@ impl IntoResponse for AuthorizePageErrorResponse {
                 "server_error".to_string(),
                 "An unexpected error occurred while processing the request.".to_string(),
             ),
+            AuthorizePageErrorResponse::LoginRequired(redirect) => {
+                return redirect.into_response();
+            }
         };
 
         let page = AuthorizePageErrorPage {

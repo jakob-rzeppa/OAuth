@@ -5,9 +5,9 @@ use axum::{
 };
 use serde::Deserialize;
 
-use crate::web::login::{
-    cookie::{LOGIN_SESSION_COOKIE, cookie_value},
-    error_response::LoginErrorResponse,
+use crate::{
+    util::cookie::cookie_value,
+    web::login::{LOGIN_SESSION_COOKIE, error_response::LoginErrorResponse},
 };
 
 #[derive(Deserialize)]
