@@ -27,7 +27,6 @@ The services are tested together by [`e2e-tests`](e2e-tests), black-box tests ag
 
 ### Roadmap
 
-- **User authentication**
 - CSRF protection for the authorize endpoint
 - [Openid Connect](https://openid.net/specs/openid-connect-core-1_0.html)
 - **HTTPS**
