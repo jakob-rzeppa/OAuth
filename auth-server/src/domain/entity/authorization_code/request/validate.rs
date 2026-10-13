@@ -9,6 +9,7 @@ pub struct ValidatedAuthorizationRequest {
     pub state: String,
     pub code_challenge: String,
     pub code_challenge_method: String,
+    pub nonce: Option<String>,
 }
 
 impl AuthorizationRequest {
@@ -26,6 +27,7 @@ impl AuthorizationRequest {
             state,
             code_challenge,
             code_challenge_method,
+            nonce,
         } = self;
 
         Ok(ValidatedAuthorizationRequest {
@@ -35,6 +37,7 @@ impl AuthorizationRequest {
             state,
             code_challenge,
             code_challenge_method,
+            nonce,
         })
     }
 
@@ -185,6 +188,7 @@ mod tests {
             "some-state".to_string(),
             "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM".to_string(),
             "S256".to_string(),
+            None,
         )
     }
 
@@ -195,6 +199,30 @@ mod tests {
         let request = make_authorization_request(client_id);
 
         assert_eq!(request.validate_against_client(&client), Ok(()));
+    }
+
+    #[test]
+    fn validate_and_unpack_carries_the_nonce() {
+        let client_id = Uuid::new_v4();
+        let client = make_client(client_id);
+
+        let without_nonce = make_authorization_request(client_id)
+            .validate_and_unpack(&client)
+            .unwrap();
+        assert_eq!(without_nonce.nonce, None);
+
+        let request = AuthorizationRequest::new(
+            client_id,
+            "https://example.com/callback".to_string(),
+            "code".to_string(),
+            "read".to_string(),
+            "some-state".to_string(),
+            "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM".to_string(),
+            "S256".to_string(),
+            Some("some-nonce".to_string()),
+        );
+        let with_nonce = request.validate_and_unpack(&client).unwrap();
+        assert_eq!(with_nonce.nonce.as_deref(), Some("some-nonce"));
     }
 
     #[test]
@@ -222,6 +250,7 @@ mod tests {
             "some-state".to_string(),
             "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM".to_string(),
             "S256".to_string(),
+            None,
         );
 
         assert_eq!(
@@ -246,6 +275,7 @@ mod tests {
             "some-state".to_string(),
             "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM".to_string(),
             "S256".to_string(),
+            None,
         );
 
         assert_eq!(
@@ -268,6 +298,7 @@ mod tests {
             "some-state".to_string(),
             "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM".to_string(),
             "S256".to_string(),
+            None,
         );
 
         assert_eq!(
@@ -292,6 +323,7 @@ mod tests {
             "".to_string(),
             "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM".to_string(),
             "S256".to_string(),
+            None,
         );
 
         assert_eq!(
@@ -312,6 +344,7 @@ mod tests {
             "some-state".to_string(),
             "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM".to_string(),
             "plain".to_string(),
+            None,
         );
 
         assert_eq!(
@@ -336,6 +369,7 @@ mod tests {
             "some-state".to_string(),
             "".to_string(),
             "S256".to_string(),
+            None,
         );
 
         assert_eq!(
@@ -367,6 +401,7 @@ mod tests {
                 "some-state".to_string(),
                 code_challenge.to_string(),
                 "S256".to_string(),
+                None,
             );
 
             assert_eq!(
@@ -404,6 +439,7 @@ mod tests {
                 "some-state".to_string(),
                 code_challenge.to_string(),
                 "S256".to_string(),
+                None,
             );
 
             assert_eq!(

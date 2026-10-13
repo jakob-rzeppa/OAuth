@@ -57,6 +57,7 @@ pub async fn authorize_submit_endpoint(
         state,
         code_challenge,
         code_challenge_method,
+        nonce,
     } = request.validate_and_unpack(&client)?;
 
     // We only check the decision afer a full validation run, so we only return a redirect error if the request, client etc. are valid.
@@ -77,6 +78,7 @@ pub async fn authorize_submit_endpoint(
         user_id,
         code_challenge,
         code_challenge_method,
+        nonce,
     );
 
     let ttl_seconds = Config::authorization_code_ttl();
@@ -154,6 +156,7 @@ mod tests {
             "some-state".to_string(),
             "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM".to_string(),
             "S256".to_string(),
+            None,
         )
     }
 
@@ -227,6 +230,71 @@ mod tests {
             "{log}"
         );
         assert!(!log.contains(request_uri), "{log}");
+    }
+
+    #[tokio::test]
+    async fn carries_the_nonce_from_the_request_into_the_authorization_code() {
+        fake_valid_session();
+        let client_id = Uuid::new_v4();
+        let client = make_client(client_id);
+        let request = AuthorizationRequest::new(
+            client_id,
+            "https://example.com/callback".to_string(),
+            "code".to_string(),
+            "read write".to_string(),
+            "some-state".to_string(),
+            "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM".to_string(),
+            "S256".to_string(),
+            Some("some-nonce".to_string()),
+        );
+
+        take_par_mock().setup(move |_| Ok(Some(request.clone())));
+        find_client_by_id_fake().setup(move |_| Some(client.clone()));
+        random_token_fake().setup(|| "test-code".to_string());
+        Config::authorization_code_ttl_fake().setup(|| CODE_TTL_SECONDS);
+        Config::iss_fake().setup(|| "test-issuer");
+        let save_mock = save_authorization_code_mock();
+        save_mock.setup(|_, _| Ok(()));
+        save_mock
+            .expectf(|code: &AuthorizationCode, _: &u64| code.nonce() == Some("some-nonce"))
+            .once();
+
+        let result = authorize_submit_endpoint(
+            session_token(),
+            submit_request(client_id, "urn:authorize:request_uri:test"),
+        )
+        .await;
+
+        assert!(result.is_ok());
+        save_mock.assert();
+    }
+
+    #[tokio::test]
+    async fn leaves_the_nonce_unset_when_the_request_has_none() {
+        fake_valid_session();
+        let client_id = Uuid::new_v4();
+        let client = make_client(client_id);
+        let request = make_request(client_id);
+
+        take_par_mock().setup(move |_| Ok(Some(request.clone())));
+        find_client_by_id_fake().setup(move |_| Some(client.clone()));
+        random_token_fake().setup(|| "test-code".to_string());
+        Config::authorization_code_ttl_fake().setup(|| CODE_TTL_SECONDS);
+        Config::iss_fake().setup(|| "test-issuer");
+        let save_mock = save_authorization_code_mock();
+        save_mock.setup(|_, _| Ok(()));
+        save_mock
+            .expectf(|code: &AuthorizationCode, _: &u64| code.nonce().is_none())
+            .once();
+
+        let result = authorize_submit_endpoint(
+            session_token(),
+            submit_request(client_id, "urn:authorize:request_uri:test"),
+        )
+        .await;
+
+        assert!(result.is_ok());
+        save_mock.assert();
     }
 
     #[tokio::test]

@@ -25,6 +25,7 @@ pub async fn par_endpoint(
         state,
         code_challenge,
         code_challenge_method,
+        nonce,
     }: ParRequest,
 ) -> Result<ParResponse, ParErrorResponse> {
     let Ok(client_id) = Uuid::parse_str(&client_id) else {
@@ -44,6 +45,7 @@ pub async fn par_endpoint(
         state,
         code_challenge,
         code_challenge_method,
+        nonce,
     );
 
     request.validate_against_client(&client)?;
@@ -101,6 +103,7 @@ mod tests {
             state: "some-state".to_string(),
             code_challenge: "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM".to_string(),
             code_challenge_method: "S256".to_string(),
+            nonce: Some("some-nonce".to_string()),
         }
     }
 
@@ -116,6 +119,7 @@ mod tests {
             assert_eq!(par.client_id(), &client_id);
             assert_eq!(par.redirect_uri(), "https://example.com/callback");
             assert_eq!(par.state(), "some-state");
+            assert_eq!(par.nonce(), Some("some-nonce"));
             Ok(())
         });
         generate_request_uri_fake().setup(|| "urn:authorize:request_uri:test".to_string());
@@ -128,6 +132,26 @@ mod tests {
         };
         assert_eq!(response.request_uri, "urn:authorize:request_uri:test");
         assert_eq!(response.expires_in, PAR_TTL_SECONDS);
+    }
+
+    #[tokio::test]
+    async fn stores_no_nonce_when_the_request_has_none() {
+        let client_id = Uuid::new_v4();
+        let client = make_client(client_id);
+
+        find_client_by_id_fake().setup(move |_| Some(client.clone()));
+        save_par_fake().setup(move |_, par, _| {
+            assert_eq!(par.nonce(), None);
+            Ok(())
+        });
+        generate_request_uri_fake().setup(|| "urn:authorize:request_uri:test".to_string());
+        Config::par_ttl_fake().setup(|| PAR_TTL_SECONDS);
+
+        let mut request = valid_request(client_id);
+        request.nonce = None;
+        let result = par_endpoint(request).await;
+
+        assert!(result.is_ok());
     }
 
     #[tokio::test]

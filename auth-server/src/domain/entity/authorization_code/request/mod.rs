@@ -17,8 +17,13 @@ pub struct AuthorizationRequest {
     scope: String,
 
     state: String,
+
+    // PKCE params
     code_challenge: String,
     code_challenge_method: String,
+
+    // OCID params, optional
+    nonce: Option<String>,
 }
 
 impl AuthorizationRequest {
@@ -30,6 +35,7 @@ impl AuthorizationRequest {
         state: String,
         code_challenge: String,
         code_challenge_method: String,
+        nonce: Option<String>,
     ) -> Self {
         Self {
             client_id,
@@ -39,6 +45,7 @@ impl AuthorizationRequest {
             state,
             code_challenge,
             code_challenge_method,
+            nonce,
         }
     }
 
@@ -68,5 +75,9 @@ impl AuthorizationRequest {
 
     pub fn code_challenge_method(&self) -> &str {
         &self.code_challenge_method
+    }
+
+    pub fn nonce(&self) -> Option<&str> {
+        self.nonce.as_deref()
     }
 }

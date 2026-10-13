@@ -106,6 +106,7 @@ mod tests {
                 Uuid::new_v4(),
                 CODE_CHALLENGE.to_string(),
                 "S256".to_string(),
+                None,
             )))
         });
         generate_access_token_mock().setup(move |_, _, _| {
