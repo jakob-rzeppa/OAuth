@@ -6,3 +6,6 @@ clients:
     scopes:
       - read
       - write
+      - openid
+      - profile
+      - email

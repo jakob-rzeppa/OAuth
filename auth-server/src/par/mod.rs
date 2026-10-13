@@ -90,7 +90,11 @@ mod tests {
             id,
             "Test Client".to_string(),
             vec!["https://example.com/callback".to_string()],
-            vec!["read".to_string(), "write".to_string()],
+            vec![
+                "read".to_string(),
+                "write".to_string(),
+                "openid".to_string(),
+            ],
         )
     }
 
@@ -152,6 +156,26 @@ mod tests {
         let result = par_endpoint(request).await;
 
         assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn fails_when_the_openid_scope_is_requested_without_a_nonce() {
+        let client_id = Uuid::new_v4();
+        let client = make_client(client_id);
+        find_client_by_id_fake().setup(move |_| Some(client.clone()));
+
+        let mut request = valid_request(client_id);
+        request.scope = "openid read".to_string();
+        request.nonce = None;
+        let result = par_endpoint(request).await;
+
+        assert!(matches!(
+            result,
+            Err(ParErrorResponse::InvalidAuthorizationRequest {
+                code: OAuthErrorCode::InvalidRequest,
+                ..
+            })
+        ));
     }
 
     #[tokio::test]

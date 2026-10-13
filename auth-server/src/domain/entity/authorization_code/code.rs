@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::domain::entity::authorization_code::openid::has_openid_scope;
+
 /// The authorization code entity, derived from the authorization request on validation.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AuthorizationCode {
@@ -16,7 +18,14 @@ pub struct AuthorizationCode {
     code_challenge_method: String,
 
     // OCID params, optional
-    nonce: Option<String>,
+    /// Only set if the `openid` scope was granted.
+    openid: Option<OpenIdParams>,
+}
+
+/// The parameters of an OpenID Connect request, which are only part of the code if the `openid` scope was granted.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+struct OpenIdParams {
+    nonce: String,
 }
 
 impl AuthorizationCode {
@@ -29,6 +38,10 @@ impl AuthorizationCode {
         code_challenge_method: String,
         nonce: Option<String>,
     ) -> Self {
+        let openid = nonce
+            .filter(|_| has_openid_scope(&scope))
+            .map(|nonce| OpenIdParams { nonce });
+
         Self {
             code,
             client_id,
@@ -36,7 +49,7 @@ impl AuthorizationCode {
             sub,
             code_challenge,
             code_challenge_method,
-            nonce,
+            openid,
         }
     }
 
@@ -66,7 +79,7 @@ impl AuthorizationCode {
 
     #[allow(dead_code)] // read by the ID token grant, which is not implemented yet
     pub fn nonce(&self) -> Option<&str> {
-        self.nonce.as_deref()
+        self.openid.as_ref().map(|openid| openid.nonce.as_str())
     }
 }
 
@@ -74,16 +87,34 @@ impl AuthorizationCode {
 mod tests {
     use super::*;
 
-    fn make_code(nonce: Option<String>) -> AuthorizationCode {
+    fn make_code_with_scope(scope: &str, nonce: Option<String>) -> AuthorizationCode {
         AuthorizationCode::new(
             "the-code".to_string(),
             Uuid::new_v4(),
-            "openid".to_string(),
+            scope.to_string(),
             Uuid::new_v4(),
             "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM".to_string(),
             "S256".to_string(),
             nonce,
         )
+    }
+
+    fn make_code(nonce: Option<String>) -> AuthorizationCode {
+        make_code_with_scope("openid", nonce)
+    }
+
+    #[test]
+    fn keeps_the_nonce_when_the_openid_scope_is_granted() {
+        let code = make_code_with_scope("read openid", Some("some-nonce".to_string()));
+
+        assert_eq!(code.nonce(), Some("some-nonce"));
+    }
+
+    #[test]
+    fn drops_the_nonce_when_the_openid_scope_is_not_granted() {
+        let code = make_code_with_scope("read write", Some("some-nonce".to_string()));
+
+        assert_eq!(code.nonce(), None);
     }
 
     #[test]
@@ -100,7 +131,7 @@ mod tests {
     #[test]
     fn codes_stored_without_a_nonce_still_deserialize() {
         let mut value = serde_json::to_value(make_code(None)).unwrap();
-        value.as_object_mut().unwrap().remove("nonce");
+        value.as_object_mut().unwrap().remove("openid");
 
         let restored: AuthorizationCode = serde_json::from_value(value).unwrap();
 

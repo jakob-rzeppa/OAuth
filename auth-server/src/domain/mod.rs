@@ -3,6 +3,7 @@ pub mod entity {
 
     pub mod authorization_code {
         pub mod code;
+        pub mod openid;
         pub mod request;
     }
 

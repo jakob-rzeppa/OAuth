@@ -143,7 +143,11 @@ mod tests {
             id,
             "Test Client".to_string(),
             vec!["https://example.com/callback".to_string()],
-            vec!["read".to_string(), "write".to_string()],
+            vec![
+                "read".to_string(),
+                "write".to_string(),
+                "openid".to_string(),
+            ],
         )
     }
 
@@ -241,7 +245,7 @@ mod tests {
             client_id,
             "https://example.com/callback".to_string(),
             "code".to_string(),
-            "read write".to_string(),
+            "openid read".to_string(),
             "some-state".to_string(),
             "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM".to_string(),
             "S256".to_string(),
@@ -270,7 +274,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn leaves_the_nonce_unset_when_the_request_has_none() {
+    async fn leaves_the_nonce_unset_for_a_request_without_the_openid_scope() {
         fake_valid_session();
         let client_id = Uuid::new_v4();
         let client = make_client(client_id);
