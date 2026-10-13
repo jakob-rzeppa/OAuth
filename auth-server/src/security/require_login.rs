@@ -5,9 +5,9 @@ use axum::{
 use uuid::Uuid;
 
 use crate::{
-    config::Config, domain::entity::user_session::UserSession, error::InternalError,
-    persistence::user_session::access::access_user_session, security::session::UserSessionToken,
-    util::token::hash_token,
+    domain::entity::user_session::UserSession,
+    error::InternalError,
+    session::{self, SessionToken},
 };
 
 /// Redirects the user to the login and back to the authorization request afterwards.
@@ -29,47 +29,45 @@ impl IntoResponse for LoginRedirect {
     }
 }
 
-pub enum RequireUserSessionError {
+pub enum RequireLoginError {
     LoginRequired(LoginRedirect),
     Internal(InternalError),
 }
 
-impl From<InternalError> for RequireUserSessionError {
+impl From<InternalError> for RequireLoginError {
     fn from(error: InternalError) -> Self {
-        RequireUserSessionError::Internal(error)
+        RequireLoginError::Internal(error)
     }
 }
 
-/// Make sure the user is logged in and has a valid session (which is renewed by this call).
+/// Make sure the user is logged in and has a valid session (which ttl is renewed by this call).
 /// If not, the error carries a redirect to the login page.
-pub async fn require_user_session(
-    session_token: Option<UserSessionToken>,
+pub async fn require_login(
+    session_token: Option<SessionToken<UserSession>>,
     client_id: Uuid,
     request_uri: &str,
-) -> Result<UserSession, RequireUserSessionError> {
+) -> Result<UserSession, RequireLoginError> {
     let login_required = || {
-        RequireUserSessionError::LoginRequired(LoginRedirect {
+        RequireLoginError::LoginRequired(LoginRedirect {
             client_id,
             request_uri: request_uri.to_string(),
         })
     };
 
     let session_token = session_token.ok_or_else(login_required)?;
-    let session_token_hash = hash_token(session_token.token());
 
-    access_user_session(&session_token_hash, Config::user_session_ttl())
-        .await?
-        .ok_or_else(|| {
-            tracing::warn!("Expired or invalid user session token was received.");
-            login_required()
-        })
+    session::access(&session_token).await?.ok_or_else(|| {
+        tracing::warn!("Expired or invalid user session token was received.");
+        login_required()
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{
-        logging::testing::LogCapture, persistence::user_session::access::access_user_session_fake,
+        config::Config, logging::testing::LogCapture,
+        persistence::sessions::access::access_session_fake,
     };
 
     const REQUEST_URI: &str = "urn:authorize:request_uri:test";
@@ -79,17 +77,21 @@ mod tests {
         return_to: String,
     }
 
-    fn token() -> Option<UserSessionToken> {
-        Some(UserSessionToken::new("session-token".to_string()))
+    fn token() -> Option<SessionToken<UserSession>> {
+        Some(SessionToken::new("session-token".to_string()))
     }
 
     #[tokio::test]
     async fn returns_the_session_for_a_valid_token() {
         let user_id = Uuid::new_v4();
         Config::user_session_ttl_fake().setup(|| 1800);
-        access_user_session_fake().setup(move |_, _| Ok(Some(UserSession::new(user_id))));
+        access_session_fake().setup(move |_, _| {
+            Ok(Some(
+                serde_json::to_string(&UserSession::new(user_id)).unwrap(),
+            ))
+        });
 
-        let result = require_user_session(token(), Uuid::new_v4(), REQUEST_URI).await;
+        let result = require_login(token(), Uuid::new_v4(), REQUEST_URI).await;
 
         assert_eq!(result.ok().unwrap().user_id(), user_id);
     }
@@ -98,9 +100,9 @@ mod tests {
     async fn requires_login_without_a_session_token() {
         let client_id = Uuid::new_v4();
 
-        let result = require_user_session(None, client_id, REQUEST_URI).await;
+        let result = require_login(None, client_id, REQUEST_URI).await;
 
-        let Err(RequireUserSessionError::LoginRequired(redirect)) = result else {
+        let Err(RequireLoginError::LoginRequired(redirect)) = result else {
             panic!("expected a login required error");
         };
         assert_eq!(redirect.client_id, client_id);
@@ -112,14 +114,11 @@ mod tests {
         let capture = LogCapture::default();
         let _guard = capture.install();
         Config::user_session_ttl_fake().setup(|| 1800);
-        access_user_session_fake().setup(|_, _| Ok(None));
+        access_session_fake().setup(|_, _| Ok(None));
 
-        let result = require_user_session(token(), Uuid::new_v4(), REQUEST_URI).await;
+        let result = require_login(token(), Uuid::new_v4(), REQUEST_URI).await;
 
-        assert!(matches!(
-            result,
-            Err(RequireUserSessionError::LoginRequired(_))
-        ));
+        assert!(matches!(result, Err(RequireLoginError::LoginRequired(_))));
         let log = capture.contents();
         assert!(log.contains("WARN"), "{log}");
         assert!(
@@ -130,13 +129,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn fails_with_an_internal_error_when_access_user_session_fails() {
+    async fn fails_with_an_internal_error_when_access_session_fails() {
         Config::user_session_ttl_fake().setup(|| 1800);
-        access_user_session_fake().setup(|_, _| Err(InternalError::Invariant("redis is down")));
+        access_session_fake().setup(|_, _| Err(InternalError::Invariant("redis is down")));
 
-        let result = require_user_session(token(), Uuid::new_v4(), REQUEST_URI).await;
+        let result = require_login(token(), Uuid::new_v4(), REQUEST_URI).await;
 
-        assert!(matches!(result, Err(RequireUserSessionError::Internal(_))));
+        assert!(matches!(result, Err(RequireLoginError::Internal(_))));
     }
 
     #[test]

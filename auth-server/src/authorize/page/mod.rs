@@ -10,8 +10,10 @@ use crate::{
         error_page::AuthorizeErrorPage,
         page::{request::AuthorizePageQuery, response::AuthorizePageResponse},
     },
+    domain::entity::user_session::UserSession,
     persistence::{clients::find_by_id::find_client_by_id, pars::peek::peek_par},
-    security::{require_session::require_user_session, session::UserSessionToken},
+    security::require_login::require_login,
+    session::SessionToken,
 };
 
 /// Displays the authorization confirmation page for a previously
@@ -24,7 +26,7 @@ use crate::{
 /// the pushed request itself was already fully validated when it was created
 /// and will be validated again when the user submits the confirmation form.
 pub async fn authorize_page_endpoint(
-    session_token: Option<UserSessionToken>,
+    session_token: Option<SessionToken<UserSession>>,
     query: AuthorizePageQuery,
 ) -> Result<AuthorizePageResponse, AuthorizeErrorPage> {
     let AuthorizePageQuery {
@@ -38,7 +40,7 @@ pub async fn authorize_page_endpoint(
     let request_uri = request_uri.ok_or(AuthorizeErrorPage::MissingRequestUri)?;
 
     // Only the user themselves may see (and later submit) the request, so log in before showing it.
-    require_user_session(session_token, client_id, &request_uri).await?;
+    require_login(session_token, client_id, &request_uri).await?;
 
     let par = peek_par(&request_uri).await?.ok_or_else(|| {
             tracing::warn!(%client_id, "authorize page requested for an unknown, expired or already used request_uri");
@@ -69,9 +71,8 @@ pub async fn authorize_page_endpoint(
 mod tests {
     use super::*;
     use crate::{
-        config::Config, error::InternalError,
-        persistence::user_session::access::access_user_session_fake,
-        security::require_session::LoginRedirect,
+        config::Config, error::InternalError, persistence::sessions::access::access_session_fake,
+        security::require_login::LoginRedirect,
     };
     use axum::response::IntoResponse;
 
@@ -82,8 +83,8 @@ mod tests {
         }
     }
 
-    fn session_token() -> Option<UserSessionToken> {
-        Some(UserSessionToken::new("session-token".to_string()))
+    fn session_token() -> Option<SessionToken<UserSession>> {
+        Some(SessionToken::new("session-token".to_string()))
     }
 
     #[tokio::test]
@@ -106,7 +107,7 @@ mod tests {
     #[tokio::test]
     async fn redirects_to_login_when_the_session_is_expired() {
         Config::user_session_ttl_fake().setup(|| 1800);
-        access_user_session_fake().setup(|_, _| Ok(None));
+        access_session_fake().setup(|_, _| Ok(None));
 
         let result = authorize_page_endpoint(session_token(), query(Uuid::new_v4())).await;
 
@@ -114,9 +115,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn fails_with_server_error_when_access_user_session_fails() {
+    async fn fails_with_server_error_when_access_session_fails() {
         Config::user_session_ttl_fake().setup(|| 1800);
-        access_user_session_fake().setup(|_, _| Err(InternalError::Invariant("redis is down")));
+        access_session_fake().setup(|_, _| Err(InternalError::Invariant("redis is down")));
 
         let result = authorize_page_endpoint(session_token(), query(Uuid::new_v4())).await;
 

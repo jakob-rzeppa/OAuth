@@ -11,12 +11,13 @@ use crate::{
     domain::entity::authorization_code::{
         code::AuthorizationCode, request::validate::ValidatedAuthorizationRequest,
     },
+    domain::entity::user_session::UserSession,
     persistence::{
         authorization_codes::save::save_authorization_code, clients::find_by_id::find_client_by_id,
         pars::take::take_par,
     },
-    security::require_session::require_user_session,
-    security::session::UserSessionToken,
+    security::require_login::require_login,
+    session::SessionToken,
     util::token::random_token,
 };
 
@@ -26,7 +27,7 @@ mod response;
 
 #[axum::debug_handler]
 pub async fn authorize_submit_endpoint(
-    session_token: Option<UserSessionToken>,
+    session_token: Option<SessionToken<UserSession>>,
     AuthorizeSubmitRequest {
         request_uri,
         client_id,
@@ -35,7 +36,7 @@ pub async fn authorize_submit_endpoint(
 ) -> Result<AuthorizeSubmitResponse, AuthorizeSubmitErrorResponse> {
     // Make sure the user is logged in and has a valid session.
     // If not, return a redirect to the login page.
-    let session = require_user_session(session_token, client_id, &request_uri).await?;
+    let session = require_login(session_token, client_id, &request_uri).await?;
     let user_id = session.user_id();
 
     // Consume the pushed authorization request always, even if the user denied the request or the CSRF token is invalid.
@@ -109,7 +110,7 @@ mod tests {
         persistence::{
             authorization_codes::save::save_authorization_code_mock,
             clients::find_by_id::find_client_by_id_fake, pars::take::take_par_mock,
-            user_session::access::access_user_session_fake,
+            sessions::access::access_session_fake,
         },
         util::oauth_error::OAuthErrorCode,
     };
@@ -120,15 +121,19 @@ mod tests {
 
     const CODE_TTL_SECONDS: u64 = 300;
 
-    fn session_token() -> Option<UserSessionToken> {
-        Some(UserSessionToken::new("session-token".to_string()))
+    fn session_token() -> Option<SessionToken<UserSession>> {
+        Some(SessionToken::new("session-token".to_string()))
     }
 
     /// Fakes a valid user session for the returned user.
     fn fake_valid_session() -> Uuid {
         let user_id = Uuid::new_v4();
         Config::user_session_ttl_fake().setup(|| 1800);
-        access_user_session_fake().setup(move |_, _| Ok(Some(UserSession::new(user_id))));
+        access_session_fake().setup(move |_, _| {
+            Ok(Some(
+                serde_json::to_string(&UserSession::new(user_id)).unwrap(),
+            ))
+        });
         user_id
     }
 
@@ -511,7 +516,7 @@ mod tests {
         let request_uri = "urn:authorize:request_uri:test";
 
         Config::user_session_ttl_fake().setup(|| 1800);
-        access_user_session_fake().setup(|_, _| Ok(None));
+        access_session_fake().setup(|_, _| Ok(None));
         let take_mock = take_par_mock();
         take_mock.expect_never();
         let save_mock = save_authorization_code_mock();
@@ -542,9 +547,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn fails_with_server_error_when_access_user_session_fails() {
+    async fn fails_with_server_error_when_access_session_fails() {
         Config::user_session_ttl_fake().setup(|| 1800);
-        access_user_session_fake().setup(|_, _| Err(InternalError::Invariant("redis is down")));
+        access_session_fake().setup(|_, _| Err(InternalError::Invariant("redis is down")));
         let take_mock = take_par_mock();
         take_mock.expect_never();
         let save_mock = save_authorization_code_mock();

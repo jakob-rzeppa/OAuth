@@ -6,20 +6,15 @@ use axum::{
 };
 
 use crate::{
-    error::InternalError,
+    domain::entity::{login_session::LoginSession, user_session::UserSession},
     login::{
-        LOGIN_SESSION_COOKIE,
         error_response::LoginErrorResponse,
         login_page::render_login_page,
         return_to::{ReturnToQuery, is_local_path},
         submit::request::{LoginFormSubmitRequest, LoginSessionToken},
     },
-    persistence::{
-        login_session::take::take_login_session,
-        users::authorize::{AuthorizeUserError, authorize_user},
-    },
-    security::session::create_user_session,
-    util::{cookie::expired_cookie, token::hash_token},
+    persistence::users::authorize::{AuthorizeUserError, authorize_user},
+    session,
 };
 
 #[axum::debug_handler]
@@ -41,8 +36,7 @@ pub async fn login_submit_endpoint(
         return Err(LoginErrorResponse::InvalidReturnTo);
     }
 
-    let login_session_token_hash = hash_token(&session_token);
-    let Some(login_session) = take_login_session(&login_session_token_hash).await? else {
+    let Some(login_session) = session::take(&session_token).await? else {
         tracing::warn!("login submit rejected: no valid login session");
         return Err(LoginErrorResponse::MissingSessionCookie);
     };
@@ -72,12 +66,10 @@ pub async fn login_submit_endpoint(
 
     // Allow temporary passwords for now.
 
-    let session_cookie = create_user_session(user.id).await?;
+    let session_cookie = session::issue(&UserSession::new(user.id)).await?;
 
     // The login session was consumed above, so its cookie is of no use any more.
-    let clear_login_session_cookie = expired_cookie(LOGIN_SESSION_COOKIE).ok_or(
-        InternalError::Invariant("the expired login session cookie is not a valid header value"),
-    )?;
+    let clear_login_session_cookie = session::clear_cookie::<LoginSession>()?;
 
     tracing::info!(user_id = %user.id, "user logged in");
 
@@ -102,13 +94,13 @@ mod tests {
     use super::*;
     use crate::{
         config::Config,
-        domain::entity::{login_session::LoginSession, user_session::UserSession},
         logging::testing::LogCapture,
         persistence::{
-            login_session::{save::save_login_session_mock, take::take_login_session_fake},
-            user_session::save::save_user_session_mock,
+            sessions::{save::save_session_mock, take::take_session_fake},
             users::authorize::{AuthorizedUser, authorize_user_mock},
         },
+        session::SessionToken,
+        util::token::hash_token,
     };
 
     fn return_to(return_to: &str) -> ReturnToQuery {
@@ -125,8 +117,12 @@ mod tests {
         }
     }
 
+    fn login_session_json(csrf_token: &str) -> String {
+        serde_json::to_string(&LoginSession::new(csrf_token.to_string())).unwrap()
+    }
+
     fn login_session_token() -> LoginSessionToken {
-        LoginSessionToken("login-token".to_string())
+        LoginSessionToken(SessionToken::new("login-token".to_string()))
     }
 
     #[tokio::test]
@@ -137,9 +133,9 @@ mod tests {
         let saved = Arc::new(Mutex::new(None));
         let saved_in_mock = saved.clone();
 
-        take_login_session_fake().setup(|hash| {
-            assert_eq!(hash, hash_token("login-token"));
-            Ok(Some(LoginSession::new("csrf".to_string())))
+        take_session_fake().setup(|key| {
+            assert_eq!(key, format!("session:login:{}", hash_token("login-token")));
+            Ok(Some(login_session_json("csrf")))
         });
         authorize_user_mock().setup(move |_, _| {
             Ok(AuthorizedUser {
@@ -148,8 +144,9 @@ mod tests {
             })
         });
         Config::user_session_ttl_fake().setup(|| 1800);
-        save_user_session_mock().setup(move |hash, session, ttl_seconds| {
-            *saved_in_mock.lock().unwrap() = Some((hash.to_string(), session, ttl_seconds));
+        save_session_mock().setup(move |key, value, ttl_seconds| {
+            *saved_in_mock.lock().unwrap() =
+                Some((key.to_string(), value.to_string(), ttl_seconds));
             Ok(())
         });
 
@@ -204,9 +201,12 @@ mod tests {
             assert!(cookie.contains(attribute), "{cookie}");
         }
 
-        let (hash, session, ttl_seconds) = saved.lock().unwrap().clone().unwrap();
-        assert_eq!(hash, hash_token(token));
-        assert_eq!(session, UserSession::new(user_id));
+        let (key, value, ttl_seconds) = saved.lock().unwrap().clone().unwrap();
+        assert_eq!(key, format!("session:user:{}", hash_token(token)));
+        assert_eq!(
+            serde_json::from_str::<UserSession>(&value).unwrap(),
+            UserSession::new(user_id)
+        );
         assert_eq!(ttl_seconds, 1800);
 
         let log = capture.contents();
@@ -222,7 +222,7 @@ mod tests {
     async fn fails_with_invalid_csrf_token_when_it_differs_from_the_login_session() {
         let capture = LogCapture::default();
         let _guard = capture.install();
-        take_login_session_fake().setup(|_| Ok(Some(LoginSession::new("csrf".to_string()))));
+        take_session_fake().setup(|_| Ok(Some(login_session_json("csrf"))));
 
         let result = login_submit_endpoint(
             login_session_token(),
@@ -269,10 +269,10 @@ mod tests {
     async fn shows_the_login_page_again_when_the_credentials_are_invalid() {
         let capture = LogCapture::default();
         let _guard = capture.install();
-        take_login_session_fake().setup(|_| Ok(Some(LoginSession::new("csrf".to_string()))));
+        take_session_fake().setup(|_| Ok(Some(login_session_json("csrf"))));
         authorize_user_mock().setup(|_, _| Err(AuthorizeUserError::InvalidCredentials));
         Config::login_session_ttl_fake().setup(|| 900);
-        save_login_session_mock().setup(|_, _, _| Ok(()));
+        save_session_mock().setup(|_, _, _| Ok(()));
 
         let response =
             login_submit_endpoint(login_session_token(), return_to("/authorize"), form("csrf"))

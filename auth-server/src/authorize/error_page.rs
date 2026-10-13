@@ -3,7 +3,7 @@ use axum::extract::rejection::{FormRejection, QueryRejection};
 
 use crate::{
     error::InternalError,
-    security::require_session::{LoginRedirect, RequireUserSessionError},
+    security::require_login::{LoginRedirect, RequireLoginError},
     util::{html::render_error_page, oauth_error::OAuthErrorCode},
 };
 
@@ -58,13 +58,13 @@ pub enum AuthorizeErrorPage {
     LoginRequired(LoginRedirect),
 }
 
-impl From<RequireUserSessionError> for AuthorizeErrorPage {
-    fn from(error: RequireUserSessionError) -> Self {
+impl From<RequireLoginError> for AuthorizeErrorPage {
+    fn from(error: RequireLoginError) -> Self {
         match error {
-            RequireUserSessionError::LoginRequired(redirect) => {
+            RequireLoginError::LoginRequired(redirect) => {
                 AuthorizeErrorPage::LoginRequired(redirect)
             }
-            RequireUserSessionError::Internal(error) => AuthorizeErrorPage::ServerError(error),
+            RequireLoginError::Internal(error) => AuthorizeErrorPage::ServerError(error),
         }
     }
 }

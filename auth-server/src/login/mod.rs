@@ -11,9 +11,6 @@ mod page;
 mod return_to;
 mod submit;
 
-/// Name of the cookie carrying the login session token.
-const LOGIN_SESSION_COOKIE: &str = "__Host-login_session";
-
 pub fn router() -> Router {
     Router::new()
         .route(

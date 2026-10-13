@@ -1,20 +1,14 @@
 use askama::Template;
 use axum::{
-    http::{StatusCode, header},
+    http::{HeaderValue, StatusCode, header},
     response::{IntoResponse, Response},
 };
 
 use crate::{
-    config::Config,
     domain::entity::login_session::LoginSession,
-    login::{LOGIN_SESSION_COOKIE, error_response::LoginErrorResponse},
-    persistence::login_session::save::save_login_session,
-    util::{
-        cookie::session_cookie,
-        csrf::create_csrf_token,
-        html::render_html,
-        token::{hash_token, random_token},
-    },
+    login::error_response::LoginErrorResponse,
+    session,
+    util::{csrf::create_csrf_token, html::render_html},
 };
 
 /// Starts a login session and builds the login form for it.
@@ -24,22 +18,13 @@ pub(super) async fn render_login_page(
     user_name: Option<String>,
     error_message: Option<String>,
 ) -> Result<LoginPageResponse, LoginErrorResponse> {
-    let session_token = random_token();
     let csrf_token = create_csrf_token();
-    let session_ttl_seconds = Config::login_session_ttl();
-
-    save_login_session(
-        &hash_token(&session_token),
-        LoginSession::new(csrf_token.clone()),
-        session_ttl_seconds,
-    )
-    .await?;
+    let session_cookie = session::issue(&LoginSession::new(csrf_token.clone())).await?;
 
     Ok(LoginPageResponse {
         csrf_token,
         return_to,
-        session_token,
-        session_ttl_seconds,
+        session_cookie,
         user_name,
         error_message,
     })
@@ -49,8 +34,8 @@ pub struct LoginPageResponse {
     pub csrf_token: String,
     pub return_to: String,
 
-    pub session_token: String,
-    pub session_ttl_seconds: u64,
+    /// The `Set-Cookie` value carrying the login session token.
+    pub session_cookie: HeaderValue,
 
     // Pre-filled username
     pub user_name: Option<String>,
@@ -77,8 +62,7 @@ impl IntoResponse for LoginPageResponse {
         let Self {
             csrf_token,
             return_to,
-            session_token,
-            session_ttl_seconds,
+            session_cookie,
             user_name,
             error_message,
         } = self;
@@ -90,14 +74,8 @@ impl IntoResponse for LoginPageResponse {
             error_message,
         };
 
-        let Some(cookie) =
-            session_cookie(LOGIN_SESSION_COOKIE, &session_token, session_ttl_seconds)
-        else {
-            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-        };
-
         (
-            [(header::SET_COOKIE, cookie)],
+            [(header::SET_COOKIE, session_cookie)],
             render_html(&page, StatusCode::OK),
         )
             .into_response()
@@ -116,8 +94,7 @@ mod tests {
         let response = LoginPageResponse {
             csrf_token: "csrf".to_string(),
             return_to: return_to.to_string(),
-            session_token: "token".to_string(),
-            session_ttl_seconds: 900,
+            session_cookie: HeaderValue::from_static("__Host-login_session=token"),
             user_name: user_name.map(str::to_string),
             error_message: None,
         }

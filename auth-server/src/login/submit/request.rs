@@ -1,13 +1,12 @@
 use axum::{
     Form,
     extract::{FromRequest, FromRequestParts},
-    http::header,
 };
 use serde::Deserialize;
 
 use crate::{
-    login::{LOGIN_SESSION_COOKIE, error_response::LoginErrorResponse},
-    util::cookie::cookie_value,
+    domain::entity::login_session::LoginSession, login::error_response::LoginErrorResponse,
+    session::SessionToken,
 };
 
 /// Read from the request body, so it has to be the last extractor of a handler.
@@ -21,7 +20,7 @@ pub struct LoginFormSubmitRequest {
 }
 
 /// The login session token, read from the login session cookie.
-pub struct LoginSessionToken(pub String);
+pub struct LoginSessionToken(pub SessionToken<LoginSession>);
 
 impl<S: Send + Sync> FromRequestParts<S> for LoginSessionToken {
     type Rejection = LoginErrorResponse;
@@ -30,20 +29,15 @@ impl<S: Send + Sync> FromRequestParts<S> for LoginSessionToken {
         parts: &mut axum::http::request::Parts,
         _state: &S,
     ) -> Result<Self, Self::Rejection> {
-        parts
-            .headers
-            .get_all(header::COOKIE)
-            .iter()
-            .filter_map(|value| value.to_str().ok())
-            .find_map(|cookies| cookie_value(cookies, LOGIN_SESSION_COOKIE))
-            .map(|token| LoginSessionToken(token.to_string()))
+        SessionToken::from_headers(&parts.headers)
+            .map(LoginSessionToken)
             .ok_or(LoginErrorResponse::MissingSessionCookie)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use axum::{body::Body, extract::Request};
+    use axum::{body::Body, extract::Request, http::header};
 
     use super::*;
 
@@ -57,7 +51,7 @@ mod tests {
 
         let token = LoginSessionToken::from_request_parts(&mut parts, &()).await;
 
-        assert_eq!(token.ok().unwrap().0, "token-123");
+        assert_eq!(token.ok().unwrap().0.as_str(), "token-123");
     }
 
     #[tokio::test]

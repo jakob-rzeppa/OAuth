@@ -1,2 +1,1 @@
-pub mod require_session;
-pub mod session;
+pub mod require_login;

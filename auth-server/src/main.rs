@@ -20,6 +20,7 @@ mod error;
 mod logging;
 mod persistence;
 mod security;
+mod session;
 mod util;
 
 mod authorize;

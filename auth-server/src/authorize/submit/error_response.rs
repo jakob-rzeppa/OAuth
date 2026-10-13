@@ -4,7 +4,7 @@ use url::Url;
 use crate::{
     authorize::error_page::AuthorizeErrorPage, config::Config,
     domain::entity::authorization_code::request::validate::ValidationError, error::InternalError,
-    security::require_session::RequireUserSessionError, util::oauth_error::OAuthErrorCode,
+    security::require_login::RequireLoginError, util::oauth_error::OAuthErrorCode,
 };
 
 /// An error reported back to the client by redirecting to its `redirect_uri`
@@ -82,8 +82,8 @@ impl From<AuthorizeErrorPage> for AuthorizeSubmitErrorResponse {
     }
 }
 
-impl From<RequireUserSessionError> for AuthorizeSubmitErrorResponse {
-    fn from(error: RequireUserSessionError) -> Self {
+impl From<RequireLoginError> for AuthorizeSubmitErrorResponse {
+    fn from(error: RequireLoginError) -> Self {
         AuthorizeErrorPage::from(error).into()
     }
 }
@@ -140,7 +140,7 @@ mod tests {
             }
         ));
         assert!(matches!(
-            AuthorizeSubmitErrorResponse::from(RequireUserSessionError::Internal(
+            AuthorizeSubmitErrorResponse::from(RequireLoginError::Internal(
                 InternalError::Invariant("redis is down")
             )),
             AuthorizeSubmitErrorResponse::Page {
