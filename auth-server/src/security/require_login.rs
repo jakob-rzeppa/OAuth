@@ -43,7 +43,7 @@ impl From<InternalError> for RequireLoginError {
 /// Make sure the user is logged in and has a valid session (which ttl is renewed by this call).
 /// If not, the error carries a redirect to the login page.
 pub async fn require_login(
-    session_token: Option<SessionToken<UserSession>>,
+    session_token: Option<SessionToken>,
     client_id: Uuid,
     request_uri: &str,
 ) -> Result<UserSession, RequireLoginError> {
@@ -67,7 +67,7 @@ mod tests {
     use super::*;
     use crate::{
         config::Config, logging::testing::LogCapture,
-        persistence::sessions::access::access_session_fake,
+        persistence::user_sessions::access::access_session_fake,
     };
 
     const REQUEST_URI: &str = "urn:authorize:request_uri:test";
@@ -77,7 +77,7 @@ mod tests {
         return_to: String,
     }
 
-    fn token() -> Option<SessionToken<UserSession>> {
+    fn token() -> Option<SessionToken> {
         Some(SessionToken::new("session-token".to_string()))
     }
 

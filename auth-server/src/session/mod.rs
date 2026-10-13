@@ -1,78 +1,51 @@
-//! Handling of sessions that are identified by a token in a cookie and stored in redis under the
-//! hash of that token. A kind of session (login, user, ...) only implements [`Session`]; issuing,
-//! looking up and clearing it is shared.
+//! Handling of the user session. It is identified by a token in a cookie and stored in redis
+//! under the hash of that token.
 
 pub mod cookie;
-mod kinds;
 mod token;
 
 use axum::http::HeaderValue;
-use serde::{Serialize, de::DeserializeOwned};
 
 use crate::{
+    config::Config,
+    domain::entity::user_session::UserSession,
     error::InternalError,
-    persistence::sessions::{access::access_session, save::save_session, take::take_session},
+    persistence::user_sessions::{access::access_session, save::save_session},
     util::token::{hash_token, random_token},
 };
 
 pub use token::SessionToken;
 
-/// A kind of session. It is stored as JSON under `{KEY_PREFIX}:{hash of the session token}` and
-/// handed to the browser as the cookie `COOKIE_NAME`.
-pub trait Session: Serialize + DeserializeOwned {
-    /// Has to carry the `__Host-` prefix, which keeps sibling subdomains from shadowing it.
-    const COOKIE_NAME: &'static str;
-    const KEY_PREFIX: &'static str;
+/// Has to carry the `__Host-` prefix, which keeps sibling subdomains from shadowing it.
+const COOKIE_NAME: &str = "__Host-user_session";
 
-    /// How long the session lives, in seconds.
-    fn ttl_seconds() -> u64;
-}
+/// The session is stored as JSON under `{KEY_PREFIX}:{hash of the session token}`.
+const KEY_PREFIX: &str = "session:user";
 
-fn key<S: Session>(token: &str) -> String {
-    format!("{}:{}", S::KEY_PREFIX, hash_token(token))
+fn key(token: &str) -> String {
+    format!("{KEY_PREFIX}:{}", hash_token(token))
 }
 
 /// Starts a session: stores it under a fresh token and returns the `Set-Cookie` value handing
 /// that token to the browser.
-pub async fn issue<S: Session>(session: &S) -> Result<HeaderValue, InternalError> {
+pub async fn issue(session: &UserSession) -> Result<HeaderValue, InternalError> {
     let token = random_token();
-    let ttl_seconds = S::ttl_seconds();
+    let ttl_seconds = Config::user_session_ttl();
 
-    save_session(
-        &key::<S>(&token),
-        &serde_json::to_string(session)?,
-        ttl_seconds,
-    )
-    .await?;
+    save_session(&key(&token), &serde_json::to_string(session)?, ttl_seconds).await?;
 
-    cookie::session_cookie(S::COOKIE_NAME, &token, ttl_seconds).ok_or(InternalError::Invariant(
+    cookie::session_cookie(COOKIE_NAME, &token, ttl_seconds).ok_or(InternalError::Invariant(
         "the session cookie is not a valid header value",
     ))
 }
 
 /// Reads a session and renews its lifetime (sliding expiration).
 /// Returns `None` if the session does not exist or has expired.
-pub async fn access<S: Session>(token: &SessionToken<S>) -> Result<Option<S>, InternalError> {
-    let value = access_session(&key::<S>(token.as_str()), S::ttl_seconds()).await?;
+pub async fn access(token: &SessionToken) -> Result<Option<UserSession>, InternalError> {
+    let value = access_session(&key(token.as_str()), Config::user_session_ttl()).await?;
     Ok(value
         .map(|value| serde_json::from_str(&value))
         .transpose()?)
-}
-
-/// Reads a session and deletes it, so it can only be used once.
-/// Returns `None` if the session does not exist or has expired.
-pub async fn take<S: Session>(token: &SessionToken<S>) -> Result<Option<S>, InternalError> {
-    let value = take_session(&key::<S>(token.as_str())).await?;
-    Ok(value
-        .map(|value| serde_json::from_str(&value))
-        .transpose()?)
-}
-
-/// The `Set-Cookie` value telling the browser to delete the cookie of the session kind.
-pub fn clear_cookie<S: Session>() -> Result<HeaderValue, InternalError> {
-    cookie::expired_cookie(S::COOKIE_NAME).ok_or(InternalError::Invariant(
-        "the expired session cookie is not a valid header value",
-    ))
 }
 
 #[cfg(test)]
@@ -83,13 +56,11 @@ mod tests {
     use crate::{
         config::Config,
         domain::entity::user_session::UserSession,
-        persistence::sessions::{access::access_session_fake, save::save_session_mock},
+        persistence::user_sessions::{access::access_session_fake, save::save_session_mock},
         util::token::random_token_fake,
     };
 
-    use crate::persistence::sessions::take::take_session_fake;
-
-    fn token<S: Session>(token: &str) -> SessionToken<S> {
+    fn token(token: &str) -> SessionToken {
         SessionToken::new(token.to_string())
     }
 
@@ -129,7 +100,7 @@ mod tests {
             ))
         });
 
-        let session = access(&token::<UserSession>("token-123")).await.unwrap();
+        let session = access(&token("token-123")).await.unwrap();
 
         assert_eq!(session, Some(UserSession::new(uuid::Uuid::nil())));
     }
@@ -139,40 +110,8 @@ mod tests {
         Config::user_session_ttl_fake().setup(|| 1800);
         access_session_fake().setup(|_, _| Ok(None));
 
-        let session = access(&token::<UserSession>("token-123")).await.unwrap();
+        let session = access(&token("token-123")).await.unwrap();
 
         assert_eq!(session, None);
-    }
-
-    #[tokio::test]
-    async fn take_consumes_the_session_under_the_token_hash() {
-        let user_id = uuid::Uuid::nil();
-        take_session_fake().setup(move |key| {
-            assert_eq!(key, format!("session:user:{}", hash_token("token-123")));
-            Ok(Some(
-                serde_json::to_string(&UserSession::new(user_id)).unwrap(),
-            ))
-        });
-
-        let session = take(&token::<UserSession>("token-123")).await.unwrap();
-
-        assert_eq!(session, Some(UserSession::new(user_id)));
-    }
-
-    #[tokio::test]
-    async fn take_fails_when_the_stored_value_is_not_a_session() {
-        take_session_fake().setup(|_| Ok(Some("not json".to_string())));
-
-        let session = take(&token::<UserSession>("token-123")).await;
-
-        assert!(session.is_err());
-    }
-
-    #[test]
-    fn clear_cookie_expires_the_cookie_of_the_session_kind() {
-        assert_eq!(
-            clear_cookie::<UserSession>().unwrap(),
-            "__Host-user_session=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Lax"
-        );
     }
 }

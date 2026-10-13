@@ -10,7 +10,6 @@ use crate::{
         error_page::AuthorizeErrorPage,
         page::{request::AuthorizePageQuery, response::AuthorizePageResponse},
     },
-    domain::entity::user_session::UserSession,
     persistence::{clients::find_by_id::find_client_by_id, pars::peek::peek_par},
     security::require_login::require_login,
     session::SessionToken,
@@ -26,7 +25,7 @@ use crate::{
 /// the pushed request itself was already fully validated when it was created
 /// and will be validated again when the user submits the confirmation form.
 pub async fn authorize_page_endpoint(
-    session_token: Option<SessionToken<UserSession>>,
+    session_token: Option<SessionToken>,
     query: AuthorizePageQuery,
 ) -> Result<AuthorizePageResponse, AuthorizeErrorPage> {
     let AuthorizePageQuery {
@@ -71,7 +70,8 @@ pub async fn authorize_page_endpoint(
 mod tests {
     use super::*;
     use crate::{
-        config::Config, error::InternalError, persistence::sessions::access::access_session_fake,
+        config::Config, error::InternalError,
+        persistence::user_sessions::access::access_session_fake,
         security::require_login::LoginRedirect,
     };
     use axum::response::IntoResponse;
@@ -83,7 +83,7 @@ mod tests {
         }
     }
 
-    fn session_token() -> Option<SessionToken<UserSession>> {
+    fn session_token() -> Option<SessionToken> {
         Some(SessionToken::new("session-token".to_string()))
     }
 

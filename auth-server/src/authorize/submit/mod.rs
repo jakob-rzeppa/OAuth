@@ -11,7 +11,6 @@ use crate::{
     domain::entity::authorization_code::{
         code::AuthorizationCode, request::validate::ValidatedAuthorizationRequest,
     },
-    domain::entity::user_session::UserSession,
     persistence::{
         authorization_codes::save::save_authorization_code, clients::find_by_id::find_client_by_id,
         pars::take::take_par,
@@ -27,7 +26,7 @@ mod response;
 
 #[axum::debug_handler]
 pub async fn authorize_submit_endpoint(
-    session_token: Option<SessionToken<UserSession>>,
+    session_token: Option<SessionToken>,
     AuthorizeSubmitRequest {
         request_uri,
         client_id,
@@ -110,7 +109,7 @@ mod tests {
         persistence::{
             authorization_codes::save::save_authorization_code_mock,
             clients::find_by_id::find_client_by_id_fake, pars::take::take_par_mock,
-            sessions::access::access_session_fake,
+            user_sessions::access::access_session_fake,
         },
         util::oauth_error::OAuthErrorCode,
     };
@@ -121,7 +120,7 @@ mod tests {
 
     const CODE_TTL_SECONDS: u64 = 300;
 
-    fn session_token() -> Option<SessionToken<UserSession>> {
+    fn session_token() -> Option<SessionToken> {
         Some(SessionToken::new("session-token".to_string()))
     }
 

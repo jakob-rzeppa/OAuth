@@ -9,12 +9,6 @@ pub fn session_cookie(name: &str, token: &str, max_age_seconds: u64) -> Option<H
     .ok()
 }
 
-/// The `Set-Cookie` value telling the browser to delete the cookie `name`.
-/// The attributes match `session_cookie`, so the browser treats it as the same cookie.
-pub fn expired_cookie(name: &str) -> Option<HeaderValue> {
-    session_cookie(name, "", 0)
-}
-
 /// Finds the cookie `name` in the value of a `Cookie` header (`a=1; b=2`).
 /// An empty value counts as missing.
 pub fn cookie_value<'a>(cookies: &'a str, name: &str) -> Option<&'a str> {
@@ -31,30 +25,30 @@ mod tests {
     use super::*;
 
     #[test]
-    fn expired_cookie_has_an_empty_value_and_no_lifetime() {
-        let cookie = expired_cookie("login_session").unwrap();
+    fn session_cookie_carries_the_token_and_lifetime() {
+        let cookie = session_cookie("user_session", "abc", 1800).unwrap();
 
         assert_eq!(
             cookie,
-            "login_session=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Lax"
+            "user_session=abc; Max-Age=1800; Path=/; HttpOnly; Secure; SameSite=Lax"
         );
     }
 
     #[test]
     fn finds_the_cookie_among_others() {
         assert_eq!(
-            cookie_value("theme=dark; login_session=abc; lang=en", "login_session"),
+            cookie_value("theme=dark; user_session=abc; lang=en", "user_session"),
             Some("abc")
         );
     }
 
     #[test]
     fn does_not_match_cookies_with_a_longer_name() {
-        assert_eq!(cookie_value("x_login_session=abc", "login_session"), None);
+        assert_eq!(cookie_value("x_user_session=abc", "user_session"), None);
     }
 
     #[test]
     fn treats_an_empty_value_as_missing() {
-        assert_eq!(cookie_value("login_session=", "login_session"), None);
+        assert_eq!(cookie_value("user_session=", "user_session"), None);
     }
 }

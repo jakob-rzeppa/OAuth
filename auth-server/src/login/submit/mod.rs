@@ -78,7 +78,7 @@ mod tests {
         config::Config,
         logging::testing::LogCapture,
         persistence::{
-            sessions::save::save_session_mock,
+            user_sessions::save::save_session_mock,
             users::authorize::{AuthorizedUser, authorize_user_mock},
         },
         util::token::hash_token,
