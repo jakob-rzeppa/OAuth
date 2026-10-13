@@ -26,10 +26,6 @@ impl Config {
         CONFIG.access_token_ttl
     }
 
-    pub fn login_session_ttl() -> u64 {
-        CONFIG.login_session_ttl
-    }
-
     pub fn user_session_ttl() -> u64 {
         CONFIG.user_session_ttl
     }
@@ -62,7 +58,6 @@ struct ConfigValues {
     database_url: String,
     app_port: u16,
     access_token_ttl: u32,
-    login_session_ttl: u64,
     user_session_ttl: u64,
     par_ttl: u64,
     authorization_code_ttl: u64,
@@ -101,11 +96,6 @@ static CONFIG: LazyLock<ConfigValues> = LazyLock::new(|| {
         .parse()
         .expect("ACCESS_TOKEN_TTL must be a valid duration");
 
-    let login_session_ttl = std::env::var("LOGIN_SESSION_TTL")
-        .expect("LOGIN_SESSION_TTL must be set")
-        .parse()
-        .expect("LOGIN_SESSION_TTL must be a valid duration");
-
     let user_session_ttl = std::env::var("USER_SESSION_TTL")
         .expect("USER_SESSION_TTL must be set")
         .parse()
@@ -137,7 +127,6 @@ static CONFIG: LazyLock<ConfigValues> = LazyLock::new(|| {
         database_url,
         app_port,
         access_token_ttl,
-        login_session_ttl,
         user_session_ttl,
         par_ttl,
         authorization_code_ttl,

@@ -56,7 +56,7 @@ mod tests {
     use axum::extract::Request;
 
     use super::*;
-    use crate::domain::entity::{login_session::LoginSession, user_session::UserSession};
+    use crate::domain::entity::user_session::UserSession;
 
     fn parts(cookie: Option<&str>) -> axum::http::request::Parts {
         let mut request = Request::post("/");
@@ -68,23 +68,14 @@ mod tests {
 
     #[tokio::test]
     async fn extractor_reads_the_token_from_the_cookie_of_its_kind() {
-        let mut parts = parts(Some(
-            "__Host-login_session=login-token; __Host-user_session=user-token",
-        ));
+        let mut parts = parts(Some("theme=dark; __Host-user_session=user-token"));
 
-        let login =
-            <SessionToken<LoginSession> as OptionalFromRequestParts<()>>::from_request_parts(
-                &mut parts,
-                &(),
-            )
-            .await;
         let user = <SessionToken<UserSession> as OptionalFromRequestParts<()>>::from_request_parts(
             &mut parts,
             &(),
         )
         .await;
 
-        assert_eq!(login.unwrap().unwrap().as_str(), "login-token");
         assert_eq!(user.unwrap().unwrap().as_str(), "user-token");
     }
 

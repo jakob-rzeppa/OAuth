@@ -8,8 +8,6 @@
     <h1>Login</h1>
 
     <form method="post" action="/login?return_to={{ return_to|urlencode_strict }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-
         <!-- Display error message if it exists -->
         {% if let Some(error_message) = error_message %}
             <p style="color: red;">{{ error_message }}</p>

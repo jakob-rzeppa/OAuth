@@ -1,15 +1,10 @@
 use askama::Template;
 use axum::{
-    http::{HeaderValue, StatusCode, header},
+    http::StatusCode,
     response::{IntoResponse, Response},
 };
 
-use crate::{
-    domain::entity::login_session::LoginSession,
-    login::error_response::LoginErrorResponse,
-    session,
-    util::{csrf::create_csrf_token, html::render_html},
-};
+use crate::{login::error_response::LoginErrorResponse, util::html::render_html};
 
 /// Starts a login session and builds the login form for it.
 /// `user_name` pre-fills the user name field, e.g. after a failed login attempt.
@@ -18,24 +13,15 @@ pub(super) async fn render_login_page(
     user_name: Option<String>,
     error_message: Option<String>,
 ) -> Result<LoginPageResponse, LoginErrorResponse> {
-    let csrf_token = create_csrf_token();
-    let session_cookie = session::issue(&LoginSession::new(csrf_token.clone())).await?;
-
     Ok(LoginPageResponse {
-        csrf_token,
         return_to,
-        session_cookie,
         user_name,
         error_message,
     })
 }
 
 pub struct LoginPageResponse {
-    pub csrf_token: String,
     pub return_to: String,
-
-    /// The `Set-Cookie` value carrying the login session token.
-    pub session_cookie: HeaderValue,
 
     // Pre-filled username
     pub user_name: Option<String>,
@@ -47,7 +33,6 @@ pub struct LoginPageResponse {
 #[derive(Template)]
 #[template(path = "login.html")]
 struct LoginPage {
-    csrf_token: String,
     return_to: String,
 
     // Pre-filled username
@@ -60,25 +45,18 @@ struct LoginPage {
 impl IntoResponse for LoginPageResponse {
     fn into_response(self) -> Response {
         let Self {
-            csrf_token,
             return_to,
-            session_cookie,
             user_name,
             error_message,
         } = self;
 
         let page = LoginPage {
-            csrf_token,
             return_to,
             user_name,
             error_message,
         };
 
-        (
-            [(header::SET_COOKIE, session_cookie)],
-            render_html(&page, StatusCode::OK),
-        )
-            .into_response()
+        render_html(&page, StatusCode::OK).into_response()
     }
 }
 
@@ -92,9 +70,7 @@ mod tests {
 
     async fn render_with_return_to(user_name: Option<&str>, return_to: &str) -> String {
         let response = LoginPageResponse {
-            csrf_token: "csrf".to_string(),
             return_to: return_to.to_string(),
-            session_cookie: HeaderValue::from_static("__Host-login_session=token"),
             user_name: user_name.map(str::to_string),
             error_message: None,
         }
@@ -106,7 +82,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn posts_back_to_the_url_carrying_return_to_instead_of_a_hidden_field() {
+    async fn posts_back_to_the_url_carrying_return_to() {
         let body =
             render_with_return_to(None, "/authorize?client_id=1&request_uri=urn%3Aabc").await;
 
@@ -116,7 +92,6 @@ mod tests {
             ),
             "{body}"
         );
-        assert!(!body.contains("name=\"return_to\""), "{body}");
     }
 
     #[tokio::test]

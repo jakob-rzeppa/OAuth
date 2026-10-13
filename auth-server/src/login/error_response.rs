@@ -16,14 +16,6 @@ pub enum LoginErrorResponse {
     #[description("The return_to parameter is missing or is not a path on this server.")]
     InvalidReturnTo,
 
-    #[code(OAuthErrorCode::InvalidRequest)]
-    #[description("The login session cookie is missing. Reload the login page and try again.")]
-    MissingSessionCookie,
-
-    #[code(OAuthErrorCode::InvalidRequest)]
-    #[description("The CSRF token is invalid. Reload the login page and try again.")]
-    InvalidCsrfToken,
-
     #[server_error]
     ServerError(InternalError),
 }

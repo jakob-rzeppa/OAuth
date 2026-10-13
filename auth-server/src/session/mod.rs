@@ -82,7 +82,7 @@ mod tests {
     use super::*;
     use crate::{
         config::Config,
-        domain::entity::{login_session::LoginSession, user_session::UserSession},
+        domain::entity::user_session::UserSession,
         persistence::sessions::{access::access_session_fake, save::save_session_mock},
         util::token::random_token_fake,
     };
@@ -146,23 +146,24 @@ mod tests {
 
     #[tokio::test]
     async fn take_consumes_the_session_under_the_token_hash() {
-        take_session_fake().setup(|key| {
-            assert_eq!(key, format!("session:login:{}", hash_token("token-123")));
+        let user_id = uuid::Uuid::nil();
+        take_session_fake().setup(move |key| {
+            assert_eq!(key, format!("session:user:{}", hash_token("token-123")));
             Ok(Some(
-                serde_json::to_string(&LoginSession::new("csrf".to_string())).unwrap(),
+                serde_json::to_string(&UserSession::new(user_id)).unwrap(),
             ))
         });
 
-        let session = take(&token::<LoginSession>("token-123")).await.unwrap();
+        let session = take(&token::<UserSession>("token-123")).await.unwrap();
 
-        assert_eq!(session, Some(LoginSession::new("csrf".to_string())));
+        assert_eq!(session, Some(UserSession::new(user_id)));
     }
 
     #[tokio::test]
     async fn take_fails_when_the_stored_value_is_not_a_session() {
         take_session_fake().setup(|_| Ok(Some("not json".to_string())));
 
-        let session = take(&token::<LoginSession>("token-123")).await;
+        let session = take(&token::<UserSession>("token-123")).await;
 
         assert!(session.is_err());
     }
@@ -170,8 +171,8 @@ mod tests {
     #[test]
     fn clear_cookie_expires_the_cookie_of_the_session_kind() {
         assert_eq!(
-            clear_cookie::<LoginSession>().unwrap(),
-            "__Host-login_session=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Lax"
+            clear_cookie::<UserSession>().unwrap(),
+            "__Host-user_session=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Lax"
         );
     }
 }
