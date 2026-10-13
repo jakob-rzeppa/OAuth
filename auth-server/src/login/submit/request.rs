@@ -50,7 +50,7 @@ mod tests {
     #[tokio::test]
     async fn extractor_reads_the_token_from_the_cookie_header() {
         let (mut parts, _) = Request::post("/login")
-            .header(header::COOKIE, "login_session=token-123")
+            .header(header::COOKIE, "__Host-login_session=token-123")
             .body(())
             .unwrap()
             .into_parts();

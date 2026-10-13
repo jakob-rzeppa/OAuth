@@ -13,7 +13,7 @@ use crate::{
 };
 
 /// Name of the cookie carrying the user session token, set once the user is logged in.
-const USER_SESSION_COOKIE: &str = "user_session";
+const USER_SESSION_COOKIE: &str = "__Host-user_session";
 
 pub struct UserSessionToken(String);
 

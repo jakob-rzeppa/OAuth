@@ -178,16 +178,18 @@ mod tests {
 
         // The consumed login session cookie is deleted.
         assert!(
-            cookies.contains(&"login_session=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Lax"),
+            cookies.contains(
+                &"__Host-login_session=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Lax"
+            ),
             "{cookies:?}"
         );
 
         let cookie = cookies
             .iter()
-            .find(|cookie| cookie.starts_with("user_session="))
-            .expect("expected a user_session cookie");
+            .find(|cookie| cookie.starts_with("__Host-user_session="))
+            .expect("expected a __Host-user_session cookie");
         let token = cookie
-            .strip_prefix("user_session=")
+            .strip_prefix("__Host-user_session=")
             .unwrap()
             .split(';')
             .next()
@@ -285,7 +287,7 @@ mod tests {
             .unwrap()
             .to_str()
             .unwrap();
-        assert!(cookie.starts_with("login_session="), "{cookie}");
+        assert!(cookie.starts_with("__Host-login_session="), "{cookie}");
 
         let log = capture.contents();
         assert!(log.contains("INFO"), "{log}");
