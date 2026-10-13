@@ -45,7 +45,7 @@ mod tests {
 
         assert_eq!(
             response.headers().get(header::REFERRER_POLICY).unwrap(),
-            "no-referrer"
+            "same-origin"
         );
     }
 
@@ -82,7 +82,7 @@ mod tests {
 
         assert_eq!(response.status(), StatusCode::FORBIDDEN);
         let headers = response.headers().clone();
-        assert_eq!(headers.get(header::REFERRER_POLICY).unwrap(), "no-referrer");
+        assert_eq!(headers.get(header::REFERRER_POLICY).unwrap(), "same-origin");
         assert_eq!(headers.get(header::X_FRAME_OPTIONS).unwrap(), "DENY");
         let body = axum::body::to_bytes(response.into_body(), usize::MAX)
             .await
@@ -102,5 +102,19 @@ mod tests {
         let response = router().oneshot(request).await.unwrap();
 
         assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn rejects_posts_without_origin_information() {
+        let request = Request::post("/authorize").body(Body::empty()).unwrap();
+
+        let response = router().oneshot(request).await.unwrap();
+
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body = String::from_utf8(body.to_vec()).unwrap();
+        assert!(body.contains("up-to-date browser"), "{body}");
     }
 }

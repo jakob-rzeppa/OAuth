@@ -13,8 +13,8 @@ const SEC_FETCH_SITE: &str = "sec-fetch-site";
 /// the auth-server's own pages, as a second CSRF layer next to the form tokens.
 ///
 /// Browsers set `Sec-Fetch-Site` and `Origin` themselves and scripts cannot override them.
-/// Requests carrying neither header (non-browser clients) are let through, since the cookies and
-/// tokens still apply to them and we don't have to worry about CSRF attacks from them.
+/// Requests carrying neither header are rejected too: every current browser sends at least one of
+/// them, so a request without both is not coming from a browser we can verify.
 pub async fn reject_cross_site(request: Request, next: Next) -> Response {
     let decision = decide(request.method(), request.headers(), Config::issuer_origin);
 
@@ -23,38 +23,53 @@ pub async fn reject_cross_site(request: Request, next: Next) -> Response {
         tracing::warn!(
             method = %request.method(),
             path = request.uri().path(),
-            header = rejected.header(),
-            "rejected a cross-site request"
+            reason = rejected.reason(),
+            "rejected a request"
         );
         return render_error_page(
             StatusCode::FORBIDDEN,
             "invalid_request",
-            "This request did not come from this site.",
+            rejected.description(),
         );
     }
 
     next.run(request).await
 }
 
-/// The header that made [`decide`] reject a request.
+/// Why [`decide`] rejected a request.
 #[derive(Debug, PartialEq, Eq)]
 enum Rejected {
     SecFetchSite,
     Origin,
+    MissingHeaders,
 }
 
 impl Rejected {
-    fn header(&self) -> &'static str {
+    fn reason(&self) -> &'static str {
         match self {
             Rejected::SecFetchSite => "Sec-Fetch-Site",
             Rejected::Origin => "Origin",
+            Rejected::MissingHeaders => "no Sec-Fetch-Site or Origin header",
+        }
+    }
+
+    fn description(&self) -> &'static str {
+        match self {
+            Rejected::SecFetchSite | Rejected::Origin => {
+                "This request did not come from this site."
+            }
+            Rejected::MissingHeaders => {
+                "Your browser did not tell us where this request came from. \
+                 Please use an up-to-date browser."
+            }
         }
     }
 }
 
 /// `Sec-Fetch-Site` wins when present, and only `same-origin` (and `none`, for user-initiated
 /// requests) pass: `same-site` would let a sibling subdomain through. `Origin` is the fallback
-/// for browsers that do not send it. The issuer origin is only looked up when it is needed.
+/// for browsers that do not send it. A request with neither is rejected. The issuer origin is only
+/// looked up when it is needed.
 fn decide(
     method: &Method,
     headers: &HeaderMap,
@@ -79,7 +94,7 @@ fn decide(
         };
     }
 
-    Ok(())
+    Err(Rejected::MissingHeaders)
 }
 
 #[cfg(test)]
@@ -146,8 +161,8 @@ mod tests {
     }
 
     #[test]
-    fn allows_requests_without_either_header() {
-        assert_eq!(post(&[]), Ok(()));
+    fn rejects_requests_without_either_header() {
+        assert_eq!(post(&[]), Err(Rejected::MissingHeaders));
     }
 
     #[test]

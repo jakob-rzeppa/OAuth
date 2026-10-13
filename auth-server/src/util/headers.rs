@@ -4,11 +4,12 @@ use axum::{
 };
 
 /// Response layer for HTML pages: never leak the page URL (it carries the request_uri) to other
-/// origins.
+/// origins. Same-origin requests still send it, so that browsers send a real `Origin` header on
+/// form posts (`no-referrer` makes them send `Origin: null`).
 pub async fn set_referrer_policy(mut response: Response) -> Response {
     response.headers_mut().insert(
         header::REFERRER_POLICY,
-        HeaderValue::from_static("no-referrer"),
+        HeaderValue::from_static("same-origin"),
     );
     response
 }
