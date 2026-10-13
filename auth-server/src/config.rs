@@ -46,6 +46,11 @@ impl Config {
         &CONFIG.iss
     }
 
+    /// The origin (`scheme://host[:port]`) browsers reach the auth-server under.
+    pub fn issuer_origin() -> &'static str {
+        &CONFIG.issuer_origin
+    }
+
     pub fn log_level() -> LevelFilter {
         CONFIG.log_level
     }
@@ -62,7 +67,20 @@ struct ConfigValues {
     par_ttl: u64,
     authorization_code_ttl: u64,
     iss: String,
+    issuer_origin: String,
     log_level: LevelFilter,
+}
+
+/// Parses `value` as a bare origin (`scheme://host[:port]`) and returns it in the form
+/// browsers send in the `Origin` header.
+fn parse_origin(value: &str) -> Result<String, String> {
+    let url = url::Url::parse(value).map_err(|error| error.to_string())?;
+
+    if !url.has_host() || url.path() != "/" || url.query().is_some() || url.fragment().is_some() {
+        return Err("expected scheme://host[:port] without a path, query or fragment".into());
+    }
+
+    Ok(url.origin().ascii_serialization())
 }
 
 static CONFIG: LazyLock<ConfigValues> = LazyLock::new(|| {
@@ -105,6 +123,10 @@ static CONFIG: LazyLock<ConfigValues> = LazyLock::new(|| {
 
     let iss = std::env::var("ISSUER_IDENTIFIER").expect("ISSUER_IDENTIFIER must be set");
 
+    let issuer_origin =
+        parse_origin(&std::env::var("ISSUER_ORIGIN").expect("ISSUER_ORIGIN must be set"))
+            .expect("ISSUER_ORIGIN must be an origin like https://auth.example.com");
+
     let log_level =
         crate::logging::parse_level(&std::env::var("LOG_LEVEL").expect("LOG_LEVEL must be set"))
             .expect("LOG_LEVEL must be one of debug, info, warn, error");
@@ -120,6 +142,42 @@ static CONFIG: LazyLock<ConfigValues> = LazyLock::new(|| {
         par_ttl,
         authorization_code_ttl,
         iss,
+        issuer_origin,
         log_level,
     }
 });
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_origins_into_the_form_browsers_send() {
+        assert_eq!(
+            parse_origin("https://Auth.Example.com/").unwrap(),
+            "https://auth.example.com"
+        );
+        assert_eq!(
+            parse_origin("http://127.0.0.1:8081").unwrap(),
+            "http://127.0.0.1:8081"
+        );
+        // The default port is dropped, as browsers do.
+        assert_eq!(
+            parse_origin("https://auth.example.com:443").unwrap(),
+            "https://auth.example.com"
+        );
+    }
+
+    #[test]
+    fn rejects_values_that_are_not_a_bare_origin() {
+        for value in [
+            "a-identifier-you-should-change",
+            "https://auth.example.com/path",
+            "https://auth.example.com/?q=1",
+            "https://auth.example.com/#fragment",
+            "mailto:someone@example.com",
+        ] {
+            assert!(parse_origin(value).is_err(), "{value}");
+        }
+    }
+}
