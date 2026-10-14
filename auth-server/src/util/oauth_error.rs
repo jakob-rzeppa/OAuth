@@ -3,7 +3,7 @@
 
 use axum::http::StatusCode;
 
-use crate::domain::entity::authorization_code::request::validate::{
+use crate::domain::authorization_code::request::validate::{
     FatalValidationError, RedirectableValidationError, ValidationError,
 };
 
@@ -54,9 +54,7 @@ impl ValidationError {
                 RedirectableValidationError::InvalidScope => OAuthErrorCode::InvalidScope,
                 RedirectableValidationError::InvalidCodeChallengeMethod
                 | RedirectableValidationError::InvalidCodeChallenge
-                | RedirectableValidationError::MissingNonce => {
-                    OAuthErrorCode::InvalidRequest
-                }
+                | RedirectableValidationError::MissingNonce => OAuthErrorCode::InvalidRequest,
             },
         }
     }

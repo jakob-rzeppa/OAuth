@@ -3,7 +3,7 @@ use uuid::Uuid;
 
 use crate::{
     config::Config,
-    domain::entity::authorization_code::request::AuthorizationRequest,
+    domain::authorization_code::request::AuthorizationRequest,
     par::{error_response::ParErrorResponse, request::ParRequest, response::ParResponse},
     persistence::{clients::find_by_id::find_client_by_id, pars::save::save_par},
 };
@@ -77,7 +77,7 @@ fn generate_request_uri() -> String {
 mod tests {
     use super::*;
     use crate::{
-        domain::entity::client::Client,
+        domain::client::Client,
         error::InternalError,
         persistence::{clients::find_by_id::find_client_by_id_fake, pars::save::save_par_fake},
         util::oauth_error::OAuthErrorCode,

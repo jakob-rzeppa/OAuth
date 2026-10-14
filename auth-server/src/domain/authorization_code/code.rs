@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::domain::entity::authorization_code::openid::has_openid_scope;
+use crate::domain::authorization_code::openid::has_openid_scope;
 
 /// The authorization code entity, derived from the authorization request on validation.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use sqlx::prelude::FromRow;
 use uuid::Uuid;
 
-use crate::domain::entity::access_token::AccessToken;
+use crate::domain::access_token::AccessToken;
 
 pub mod find_by_token_hash;
 pub mod register;

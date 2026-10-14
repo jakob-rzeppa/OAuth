@@ -1,7 +1,7 @@
 use sqlx::query;
 
 use crate::{
-    domain::entity::access_token::AccessToken, error::InternalError,
+    domain::access_token::AccessToken, error::InternalError,
     persistence::postgres::get_postgres_connection,
 };
 

@@ -8,7 +8,7 @@ use crate::{
         },
     },
     config::Config,
-    domain::entity::authorization_code::{
+    domain::authorization_code::{
         code::AuthorizationCode, request::validate::ValidatedAuthorizationRequest,
     },
     persistence::{
@@ -102,7 +102,7 @@ pub async fn authorize_submit_endpoint(
 mod tests {
     use super::*;
     use crate::{
-        domain::entity::{
+        domain::{
             authorization_code::request::AuthorizationRequest, client::Client,
             user_session::UserSession,
         },

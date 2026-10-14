@@ -2,7 +2,7 @@ use std::sync::LazyLock;
 
 use uuid::Uuid;
 
-use crate::domain::entity::client::Client;
+use crate::domain::client::Client;
 
 #[derive(serde::Deserialize)]
 struct ClientRow {

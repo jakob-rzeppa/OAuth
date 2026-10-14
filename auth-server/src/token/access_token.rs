@@ -3,7 +3,7 @@ use uuid::Uuid;
 
 use crate::{
     config::Config,
-    domain::entity::access_token::{AccessToken, BEARER},
+    domain::access_token::{AccessToken, BEARER},
     util::token::{hash_token, random_token},
 };
 

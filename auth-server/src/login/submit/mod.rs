@@ -6,7 +6,7 @@ use axum::{
 };
 
 use crate::{
-    domain::entity::user_session::UserSession,
+    domain::user_session::UserSession,
     login::{
         error_response::LoginErrorResponse,
         login_page::render_login_page,

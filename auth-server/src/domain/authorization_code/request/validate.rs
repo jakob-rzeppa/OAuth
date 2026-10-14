@@ -1,6 +1,6 @@
 use uuid::Uuid;
 
-use crate::domain::entity::{
+use crate::domain::{
     authorization_code::{openid::has_openid_scope, request::AuthorizationRequest},
     client::Client,
 };

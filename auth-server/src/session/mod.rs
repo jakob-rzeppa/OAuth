@@ -8,7 +8,7 @@ use axum::http::HeaderValue;
 
 use crate::{
     config::Config,
-    domain::entity::user_session::UserSession,
+    domain::user_session::UserSession,
     error::InternalError,
     persistence::user_sessions::{access::access_session, save::save_session},
     util::token::{hash_token, random_token},
@@ -55,7 +55,7 @@ mod tests {
     use super::*;
     use crate::{
         config::Config,
-        domain::entity::user_session::UserSession,
+        domain::user_session::UserSession,
         persistence::user_sessions::{access::access_session_fake, save::save_session_mock},
         util::token::random_token_fake,
     };

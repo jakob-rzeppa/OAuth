@@ -3,7 +3,7 @@ use url::Url;
 
 use crate::{
     authorize::error_page::AuthorizeErrorPage, config::Config,
-    domain::entity::authorization_code::request::validate::ValidationError, error::InternalError,
+    domain::authorization_code::request::validate::ValidationError, error::InternalError,
     security::require_login::RequireLoginError, util::oauth_error::OAuthErrorCode,
 };
 

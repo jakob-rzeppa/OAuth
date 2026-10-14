@@ -2,7 +2,7 @@ use axum::{Router, routing::post};
 use chrono::Utc;
 
 use crate::{
-    domain::entity::access_token::BEARER,
+    domain::access_token::BEARER,
     persistence::access_tokens::register::register_access_token,
     token::{error_response::TokenErrorResponse, request::TokenRequest, response::TokenResponse},
 };
@@ -56,7 +56,7 @@ mod tests {
     use super::access_token::generate_access_token_mock;
     use super::*;
     use crate::{
-        domain::entity::{
+        domain::{
             access_token::AccessToken, authorization_code::code::AuthorizationCode, client::Client,
         },
         error::InternalError,

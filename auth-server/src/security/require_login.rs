@@ -5,7 +5,7 @@ use axum::{
 use uuid::Uuid;
 
 use crate::{
-    domain::entity::user_session::UserSession,
+    domain::user_session::UserSession,
     error::InternalError,
     session::{self, SessionToken},
 };

@@ -1,7 +1,7 @@
 use redis::AsyncCommands;
 
 use crate::{
-    domain::entity::authorization_code::request::AuthorizationRequest,
+    domain::authorization_code::request::AuthorizationRequest,
     error::InternalError,
     persistence::{pars::key, redis::get_redis_connection},
 };

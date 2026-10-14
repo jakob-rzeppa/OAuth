@@ -1,7 +1,7 @@
 use uuid::Uuid;
 
 use crate::{
-    domain::entity::access_token::AccessToken,
+    domain::access_token::AccessToken,
     persistence::{
         authorization_codes::take::take_authorization_code, clients::find_by_id::find_client_by_id,
     },

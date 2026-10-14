@@ -2,9 +2,7 @@ use api_macros::ApiErrorResponse;
 use axum::extract::rejection::JsonRejection;
 
 use crate::{
-    domain::entity::authorization_code::request::validate::{
-        FatalValidationError, ValidationError,
-    },
+    domain::authorization_code::request::validate::{FatalValidationError, ValidationError},
     error::InternalError,
     util::oauth_error::OAuthErrorCode,
 };
