@@ -93,7 +93,7 @@ mod tests {
 
     #[tokio::test]
     async fn rejects_posts_from_another_origin() {
-        Config::issuer_origin_fake().setup(|| "https://issuer.example");
+        Config::iss_fake().setup(|| "https://issuer.example");
         let request = Request::post("/authorize")
             .header("origin", "https://evil.example")
             .body(Body::empty())

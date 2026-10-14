@@ -16,7 +16,7 @@ const SEC_FETCH_SITE: &str = "sec-fetch-site";
 /// Requests carrying neither header are rejected too: every current browser sends at least one of
 /// them, so a request without both is not coming from a browser we can verify.
 pub async fn reject_cross_site(request: Request, next: Next) -> Response {
-    let decision = decide(request.method(), request.headers(), Config::issuer_origin);
+    let decision = decide(request.method(), request.headers(), Config::iss);
 
     if let Err(rejected) = decision {
         // Only the method and path: the query string of `/authorize` carries the `request_uri`.
