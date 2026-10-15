@@ -7,7 +7,7 @@ use spec_api::{
 };
 
 use crate::application::{
-    contract::spec_gateway::{ListSpecsError, SpecGateway},
+    contract::spec_gateway::{SpecGateway, SpecGatewayError},
     spec_view::visibility_label,
     timestamp::format_date,
 };
@@ -232,7 +232,7 @@ impl SpecListService {
         &self,
         query: &ListQuery,
         page_token: Option<String>,
-    ) -> Result<SpecListPage, ListSpecsError> {
+    ) -> Result<SpecListPage, SpecGatewayError> {
         self.spec_gateway
             .list_specs(query.to_request(page_token))
             .await
@@ -380,11 +380,11 @@ mod tests {
         let mut spec_gateway = MockSpecGateway::new();
         spec_gateway
             .expect_list_specs()
-            .returning(|_| Err(ListSpecsError::Status(tonic::Status::unavailable("down"))));
+            .returning(|_| Err(SpecGatewayError::Status(tonic::Status::unavailable("down"))));
         let service = SpecListService::new(Arc::new(spec_gateway));
 
         let result = service.list_page(&ListQuery::default(), None).await;
 
-        assert!(matches!(result, Err(ListSpecsError::Status(_))));
+        assert!(matches!(result, Err(SpecGatewayError::Status(_))));
     }
 }

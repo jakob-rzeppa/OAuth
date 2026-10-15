@@ -7,7 +7,7 @@ use spec_api::{
 };
 use tonic::transport::{Channel, Endpoint};
 
-use crate::application::contract::spec_gateway::{GetSpecError, ListSpecsError, SpecGateway};
+use crate::application::contract::spec_gateway::{SpecGateway, SpecGatewayError};
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(3);
 /// For one call, including waiting for the connection.
@@ -48,27 +48,27 @@ impl GrpcSpecGateway {
 
 #[async_trait]
 impl SpecGateway for GrpcSpecGateway {
-    async fn get_spec(&self, id: &str) -> Result<Kind, GetSpecError> {
+    async fn get_spec(&self, id: &str) -> Result<Kind, SpecGatewayError> {
         self.client
             .clone()
             .get_spec(GetSpecRequest { id: id.to_string() })
             .await
-            .map_err(GetSpecError::Status)?
+            .map_err(SpecGatewayError::from)?
             .into_inner()
             .kind
-            .ok_or(GetSpecError::MissingKind)
+            .ok_or(SpecGatewayError::MissingKind)
     }
 
     async fn list_specs(
         &self,
         request: ListSpecsRequest,
-    ) -> Result<ListSpecsResponse, ListSpecsError> {
+    ) -> Result<ListSpecsResponse, SpecGatewayError> {
         self.client
             .clone()
             .list_specs(request)
             .await
             .map(tonic::Response::into_inner)
-            .map_err(ListSpecsError::Status)
+            .map_err(SpecGatewayError::from)
     }
 }
 
@@ -208,7 +208,9 @@ mod tests {
         let gateway = start_provider().await;
 
         match gateway.get_spec("missing").await {
-            Err(GetSpecError::Status(status)) => assert_eq!(status.code(), tonic::Code::NotFound),
+            Err(SpecGatewayError::Status(status)) => {
+                assert_eq!(status.code(), tonic::Code::NotFound)
+            }
             other => panic!("unexpected result: {other:?}"),
         }
     }
@@ -219,7 +221,7 @@ mod tests {
 
         assert!(matches!(
             gateway.get_spec("empty").await,
-            Err(GetSpecError::MissingKind)
+            Err(SpecGatewayError::MissingKind)
         ));
     }
 
@@ -230,14 +232,14 @@ mod tests {
         let started = std::time::Instant::now();
         let result = gateway.get_spec("slow").await;
 
-        assert!(matches!(result, Err(GetSpecError::Status(_))));
+        assert!(matches!(result, Err(SpecGatewayError::Status(_))));
         assert!(started.elapsed() < Duration::from_secs(3));
     }
 
     #[tokio::test]
     async fn maps_an_unreachable_provider_to_unavailable_on_get_spec() {
         match unreachable_provider().get_spec("x").await {
-            Err(GetSpecError::Status(status)) => {
+            Err(SpecGatewayError::Status(status)) => {
                 assert_eq!(status.code(), tonic::Code::Unavailable)
             }
             other => panic!("unexpected result: {other:?}"),
@@ -303,7 +305,7 @@ mod tests {
         let gateway = start_provider().await;
 
         match gateway.list_specs(request("fail")).await {
-            Err(ListSpecsError::Status(status)) => {
+            Err(SpecGatewayError::Status(status)) => {
                 assert_eq!(status.code(), tonic::Code::InvalidArgument)
             }
             other => panic!("unexpected result: {other:?}"),
@@ -313,7 +315,7 @@ mod tests {
     #[tokio::test]
     async fn maps_an_unreachable_provider_to_unavailable_on_list_specs() {
         match unreachable_provider().list_specs(request("bank")).await {
-            Err(ListSpecsError::Status(status)) => {
+            Err(SpecGatewayError::Status(status)) => {
                 assert_eq!(status.code(), tonic::Code::Unavailable)
             }
             other => panic!("unexpected result: {other:?}"),

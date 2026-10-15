@@ -8,7 +8,7 @@ use spec_api::{
 use crate::application::{
     contract::{
         content_gateway::{ContentGateway, GetContentError},
-        spec_gateway::{GetSpecError, SpecGateway},
+        spec_gateway::{SpecGateway, SpecGatewayError},
     },
     diff::{Diff, diff},
     markdown::render_markdown,
@@ -126,7 +126,7 @@ pub enum ViewSpecError {
     #[error("no such spec, version or proposal")]
     NotFound,
     #[error(transparent)]
-    Provider(GetSpecError),
+    Provider(SpecGatewayError),
 }
 
 /// A spec as the detail page shows it.
@@ -193,7 +193,7 @@ impl SpecViewService {
         let spec = match self.spec_gateway.get_spec(id).await {
             Ok(kind) => SpecDetail::from(kind),
             // An id that is not even well formed is as unknown as one that doesn't exist.
-            Err(GetSpecError::Status(status))
+            Err(SpecGatewayError::Status(status))
                 if matches!(
                     status.code(),
                     tonic::Code::NotFound | tonic::Code::InvalidArgument
@@ -995,8 +995,8 @@ mod tests {
                 versions: vec![version(&["p1", "p2"])],
                 ..Default::default()
             })),
-            "down" => Err(GetSpecError::Status(tonic::Status::unavailable("down"))),
-            _ => Err(GetSpecError::Status(tonic::Status::not_found(
+            "down" => Err(SpecGatewayError::Status(tonic::Status::unavailable("down"))),
+            _ => Err(SpecGatewayError::Status(tonic::Status::not_found(
                 "no such spec",
             ))),
         });
@@ -1072,7 +1072,7 @@ mod tests {
     async fn maps_a_malformed_id_to_not_found() {
         let mut spec_gateway = MockSpecGateway::new();
         spec_gateway.expect_get_spec().returning(|_| {
-            Err(GetSpecError::Status(tonic::Status::invalid_argument(
+            Err(SpecGatewayError::Status(tonic::Status::invalid_argument(
                 "The provided spec ID is invalid.",
             )))
         });
@@ -1089,7 +1089,7 @@ mod tests {
         let mut spec_gateway = MockSpecGateway::new();
         spec_gateway
             .expect_get_spec()
-            .returning(|_| Err(GetSpecError::MissingKind));
+            .returning(|_| Err(SpecGatewayError::MissingKind));
 
         let result = service(spec_gateway, MockContentGateway::new())
             .view_spec("spec", ViewParams::default())
