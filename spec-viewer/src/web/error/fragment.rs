@@ -15,6 +15,9 @@ struct ErrorFragment<'a> {
     is_list_item: bool,
 }
 
+/// Shown where something is loaded from the spec provider, and it isn't answering.
+const PROVIDER_UNAVAILABLE: &str = "The spec provider is not answering. Try again in a moment.";
+
 pub(in crate::web) fn content_not_found_fragment() -> Response {
     into_content(render(
         StatusCode::NOT_FOUND,
@@ -29,7 +32,7 @@ pub(in crate::web) fn content_unavailable_fragment() -> Response {
     into_content(render(
         StatusCode::BAD_GATEWAY,
         &ErrorFragment {
-            message: "The spec provider is not answering. Try again in a moment.",
+            message: PROVIDER_UNAVAILABLE,
             is_list_item: false,
         },
     ))
@@ -39,7 +42,7 @@ pub(in crate::web) fn spec_list_unavailable_fragment() -> Response {
     render(
         StatusCode::BAD_GATEWAY,
         &ErrorFragment {
-            message: "The spec provider is not answering. Try again in a moment.",
+            message: PROVIDER_UNAVAILABLE,
             is_list_item: true,
         },
     )
