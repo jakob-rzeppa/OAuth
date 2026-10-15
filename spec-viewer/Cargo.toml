@@ -21,6 +21,9 @@ ammonia = "4.2.3"
 similar = "3.2.0"
 
 spec-api = { git = "https://github.com/jakob-rzeppa/auth.git" }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+tower-http = { version = "0.7.1", features = ["trace"] }
 
 [dev-dependencies]
 mockall = "0.15.0"

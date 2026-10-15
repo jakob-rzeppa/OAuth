@@ -25,7 +25,7 @@ fn render(status: StatusCode, template: &impl Template) -> Response {
     match template.render() {
         Ok(html) => (status, Html(html)).into_response(),
         Err(error) => {
-            eprintln!("failed to render template: {error}");
+            tracing::error!(%error, "failed to render template");
             StatusCode::INTERNAL_SERVER_ERROR.into_response()
         }
     }

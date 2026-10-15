@@ -218,7 +218,7 @@ impl SpecViewService {
         };
 
         body.unwrap_or_else(|error| {
-            eprintln!("failed to load the text of spec {}: {error}", spec.id);
+            tracing::error!(spec_id = %spec.id, %error, "failed to load the text of the spec");
             Body::Unavailable
         })
     }

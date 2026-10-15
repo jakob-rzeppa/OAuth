@@ -59,7 +59,7 @@ pub(super) async fn spec_list_partial(
     {
         Ok(page) => page,
         Err(error) => {
-            eprintln!("failed to list specs: {error}");
+            tracing::error!(%error, "failed to list specs");
             return spec_list_unavailable_fragment();
         }
     };

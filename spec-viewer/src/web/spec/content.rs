@@ -40,7 +40,7 @@ pub(super) async fn content_partial(
         Ok(view) => view,
         Err(ViewSpecError::NotFound) => return content_not_found_fragment(),
         Err(ViewSpecError::Provider(error)) => {
-            eprintln!("failed to get spec {id}: {error}");
+            tracing::error!(spec_id = %id, %error, "failed to get spec");
             return content_unavailable_fragment();
         }
     };

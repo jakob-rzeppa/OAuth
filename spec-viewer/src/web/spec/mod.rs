@@ -66,7 +66,7 @@ async fn spec_page(
         Ok(view) => view,
         Err(ViewSpecError::NotFound) => return not_found_page(),
         Err(ViewSpecError::Provider(error)) => {
-            eprintln!("failed to get spec {id}: {error}");
+            tracing::error!(spec_id = %id, %error, "failed to get spec");
             return provider_unavailable_page();
         }
     };
