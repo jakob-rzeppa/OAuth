@@ -3,7 +3,9 @@
 //! Run with `cargo run --example mock_content` next to `cargo run --example mock_provider`,
 //! whose `content_uri`s point here.
 //!
-//! Override the listen address with `MOCK_CONTENT_ADDR`.
+//! It listens on `127.0.0.1:50052`. Override the address with `MOCK_CONTENT_ADDR`, a socket
+//! address like `0.0.0.0:50052`. A spec-viewer in docker on Linux only reaches it on an
+//! address other than the loopback one.
 //!
 //! Serves the full text of every patch and proposal of the mock provider's known specs, at
 //! `/{spec}/{patch or proposal}.md`. Anything else is `404`.

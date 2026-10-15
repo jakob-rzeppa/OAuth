@@ -1,13 +1,18 @@
 //! Standalone mock of the spec-provider for developing the spec-viewer by hand.
 //!
-//! Run with `cargo run --example mock_provider`, then start the spec-viewer with
-//! `SPEC_PROVIDER_URL=http://localhost:50051` (the default in `.env`).
+//! Run with `cargo run --example mock_provider` next to `cargo run --example mock_content`,
+//! then start the spec-viewer:
+//! - in docker with `docker compose up`, whose `.env` points to `host.docker.internal`, or
+//! - without docker with
+//!   `APP_PORT=8080 SPEC_PROVIDER_URL=http://localhost:50051
+//!   CONTENT_STORAGE_URL=http://localhost:50052 cargo run`.
 //!
-//! Override the listen address with `MOCK_PROVIDER_ADDR`.
+//! It listens on `127.0.0.1:50051`. Override the address with `MOCK_PROVIDER_ADDR`, a socket
+//! address like `0.0.0.0:50051`. A spec-viewer in docker on Linux only reaches it on an
+//! address other than the loopback one.
 //!
-//! The `content_uri`s of the known specs point to `cargo run --example mock_content`, at
-//! `MOCK_CONTENT_URL` (default `http://127.0.0.1:50052`). Set it to
-//! `http://host.docker.internal:50052` when the spec-viewer runs in docker.
+//! The `content_uri`s of the known specs are paths, which the spec-viewer fetches from its
+//! `CONTENT_STORAGE_URL`: from `mock_content`.
 //!
 //! `list_specs` serves a fixed catalogue: the two known specs below plus generated ones, so
 //! filtering, searching, ordering and paging can be tried by hand. The generated ones are
