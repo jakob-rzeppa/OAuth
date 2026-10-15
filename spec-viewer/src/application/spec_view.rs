@@ -243,30 +243,27 @@ impl SpecDetail {
             Selection::Unreleased => !self.unreleased_patches.is_empty(),
             Selection::Proposal(id) => self.proposal(id).is_some(),
             Selection::Patch { scope, number } => {
-                self.has_scope(*scope) && (1..=self.patches_of(*scope).len()).contains(number)
+                (1..=self.patches_of(*scope).len()).contains(number)
             }
         }
     }
 
-    fn has_scope(&self, scope: PatchScope) -> bool {
-        match scope {
-            PatchScope::Version(number) => (1..=self.versions.len()).contains(&number),
-            PatchScope::Unreleased => !self.unreleased_patches.is_empty(),
-        }
-    }
-
-    /// The patches of a scope that [`Self::has_scope`].
+    /// The patches of a scope, none for a version that doesn't exist.
     pub fn patches_of(&self, scope: PatchScope) -> &[PatchInfo] {
         match scope {
-            PatchScope::Version(number) => &self.versions[number - 1].patches,
+            PatchScope::Version(number) => number
+                .checked_sub(1)
+                .and_then(|index| self.versions.get(index))
+                .map_or(&[], |version| &version.patches),
             PatchScope::Unreleased => &self.unreleased_patches,
         }
     }
 
-    /// The last patch of the newest version up to `count` that has any.
+    /// The last patch of the newest of the first `count` versions that has any.
     fn last_patch_up_to(&self, count: usize) -> Option<&PatchInfo> {
-        self.versions[..count]
+        self.versions
             .iter()
+            .take(count)
             .rev()
             .find_map(|version| version.patches.last())
     }
@@ -301,9 +298,10 @@ impl SpecDetail {
     /// What the diff of the selection compares with, `None` for an empty text.
     fn base_of(&self, selection: &Selection) -> Option<Selection> {
         match selection {
-            Selection::Version(number) => {
-                Some(number - 1).filter(|&n| n > 0).map(Selection::Version)
-            }
+            Selection::Version(number) => number
+                .checked_sub(1)
+                .filter(|&previous| previous > 0)
+                .map(Selection::Version),
             Selection::Unreleased => self.latest_version(),
             Selection::Proposal(_) => self.head(),
             Selection::Patch { scope, number } if *number > 1 => Some(Selection::Patch {
@@ -313,11 +311,12 @@ impl SpecDetail {
             // The first patch changes what the patches before it left.
             Selection::Patch { scope, .. } => {
                 let before = match scope {
-                    PatchScope::Version(number) => number - 1,
+                    PatchScope::Version(number) => number.saturating_sub(1),
                     PatchScope::Unreleased => self.versions.len(),
                 };
-                self.versions[..before]
+                self.versions
                     .iter()
+                    .take(before)
                     .enumerate()
                     .rev()
                     .find(|(_, version)| !version.patches.is_empty())
@@ -333,12 +332,17 @@ impl SpecDetail {
     /// patch. `None` when there is no patch yet.
     fn content_uri(&self, selection: &Selection) -> Option<&str> {
         match selection {
-            Selection::Version(number) => self.last_patch_up_to(*number),
+            Selection::Version(number) if *number <= self.versions.len() => {
+                self.last_patch_up_to(*number)
+            }
+            Selection::Version(_) => None,
             Selection::Unreleased => self
                 .unreleased_patches
                 .last()
                 .or_else(|| self.last_patch_up_to(self.versions.len())),
-            Selection::Patch { scope, number } => self.patches_of(*scope).get(number - 1),
+            Selection::Patch { scope, number } => number
+                .checked_sub(1)
+                .and_then(|index| self.patches_of(*scope).get(index)),
             Selection::Proposal(id) => {
                 return self
                     .proposal(id)
@@ -507,6 +511,38 @@ mod tests {
         assert_eq!(
             spec.base_of(&patch(PatchScope::Unreleased, 1)),
             Some(patch(PatchScope::Version(1), 2))
+        );
+    }
+
+    #[test]
+    fn never_panics_for_a_selection_that_does_not_exist() {
+        let spec = draft();
+        let selections = [
+            Selection::Version(0),
+            Selection::Version(3),
+            Selection::Version(usize::MAX),
+            Selection::Proposal("missing".into()),
+        ]
+        .into_iter()
+        .chain([0, 1, 3, usize::MAX].into_iter().flat_map(|number| {
+            [0, 1, 3, usize::MAX]
+                .into_iter()
+                .map(PatchScope::Version)
+                .chain([PatchScope::Unreleased])
+                .map(move |scope| Selection::Patch { scope, number })
+        }));
+
+        for selection in selections {
+            if !spec.contains(&selection) {
+                assert_eq!(spec.content_uri(&selection), None, "{selection:?}");
+            }
+            let _ = spec.base_of(&selection);
+        }
+        assert!(spec.patches_of(PatchScope::Version(0)).is_empty());
+        assert!(spec.patches_of(PatchScope::Version(usize::MAX)).is_empty());
+        assert_eq!(
+            spec.last_patch_up_to(usize::MAX).unwrap().content_uri,
+            "v1b"
         );
     }
 
