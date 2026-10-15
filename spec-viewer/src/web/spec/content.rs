@@ -2,34 +2,28 @@ use askama::Template;
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
-    response::{Html, IntoResponse, Response},
+    response::{IntoResponse, Response},
 };
 
 use crate::{
     application::spec_view::{Body, ViewSpecError},
     state::AppState,
-    web::display::{CssClass, Label, Sign, TimeDisplay},
-    web::error::fragment::{content_not_found_fragment, content_unavailable_fragment},
-    web::spec::{SpecViewModel, ViewParams},
+    web::{
+        display::{CssClass, Label, Sign, TimeDisplay},
+        error::fragment::{content_not_found_fragment, content_unavailable_fragment},
+        render,
+        spec::{SpecViewModel, ViewParams},
+    },
 };
 
 pub(super) const PATH: &str = "/specs/{id}/content";
 
-/// The text, or the diff, of the selected version or proposal.
+/// The text, or the diff, of the selected version or proposal, with the selection panel
+/// of the sidebar replaced out of band.
 #[derive(Template)]
-#[template(path = "spec/content.html")]
-pub(super) struct ContentPartial<'a> {
-    pub(super) view: SpecViewModel<'a>,
-}
-
-/// The version selector and proposals in the sidebar, with the details of the selection.
-///
-/// Sent along with the [`ContentPartial`], replacing the panel out of band.
-#[derive(Template)]
-#[template(path = "spec/selection.html")]
-pub(super) struct SelectionPanel<'a> {
-    pub(super) view: SpecViewModel<'a>,
-    pub(super) swap_out_of_band: bool,
+#[template(path = "spec/partial/content_with_selection.html")]
+struct ContentPartial<'a> {
+    view: SpecViewModel<'a>,
 }
 
 pub(super) async fn content_partial(
@@ -54,62 +48,79 @@ pub(super) async fn content_partial(
     };
 
     let view = SpecViewModel::new(&view);
-    let rendered = ContentPartial { view }.render().and_then(|content| {
-        let selection = SelectionPanel {
-            view,
-            swap_out_of_band: true,
-        }
-        .render()?;
-        Ok(content + &selection)
-    });
-    match rendered {
-        Ok(html) => {
-            let page_url = format!("/specs/{id}?{}", view.query_string());
-            ([("HX-Push-Url", page_url)], Html(html)).into_response()
-        }
-        Err(error) => {
-            eprintln!("failed to render template: {error}");
-            StatusCode::INTERNAL_SERVER_ERROR.into_response()
-        }
-    }
+    let page_url = format!("/specs/{id}?{}", view.query_string());
+    (
+        [("HX-Push-Url", page_url)],
+        render(StatusCode::OK, &ContentPartial { view }),
+    )
+        .into_response()
 }
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use super::*;
     use crate::application::{
-        diff::diff,
-        spec_status::{ProposalState, SpecStatus, Visibility},
-        spec_view::{ProposalInfo, Selection, SpecDetail, SpecView, ViewMode},
+        contract::{content_gateway::MockContentGateway, spec_gateway::MockSpecGateway},
+        spec_list::SpecListService,
+        spec_view::SpecViewService,
     };
+    use crate::web::spec::proposal_diff_view;
+    use axum::{Router, body::Body as HttpBody, http::Request, routing::get};
+    use spec_api::{Patch, Spec, Version, get_spec_response::Kind};
+    use tower::ServiceExt;
 
-    fn proposal_diff_view() -> SpecView {
-        SpecView {
-            spec: SpecDetail {
-                id: "draft".into(),
-                title: "Draft".into(),
-                abbreviation: "D".into(),
-                status: SpecStatus::Draft {
-                    visibility: Visibility::Public,
-                },
-                versions: Vec::new(),
-                unreleased_patches: Vec::new(),
-                proposals: vec![ProposalInfo {
-                    id: "p".into(),
-                    proposed_by: "alice".into(),
-                    created_at: None,
-                    last_updated_at: None,
-                    status: ProposalState::ReadyForReview,
-                    content_uri: String::new(),
+    /// A published spec `spec` with the version 1 with the patch `p1`, whose text is `# One`.
+    fn router() -> Router {
+        let mut spec_gateway = MockSpecGateway::new();
+        spec_gateway.expect_get_spec().returning(|id| match id {
+            "spec" => Ok(Kind::Published(Spec {
+                id: id.into(),
+                versions: vec![Version {
+                    id: String::new(),
+                    patches: vec![Patch {
+                        content_uri: "p1".into(),
+                        ..Default::default()
+                    }],
                 }],
-            },
-            selection: Some(Selection::Proposal("p".into())),
-            mode: ViewMode::Diff,
-            body: Body::Diff {
-                base: None,
-                diff: diff("kept\nold <b>\n", "kept\nnew\n"),
-            },
-        }
+                ..Default::default()
+            })),
+            _ => Err(
+                crate::application::contract::spec_gateway::SpecGatewayError::Status(
+                    tonic::Status::not_found("no such spec"),
+                ),
+            ),
+        });
+        let mut content_gateway = MockContentGateway::new();
+        content_gateway
+            .expect_get()
+            .returning(|_| Ok("# One\n".to_string()));
+        let spec_gateway = Arc::new(spec_gateway);
+        let state = AppState::new(
+            SpecViewService::new(spec_gateway.clone(), Arc::new(content_gateway)),
+            SpecListService::new(spec_gateway),
+        );
+
+        Router::new()
+            .route(PATH, get(content_partial))
+            .with_state(state)
+    }
+
+    async fn get_content(uri: &str) -> (StatusCode, Option<String>, String) {
+        let response = router()
+            .oneshot(Request::get(uri).body(HttpBody::empty()).unwrap())
+            .await
+            .unwrap();
+        let status = response.status();
+        let push_url = response
+            .headers()
+            .get("HX-Push-Url")
+            .map(|url| url.to_str().unwrap().to_string());
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        (status, push_url, String::from_utf8(body.to_vec()).unwrap())
     }
 
     #[test]
@@ -131,27 +142,38 @@ mod tests {
     }
 
     #[test]
-    fn swaps_the_selection_panel_out_of_band_only_in_the_partial() {
+    fn replaces_the_selection_panel_out_of_band() {
         let view = proposal_diff_view();
 
-        let in_page = SelectionPanel {
+        let html = ContentPartial {
             view: SpecViewModel::new(&view),
-            swap_out_of_band: false,
-        }
-        .render()
-        .unwrap();
-        let in_partial = SelectionPanel {
-            view: SpecViewModel::new(&view),
-            swap_out_of_band: true,
         }
         .render()
         .unwrap();
 
-        assert!(!in_page.contains("hx-swap-oob"), "{in_page}");
-        assert!(in_partial.contains(r#"hx-swap-oob="true""#), "{in_partial}");
-        assert!(
-            in_partial.contains(r#"aria-current="page""#),
-            "{in_partial}"
-        );
+        assert!(html.contains(r#"<div id="selection""#), "{html}");
+        assert!(html.contains(r#"hx-swap-oob="true""#), "{html}");
+        assert!(html.contains(r#"aria-current="page""#), "{html}");
+    }
+
+    #[tokio::test]
+    async fn answers_with_the_content_and_the_url_to_push() {
+        let (status, push_url, body) = get_content("/specs/spec/content?version=1").await;
+
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(push_url.as_deref(), Some("/specs/spec?version=1"));
+        assert!(body.contains("<h1>One</h1>"), "{body}");
+        assert!(body.contains(r#"hx-swap-oob="true""#), "{body}");
+    }
+
+    #[tokio::test]
+    async fn answers_with_an_error_fragment_for_an_unknown_spec_or_url() {
+        for uri in ["/specs/missing/content", "/specs/spec/content?version=x"] {
+            let (status, push_url, body) = get_content(uri).await;
+
+            assert_eq!(status, StatusCode::NOT_FOUND, "{uri}");
+            assert_eq!(push_url, None, "{uri}");
+            assert!(body.contains("status-message error"), "{body}");
+        }
     }
 }

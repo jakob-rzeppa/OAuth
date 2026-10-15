@@ -26,7 +26,7 @@ pub(super) struct Params {
 /// One page of specs. The first page replaces the list, later ones replace the
 /// "Load more" button they were loaded by.
 #[derive(Template)]
-#[template(path = "overview/spec_list.html")]
+#[template(path = "overview/partial/spec_list.html")]
 struct SpecListPartial {
     page: SpecListPage,
     is_first_page: bool,

@@ -10,7 +10,7 @@
     </header>
 
     <main class="spec-main">
-        {{ content|safe }}
+        {% include "spec/partial/content.html" %}
     </main>
 
     <aside class="spec-sidebar">
@@ -34,7 +34,8 @@
             </dl>
         </section>
 
-        {{ selection|safe }}
+        {% let swap_out_of_band = false %}
+        {% include "spec/partial/selection.html" %}
     </aside>
 </div>
 {% endblock %}

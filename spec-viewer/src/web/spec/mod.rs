@@ -8,9 +8,9 @@ use axum::{
 };
 
 use crate::{
-    application::spec_view::ViewSpecError,
+    application::spec_view::{Body, ViewSpecError},
     state::AppState,
-    web::display::Label,
+    web::display::{CssClass, Label, Sign, TimeDisplay},
     web::{
         error::{not_found_page, provider_unavailable_page},
         render,
@@ -29,8 +29,6 @@ use view_model::SpecViewModel;
 #[template(path = "spec/page.html")]
 struct SpecPage<'a> {
     view: SpecViewModel<'a>,
-    content: content::ContentPartial<'a>,
-    selection: content::SelectionPanel<'a>,
 }
 
 pub(super) fn router() -> Router<AppState> {
@@ -60,16 +58,70 @@ async fn spec_page(
         }
     };
 
-    let view = SpecViewModel::new(&view);
     render(
         StatusCode::OK,
         &SpecPage {
-            view,
-            content: content::ContentPartial { view },
-            selection: content::SelectionPanel {
-                view,
-                swap_out_of_band: false,
-            },
+            view: SpecViewModel::new(&view),
         },
     )
+}
+
+/// A draft with a proposal `p` of alice that is selected, shown as the diff of its text.
+#[cfg(test)]
+fn proposal_diff_view() -> crate::application::spec_view::SpecView {
+    use crate::application::{
+        diff::diff,
+        spec_status::{ProposalState, SpecStatus, Visibility},
+        spec_view::{ProposalInfo, Selection, SpecDetail, SpecView, ViewMode},
+    };
+
+    SpecView {
+        spec: SpecDetail {
+            id: "draft".into(),
+            title: "Draft".into(),
+            abbreviation: "D".into(),
+            status: SpecStatus::Draft {
+                visibility: Visibility::Public,
+            },
+            versions: Vec::new(),
+            unreleased_patches: Vec::new(),
+            proposals: vec![ProposalInfo {
+                id: "p".into(),
+                proposed_by: "alice".into(),
+                created_at: None,
+                last_updated_at: None,
+                status: ProposalState::ReadyForReview,
+                content_uri: String::new(),
+            }],
+        },
+        selection: Some(Selection::Proposal("p".into())),
+        mode: ViewMode::Diff,
+        body: Body::Diff {
+            base: None,
+            diff: diff("kept\nold <b>\n", "kept\nnew\n"),
+        },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn renders_the_page_with_the_content_and_the_selection_panel_in_place() {
+        let view = proposal_diff_view();
+
+        let html = SpecPage {
+            view: SpecViewModel::new(&view),
+        }
+        .render()
+        .unwrap();
+
+        assert!(html.contains("<title>Draft"), "{html}");
+        assert!(html.contains(r#"<article id="content""#), "{html}");
+        assert!(html.contains(r#"<div id="selection""#), "{html}");
+        assert!(html.contains("<dd>Public</dd>"), "{html}");
+        // The selection panel is only swapped out of band in the htmx response.
+        assert!(!html.contains("hx-swap-oob"), "{html}");
+    }
 }

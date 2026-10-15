@@ -8,7 +8,7 @@ use crate::web::render;
 
 /// Swapped in by htmx where a partial failed to load.
 #[derive(Template)]
-#[template(path = "error/fragment.html")]
+#[template(path = "error/partial/fragment.html")]
 struct ErrorFragment<'a> {
     message: &'a str,
     /// Whether it replaces an item of a list, instead of the content of an element.
