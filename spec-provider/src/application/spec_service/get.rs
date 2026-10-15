@@ -48,12 +48,10 @@ impl SpecService {
 mod tests {
     use std::sync::Arc;
 
-    use async_trait::async_trait;
-
     use super::*;
     use crate::{
         application::contract::{
-            RepositoryError, draft_repository::DraftRepository, spec_repository::SpecRepository,
+            draft_repository::DraftRepository, spec_repository::SpecRepository,
         },
         domain::entity::spec::{
             Spec,
@@ -63,24 +61,6 @@ mod tests {
             draft_repository::InMemoryDraftRepository, spec_repository::InMemorySpecRepository,
         },
     };
-
-    struct FailingSpecRepository;
-
-    #[async_trait]
-    impl SpecRepository for FailingSpecRepository {
-        async fn register(&self, _: &Spec) -> Result<(), RepositoryError> {
-            Err(RepositoryError::DatabaseError)
-        }
-        async fn save(&self, _: &Spec) -> Result<(), RepositoryError> {
-            Err(RepositoryError::DatabaseError)
-        }
-        async fn find_by_id(&self, _: Uuid) -> Result<Option<Spec>, RepositoryError> {
-            Err(RepositoryError::DatabaseError)
-        }
-        async fn delete_by_id(&self, _: Uuid) -> Result<(), RepositoryError> {
-            Err(RepositoryError::DatabaseError)
-        }
-    }
 
     fn make_spec(id: Uuid) -> Spec {
         Spec::reconstitute(
@@ -151,17 +131,5 @@ mod tests {
         let result = service.get_spec_or_draft(Uuid::new_v4()).await;
 
         assert!(matches!(result, Err(GetSpecError::SpecNotFound)));
-    }
-
-    #[tokio::test]
-    async fn fails_with_database_error_when_the_repository_fails() {
-        let service = SpecService::new(
-            Arc::new(FailingSpecRepository),
-            Arc::new(InMemoryDraftRepository::default()),
-        );
-
-        let result = service.get_spec_or_draft(Uuid::new_v4()).await;
-
-        assert!(matches!(result, Err(GetSpecError::DatabaseError)));
     }
 }

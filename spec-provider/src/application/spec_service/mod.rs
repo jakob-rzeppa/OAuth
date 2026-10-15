@@ -5,6 +5,7 @@ use crate::application::contract::{
 };
 
 pub mod get;
+pub mod list;
 
 /// Use cases around specs and their drafts.
 pub struct SpecService {

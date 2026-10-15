@@ -7,6 +7,9 @@ import "google/protobuf/timestamp.proto";
 service SpecProvider {
   // Returns either the published spec or the draft with the given id.
   rpc GetSpec(GetSpecRequest) returns (GetSpecResponse);
+
+  // Returns one page of published specs and/or drafts as overviews.
+  rpc ListSpecs(ListSpecsRequest) returns (ListSpecsResponse);
 }
 
 // --- Requests / Responses ---
@@ -20,6 +23,63 @@ message GetSpecResponse {
   oneof kind {
     Spec published = 1;
     Draft draft = 2;
+  }
+}
+
+message ListSpecsRequest {
+  // The maximum number of items to return. 0 selects the default of 50.
+  // Values above 100 are capped at 100.
+  uint32 page_size = 1;
+  // The `next_page_token` of the previous response. Empty for the first page.
+  // Keep filter, search and order the same while paging.
+  string page_token = 2;
+  ListSpecsFilter filter = 3;
+  // Matches specs whose title or abbreviation contains this text, ignoring case.
+  // Empty means no search.
+  string search = 4;
+  ListSpecsOrder order = 5;
+}
+
+message ListSpecsFilter {
+  // Which kinds of specs to return. Unspecified means both.
+  SpecKind kind = 1;
+}
+
+enum SpecKind {
+  SPEC_KIND_UNSPECIFIED = 0;
+  SPEC_KIND_PUBLISHED = 1;
+  SPEC_KIND_DRAFT = 2;
+  SPEC_KIND_BOTH = 3;
+}
+
+message ListSpecsOrder {
+  // Unspecified means created_at.
+  ListSpecsOrderField field = 1;
+  // Unspecified means descending.
+  SortDirection direction = 2;
+}
+
+enum ListSpecsOrderField {
+  LIST_SPECS_ORDER_FIELD_UNSPECIFIED = 0;
+  LIST_SPECS_ORDER_FIELD_CREATED_AT = 1;
+}
+
+enum SortDirection {
+  SORT_DIRECTION_UNSPECIFIED = 0;
+  SORT_DIRECTION_ASC = 1;
+  SORT_DIRECTION_DESC = 2;
+}
+
+message ListSpecsResponse {
+  repeated SpecListItem items = 1;
+  // Pass as `page_token` to get the next page. Empty on the last page.
+  string next_page_token = 2;
+}
+
+message SpecListItem {
+  oneof kind {
+    SpecOverview published = 1;
+    DraftOverview draft = 2;
   }
 }
 
@@ -82,4 +142,25 @@ message Proposal {
   google.protobuf.Timestamp last_updated_at = 4;
   ProposalStatus status = 5;
   string content_uri = 6;
+}
+
+// A published spec without its versions.
+message SpecOverview {
+  string id = 1;
+  string title = 2;
+  string abbreviation = 3;
+  string created_by = 4;
+  google.protobuf.Timestamp created_at = 5;
+}
+
+// A draft without its versions, patches and proposals.
+message DraftOverview {
+  string id = 1;
+  string title = 2;
+  string abbreviation = 3;
+  DraftVisibility visibility = 4;
+  // The number of the latest cut version. 0 while no version has been cut.
+  uint32 current_version = 5;
+  string created_by = 6;
+  google.protobuf.Timestamp created_at = 7;
 }

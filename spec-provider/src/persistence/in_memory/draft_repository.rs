@@ -5,8 +5,9 @@ use tokio::sync::RwLock;
 use uuid::Uuid;
 
 use crate::{
-    application::contract::{RepositoryError, draft_repository::DraftRepository},
+    application::contract::{ListQuery, RepositoryError, draft_repository::DraftRepository},
     domain::entity::spec::draft::Draft,
+    persistence::in_memory::select_page,
 };
 
 /// Keeps drafts in memory. Everything is lost when the process stops.
@@ -45,12 +46,21 @@ impl DraftRepository for InMemoryDraftRepository {
             None => Err(RepositoryError::NotFound),
         }
     }
+
+    async fn list(&self, query: &ListQuery) -> Result<Vec<Draft>, RepositoryError> {
+        Ok(select_page(self.drafts.read().await.values(), query))
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use chrono::{TimeZone, Utc};
+
     use super::*;
-    use crate::domain::entity::spec::draft::DraftVisibility;
+    use crate::{
+        application::contract::{PageCursor, SortDirection, SpecOrder},
+        domain::entity::spec::draft::DraftVisibility,
+    };
 
     fn make_draft(id: Uuid, title: &str) -> Draft {
         Draft::reconstitute(
@@ -123,5 +133,116 @@ mod tests {
             repository.delete_by_id(id).await,
             Err(RepositoryError::NotFound)
         );
+    }
+
+    fn make_draft_at(id: Uuid, title: &str, abbreviation: &str, created_at_secs: i64) -> Draft {
+        Draft::reconstitute(
+            id,
+            title.to_string(),
+            abbreviation.to_string(),
+            DraftVisibility::Public,
+            Default::default(),
+            Default::default(),
+            Default::default(),
+            Default::default(),
+            Default::default(),
+            Utc.timestamp_opt(created_at_secs, 0).unwrap(),
+        )
+    }
+
+    fn query() -> ListQuery {
+        ListQuery {
+            search: None,
+            order: SpecOrder::default(),
+            after: None,
+            limit: 100,
+        }
+    }
+
+    async fn repository_with(drafts: &[Draft]) -> InMemoryDraftRepository {
+        let repository = InMemoryDraftRepository::default();
+        for draft in drafts {
+            repository.register(draft).await.unwrap();
+        }
+        repository
+    }
+
+    fn titles(drafts: &[Draft]) -> Vec<&str> {
+        drafts.iter().map(|draft| draft.title()).collect()
+    }
+
+    #[tokio::test]
+    async fn list_returns_the_newest_draft_first_by_default() {
+        let repository = repository_with(&[
+            make_draft_at(Uuid::new_v4(), "Old", "A", 10),
+            make_draft_at(Uuid::new_v4(), "New", "B", 20),
+        ])
+        .await;
+
+        let page = repository.list(&query()).await.unwrap();
+
+        assert_eq!(titles(&page), ["New", "Old"]);
+    }
+
+    #[tokio::test]
+    async fn list_returns_the_oldest_draft_first_when_ascending() {
+        let repository = repository_with(&[
+            make_draft_at(Uuid::new_v4(), "New", "B", 20),
+            make_draft_at(Uuid::new_v4(), "Old", "A", 10),
+        ])
+        .await;
+        let query = ListQuery {
+            order: SpecOrder {
+                direction: SortDirection::Ascending,
+                ..SpecOrder::default()
+            },
+            ..query()
+        };
+
+        let page = repository.list(&query).await.unwrap();
+
+        assert_eq!(titles(&page), ["Old", "New"]);
+    }
+
+    #[tokio::test]
+    async fn list_continues_after_the_cursor_and_stops_at_the_limit() {
+        let newest = Uuid::new_v4();
+        let repository = repository_with(&[
+            make_draft_at(newest, "Newest", "D", 40),
+            make_draft_at(Uuid::new_v4(), "Newer", "C", 30),
+            make_draft_at(Uuid::new_v4(), "Older", "B", 20),
+            make_draft_at(Uuid::new_v4(), "Oldest", "A", 10),
+        ])
+        .await;
+        let query = ListQuery {
+            after: Some(PageCursor {
+                created_at: Utc.timestamp_opt(40, 0).unwrap(),
+                id: newest,
+            }),
+            limit: 2,
+            ..query()
+        };
+
+        let page = repository.list(&query).await.unwrap();
+
+        assert_eq!(titles(&page), ["Newer", "Older"]);
+    }
+
+    #[tokio::test]
+    async fn list_only_returns_drafts_matching_the_search_in_title_or_abbreviation() {
+        let repository = repository_with(&[
+            make_draft_at(Uuid::new_v4(), "Open Banking", "OB", 10),
+            make_draft_at(Uuid::new_v4(), "Payments", "BANK", 20),
+            make_draft_at(Uuid::new_v4(), "Identity", "ID", 30),
+        ])
+        .await;
+        let query = ListQuery {
+            search: Some("bank".to_string()),
+            ..query()
+        };
+
+        let page = repository.list(&query).await.unwrap();
+
+        assert_eq!(titles(&page), ["Payments", "Open Banking"]);
     }
 }
