@@ -8,6 +8,7 @@ use axum::{
 use crate::state::AppState;
 
 mod assets;
+pub mod display;
 mod error;
 mod overview;
 mod spec;

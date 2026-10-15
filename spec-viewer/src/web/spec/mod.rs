@@ -10,6 +10,7 @@ use axum::{
 use crate::{
     application::spec_view::{SpecView, ViewParams, ViewSpecError},
     state::AppState,
+    web::display::Label,
     web::{
         error::{not_found_page, provider_unavailable_page},
         render,

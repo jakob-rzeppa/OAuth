@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use spec_api::{
     ListSpecsFilter, ListSpecsOrder, ListSpecsRequest, ListSpecsResponse, SortDirection, SpecKind,
@@ -9,7 +10,7 @@ use spec_api::{
 use crate::application::{
     contract::spec_gateway::{SpecGateway, SpecGatewayError},
     spec_status::SpecStatus,
-    timestamp::format_date,
+    timestamp::to_time,
 };
 
 /// The number of specs loaded at once.
@@ -147,17 +148,7 @@ pub struct SpecListEntry {
     /// `None` for a published spec, `Some(0)` for a draft without a version yet.
     pub current_version: Option<u32>,
     pub created_by: String,
-    pub created_at: String,
-}
-
-impl SpecListEntry {
-    /// Like `Version 3`, or `No version yet`. `None` for a published spec.
-    pub fn current_version_label(&self) -> Option<String> {
-        self.current_version.map(|version| match version {
-            0 => "No version yet".to_string(),
-            version => format!("Version {version}"),
-        })
-    }
+    pub created_at: Option<DateTime<Utc>>,
 }
 
 impl From<ListSpecsResponse> for SpecListPage {
@@ -178,7 +169,7 @@ impl From<Kind> for SpecListEntry {
     fn from(kind: Kind) -> Self {
         match kind {
             Kind::Published(spec) => SpecListEntry {
-                created_at: format_date(spec.created_at.as_ref()),
+                created_at: to_time(spec.created_at.as_ref()),
                 id: spec.id,
                 title: spec.title,
                 abbreviation: spec.abbreviation,
@@ -187,7 +178,7 @@ impl From<Kind> for SpecListEntry {
                 created_by: spec.created_by,
             },
             Kind::Draft(draft) => SpecListEntry {
-                created_at: format_date(draft.created_at.as_ref()),
+                created_at: to_time(draft.created_at.as_ref()),
                 status: SpecStatus::Draft {
                     visibility: draft.visibility().into(),
                 },
@@ -314,38 +305,19 @@ mod tests {
 
         assert_eq!(page.next_page_token.as_deref(), Some("next"));
         assert_eq!(page.entries.len(), 2);
-        assert_eq!(page.entries[0].created_at, "2024-01-11");
+        assert_eq!(
+            page.entries[0].created_at,
+            DateTime::from_timestamp(1_705_000_000, 0)
+        );
         assert_eq!(page.entries[0].status, SpecStatus::Published);
-        assert_eq!(page.entries[0].current_version_label(), None);
+        assert_eq!(page.entries[0].current_version, None);
         assert_eq!(
             page.entries[1].status,
             SpecStatus::Draft {
                 visibility: Visibility::Private
             }
         );
-        assert_eq!(
-            page.entries[1].current_version_label().as_deref(),
-            Some("Version 3")
-        );
-    }
-
-    #[test]
-    fn labels_the_version_of_a_draft() {
-        let entry = |version| SpecListEntry {
-            id: String::new(),
-            title: String::new(),
-            abbreviation: String::new(),
-            status: SpecStatus::Published,
-            current_version: version,
-            created_by: String::new(),
-            created_at: String::new(),
-        };
-
-        assert_eq!(
-            entry(Some(0)).current_version_label().unwrap(),
-            "No version yet"
-        );
-        assert_eq!(entry(Some(2)).current_version_label().unwrap(), "Version 2");
+        assert_eq!(page.entries[1].current_version, Some(3));
     }
 
     #[test]

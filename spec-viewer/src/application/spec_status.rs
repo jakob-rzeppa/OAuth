@@ -19,20 +19,6 @@ impl SpecStatus {
             SpecStatus::Draft { visibility } => Some(*visibility),
         }
     }
-
-    pub fn label(&self) -> &'static str {
-        match self {
-            SpecStatus::Published => "Published",
-            SpecStatus::Draft { .. } => "Draft",
-        }
-    }
-
-    pub fn css_class(&self) -> &'static str {
-        match self {
-            SpecStatus::Published => "published",
-            SpecStatus::Draft { .. } => "draft",
-        }
-    }
 }
 
 /// Who can see a draft.
@@ -43,17 +29,6 @@ pub enum Visibility {
     Hidden,
     /// The spec-provider sent a value this viewer doesn't know.
     Unknown,
-}
-
-impl Visibility {
-    pub fn label(&self) -> &'static str {
-        match self {
-            Visibility::Public => "Public",
-            Visibility::Private => "Private",
-            Visibility::Hidden => "Hidden",
-            Visibility::Unknown => "Unknown",
-        }
-    }
 }
 
 impl From<DraftVisibility> for Visibility {
@@ -74,16 +49,6 @@ pub enum ProposalState {
     ReadyForReview,
     /// The spec-provider sent a value this viewer doesn't know.
     Unknown,
-}
-
-impl ProposalState {
-    pub fn label(&self) -> &'static str {
-        match self {
-            ProposalState::WorkInProgress => "Work in progress",
-            ProposalState::ReadyForReview => "Ready for review",
-            ProposalState::Unknown => "Unknown",
-        }
-    }
 }
 
 impl From<ProposalStatus> for ProposalState {
@@ -108,10 +73,8 @@ mod tests {
 
         assert!(draft.is_draft());
         assert_eq!(draft.visibility(), Some(Visibility::Private));
-        assert_eq!(draft.label(), "Draft");
         assert!(!SpecStatus::Published.is_draft());
         assert_eq!(SpecStatus::Published.visibility(), None);
-        assert_eq!(SpecStatus::Published.css_class(), "published");
     }
 
     #[test]
@@ -125,8 +88,8 @@ mod tests {
             ProposalState::Unknown
         );
         assert_eq!(
-            ProposalState::from(ProposalStatus::Ready).label(),
-            "Ready for review"
+            ProposalState::from(ProposalStatus::Ready),
+            ProposalState::ReadyForReview
         );
     }
 }

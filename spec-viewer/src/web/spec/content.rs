@@ -8,6 +8,7 @@ use axum::{
 use crate::{
     application::spec_view::{Body, SpecView, ViewParams, ViewSpecError},
     state::AppState,
+    web::display::{CssClass, Label, Sign, TimeDisplay},
     web::error::fragment::{content_not_found_fragment, content_unavailable_fragment},
 };
 
@@ -87,8 +88,8 @@ mod tests {
                 proposals: vec![ProposalInfo {
                     id: "p".into(),
                     proposed_by: "alice".into(),
-                    created_at: String::new(),
-                    last_updated_at: String::new(),
+                    created_at: None,
+                    last_updated_at: None,
                     status: ProposalState::ReadyForReview,
                     content_uri: String::new(),
                 }],

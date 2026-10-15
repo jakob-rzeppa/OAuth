@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use spec_api::{Patch, Proposal, Version, get_spec_response::Kind};
 
@@ -11,7 +12,7 @@ use crate::application::{
     diff::{Diff, diff},
     markdown::render_markdown,
     spec_status::{ProposalState, SpecStatus},
-    timestamp::format_date_time,
+    timestamp::to_time,
 };
 
 /// A published spec or a draft with everything the detail page shows besides its text.
@@ -39,9 +40,9 @@ pub struct VersionInfo {
 #[derive(Debug)]
 pub struct PatchInfo {
     pub proposed_by: String,
-    pub created_at: String,
+    pub created_at: Option<DateTime<Utc>>,
     pub accepted_by: String,
-    pub accepted_at: String,
+    pub accepted_at: Option<DateTime<Utc>>,
     /// Where the full text of the spec with this patch applied is stored.
     pub content_uri: String,
 }
@@ -50,8 +51,8 @@ pub struct PatchInfo {
 pub struct ProposalInfo {
     pub id: String,
     pub proposed_by: String,
-    pub created_at: String,
-    pub last_updated_at: String,
+    pub created_at: Option<DateTime<Utc>>,
+    pub last_updated_at: Option<DateTime<Utc>>,
     pub status: ProposalState,
     /// Where the full text of the spec with this proposal applied is stored.
     pub content_uri: String,
@@ -605,8 +606,8 @@ fn versions(versions: Vec<Version>) -> Vec<VersionInfo> {
 impl From<Patch> for PatchInfo {
     fn from(patch: Patch) -> Self {
         PatchInfo {
-            created_at: format_date_time(patch.created_at.as_ref()),
-            accepted_at: format_date_time(patch.accepted_at.as_ref()),
+            created_at: to_time(patch.created_at.as_ref()),
+            accepted_at: to_time(patch.accepted_at.as_ref()),
             proposed_by: patch.proposed_by,
             accepted_by: patch.accepted_by,
             content_uri: patch.content_uri,
@@ -617,8 +618,8 @@ impl From<Patch> for PatchInfo {
 impl From<Proposal> for ProposalInfo {
     fn from(proposal: Proposal) -> Self {
         ProposalInfo {
-            created_at: format_date_time(proposal.created_at.as_ref()),
-            last_updated_at: format_date_time(proposal.last_updated_at.as_ref()),
+            created_at: to_time(proposal.created_at.as_ref()),
+            last_updated_at: to_time(proposal.last_updated_at.as_ref()),
             status: proposal.status().into(),
             id: proposal.id,
             proposed_by: proposal.proposed_by,

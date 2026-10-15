@@ -42,25 +42,6 @@ pub enum LineKind {
     Removed,
 }
 
-impl LineKind {
-    /// The sign shown in front of the line, like in a unified diff.
-    pub fn sign(&self) -> &'static str {
-        match self {
-            LineKind::Unchanged => " ",
-            LineKind::Added => "+",
-            LineKind::Removed => "-",
-        }
-    }
-
-    pub fn css_class(&self) -> &'static str {
-        match self {
-            LineKind::Unchanged => "unchanged",
-            LineKind::Added => "added",
-            LineKind::Removed => "removed",
-        }
-    }
-}
-
 impl Diff {
     pub fn is_empty(&self) -> bool {
         self.hunks.is_empty()
