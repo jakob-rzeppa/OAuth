@@ -1,7 +1,13 @@
+use std::time::Duration;
+
 use similar::{ChangeTag, TextDiff, udiff::UnifiedHunkHeader};
 
 /// The number of unchanged lines shown around each change, like `git diff`.
 const CONTEXT_LINES: usize = 3;
+
+/// After this, the diff stops looking for a shorter one and takes what it has: still a correct
+/// diff, just with more changed lines than needed.
+const DIFF_TIMEOUT: Duration = Duration::from_secs(2);
 
 /// A line-based diff, grouped into hunks like a unified diff.
 #[derive(Debug)]
@@ -63,7 +69,9 @@ impl Diff {
 
 /// Diffs `old` and `new` line by line.
 pub fn diff(old: &str, new: &str) -> Diff {
-    let text_diff = TextDiff::from_lines(old, new);
+    let text_diff = TextDiff::configure()
+        .timeout(DIFF_TIMEOUT)
+        .diff_lines(old, new);
     let mut added = 0;
     let mut removed = 0;
 
@@ -155,6 +163,18 @@ mod tests {
         let first = &diff.hunks[0].lines;
         assert_eq!(first.first().unwrap().text, "1");
         assert_eq!(first.last().unwrap().text, "5");
+    }
+
+    #[test]
+    fn a_large_diff_finishes_with_a_correct_result() {
+        let old: String = (0..20_000).map(|i| format!("old {i}\n")).collect();
+        let new: String = (0..20_000).map(|i| format!("new {i}\n")).collect();
+
+        let started = std::time::Instant::now();
+        let diff = diff(&old, &new);
+
+        assert!(started.elapsed() < DIFF_TIMEOUT * 3);
+        assert_eq!((diff.added, diff.removed), (20_000, 20_000));
     }
 
     #[test]

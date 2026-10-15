@@ -6,6 +6,8 @@ pub enum GetContentError {
     Request(String),
     #[error("content storage {1} answered with {0}")]
     Status(u16, String),
+    #[error("the text at {0} is larger than {1} bytes")]
+    TooLarge(String, usize),
 }
 
 /// The content storage, which holds the full texts of the patches and proposals.

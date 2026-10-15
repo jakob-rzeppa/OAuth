@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use async_trait::async_trait;
 use spec_api::{
     GetSpecRequest, ListSpecsRequest, ListSpecsResponse, get_spec_response::Kind,
@@ -6,6 +8,10 @@ use spec_api::{
 use tonic::transport::{Channel, Endpoint};
 
 use crate::application::contract::spec_gateway::{GetSpecError, ListSpecsError, SpecGateway};
+
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(3);
+/// For one call, including waiting for the connection.
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Debug, thiserror::Error)]
 #[error("SPEC_PROVIDER_URL is not a valid uri: {0}")]
@@ -22,8 +28,17 @@ impl GrpcSpecGateway {
     ///
     /// Must be called within the tokio runtime.
     pub fn connect_lazy(endpoint: &str) -> Result<Self, InvalidSpecProviderUrl> {
+        Self::connect_lazy_with(endpoint, REQUEST_TIMEOUT)
+    }
+
+    fn connect_lazy_with(
+        endpoint: &str,
+        request_timeout: Duration,
+    ) -> Result<Self, InvalidSpecProviderUrl> {
         let channel = Endpoint::from_shared(endpoint.to_string())
             .map_err(InvalidSpecProviderUrl)?
+            .connect_timeout(CONNECT_TIMEOUT)
+            .timeout(request_timeout)
             .connect_lazy();
         Ok(GrpcSpecGateway {
             client: SpecProviderClient::new(channel),
@@ -73,6 +88,7 @@ mod tests {
     /// `get_spec` answers by the `id` of the request:
     /// - `"published"` and `"draft"` are an empty spec or draft with that id,
     /// - `"empty"` is a response with neither,
+    /// - `"slow"` answers after 5 seconds,
     /// - anything else is `NOT_FOUND`.
     ///
     /// `list_specs` answers by the `search` of the request:
@@ -100,6 +116,10 @@ mod tests {
                     ..Default::default()
                 })),
                 "empty" => None,
+                "slow" => {
+                    tokio::time::sleep(Duration::from_secs(5)).await;
+                    None
+                }
                 _ => return Err(Status::not_found("no such spec")),
             };
             Ok(Response::new(GetSpecResponse { kind }))
@@ -133,7 +153,7 @@ mod tests {
         }
     }
 
-    async fn start_provider() -> GrpcSpecGateway {
+    async fn start_provider_with(request_timeout: Duration) -> GrpcSpecGateway {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
         tokio::spawn(
@@ -141,7 +161,11 @@ mod tests {
                 .add_service(SpecProviderServer::new(FakeProvider))
                 .serve_with_incoming(TcpListenerStream::new(listener)),
         );
-        GrpcSpecGateway::connect_lazy(&format!("http://{addr}")).unwrap()
+        GrpcSpecGateway::connect_lazy_with(&format!("http://{addr}"), request_timeout).unwrap()
+    }
+
+    async fn start_provider() -> GrpcSpecGateway {
+        start_provider_with(REQUEST_TIMEOUT).await
     }
 
     fn unreachable_provider() -> GrpcSpecGateway {
@@ -197,6 +221,17 @@ mod tests {
             gateway.get_spec("empty").await,
             Err(GetSpecError::NotFound)
         ));
+    }
+
+    #[tokio::test]
+    async fn gives_up_on_a_slow_provider() {
+        let gateway = start_provider_with(Duration::from_millis(100)).await;
+
+        let started = std::time::Instant::now();
+        let result = gateway.get_spec("slow").await;
+
+        assert!(matches!(result, Err(GetSpecError::Status(_))));
+        assert!(started.elapsed() < Duration::from_secs(3));
     }
 
     #[tokio::test]
