@@ -3,17 +3,15 @@ use std::net::SocketAddr;
 use axum::{Router, routing::get};
 use tokio::net::TcpListener;
 
-mod web;
+use crate::config::Config;
 
-const DEFAULT_PORT: u16 = 3000;
+mod config;
+mod spec;
+mod web;
 
 #[tokio::main]
 async fn main() {
-    let port = std::env::var("APP_PORT")
-        .ok()
-        .and_then(|port| port.parse().ok())
-        .unwrap_or(DEFAULT_PORT);
-    let addr = SocketAddr::from(([0, 0, 0, 0], port));
+    let addr = SocketAddr::from(([0, 0, 0, 0], Config::app_port()));
     let listener = TcpListener::bind(addr).await.unwrap_or_else(|error| {
         eprintln!("failed to bind {addr}: {error}");
         std::process::exit(1)

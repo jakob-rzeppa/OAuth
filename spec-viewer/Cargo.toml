@@ -7,6 +7,13 @@ edition = "2024"
 askama = "0.16.0"
 axum = "0.8.9"
 tokio = { version = "1.53.1", features = ["full"] }
+prost-types = "0.14"
+tonic = "0.14"
+thiserror = "2.0.19"
+
+spec-api = { git = "https://github.com/jakob-rzeppa/auth.git" }
 
 [dev-dependencies]
+spec-api = { git = "https://github.com/jakob-rzeppa/auth.git", features = ["server"] }
+tokio-stream = { version = "0.1", features = ["net"] }
 tower = { version = "0.5.3", features = ["util"] }
