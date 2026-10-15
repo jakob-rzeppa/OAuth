@@ -1,0 +1,52 @@
+<article id="content" class="spec-content">
+    {% if let Some(label) = view.selection_label() %}
+    <div class="content-bar">
+        <h2>{{ label }}</h2>
+        <nav class="view-toggle" aria-label="Show as">
+            <a href="/specs/{{ view.spec.id }}?{{ view.rendered_query_string() }}"
+               hx-get="/specs/{{ view.spec.id }}/content?{{ view.rendered_query_string() }}"
+               hx-target="#content" hx-swap="outerHTML" hx-indicator="#content"
+               {% if !view.is_diff() %}aria-current="page"{% endif %}>Text</a>
+            <a href="/specs/{{ view.spec.id }}?{{ view.diff_query_string() }}"
+               hx-get="/specs/{{ view.spec.id }}/content?{{ view.diff_query_string() }}"
+               hx-target="#content" hx-swap="outerHTML" hx-indicator="#content"
+               {% if view.is_diff() %}aria-current="page"{% endif %}>Changes</a>
+        </nav>
+    </div>
+    {% endif %}
+
+    {% match view.body %}
+    {% when Body::Empty %}
+    <p class="status-message">This spec has no text yet. It appears here once the first patch is accepted.</p>
+    {% when Body::Rendered(html) %}
+    <div class="prose">{{ html|safe }}</div>
+    {% when Body::Diff { base_label, diff } %}
+    <p class="diff-summary">
+        Compared with {% if let Some(base_label) = base_label %}{{ base_label }}{% else %}an empty text{% endif %}:
+        <span class="added-count">{{ diff.added }} lines added</span>,
+        <span class="removed-count">{{ diff.removed }} removed</span>
+    </p>
+    {% if diff.is_empty() %}
+    <p class="status-message">No changes.</p>
+    {% else %}
+    <div class="diff-scroll">
+        <table class="diff">
+            {% for hunk in diff.hunks %}
+            <tbody>
+                <tr class="hunk-header"><td colspan="3">{{ hunk.header }}</td></tr>
+                {% for line in hunk.lines %}
+                <tr class="{{ line.kind.css_class() }}">
+                    <td class="line-number">{% if let Some(number) = line.old_number %}{{ number }}{% endif %}</td>
+                    <td class="line-number">{% if let Some(number) = line.new_number %}{{ number }}{% endif %}</td>
+                    <td class="line-text"><span class="sign">{{ line.kind.sign() }}</span>{{ line.text }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            {% endfor %}
+        </table>
+    </div>
+    {% endif %}
+    {% when Body::Unavailable %}
+    <p class="status-message error" role="alert">The text can't be loaded from the content storage. Reload the page in a moment.</p>
+    {% endmatch %}
+</article>

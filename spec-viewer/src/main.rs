@@ -5,7 +5,9 @@ use tokio::net::TcpListener;
 
 use crate::config::Config;
 
+mod application;
 mod config;
+mod content;
 mod spec;
 mod web;
 

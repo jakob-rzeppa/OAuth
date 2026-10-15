@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block title %}{{ view.spec.title }}{% endblock %}
+
+{% block body %}
+<div class="spec-layout">
+    <header class="spec-header">
+        <p class="call-number">{{ view.spec.abbreviation }}</p>
+        <h1>{{ view.spec.title }}</h1>
+    </header>
+
+    <main class="spec-main">
+        {{ content|safe }}
+    </main>
+
+    <aside class="spec-sidebar">
+        <section class="panel">
+            <h2>About this spec</h2>
+            <dl class="facts">
+                <dt>Status</dt>
+                <dd>{{ view.spec.status }}</dd>
+                {% if let Some(visibility) = view.spec.visibility %}
+                <dt>Visibility</dt>
+                <dd>{{ visibility }}</dd>
+                {% endif %}
+                <dt>Versions</dt>
+                <dd>{{ view.spec.versions.len() }}</dd>
+                {% if view.spec.is_draft() %}
+                <dt>Proposals</dt>
+                <dd>{{ view.spec.proposals.len() }}</dd>
+                {% endif %}
+                <dt>ID</dt>
+                <dd class="spec-id">{{ view.spec.id }}</dd>
+            </dl>
+        </section>
+
+        {{ selection|safe }}
+    </aside>
+</div>
+{% endblock %}

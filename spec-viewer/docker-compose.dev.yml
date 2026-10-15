@@ -23,6 +23,9 @@ services:
         - path: ./templates
           target: /app/templates
           action: sync
+        - path: ./static
+          target: /app/static
+          action: sync
         - path: ./Cargo.toml
           target: /app/Cargo.toml
           action: sync

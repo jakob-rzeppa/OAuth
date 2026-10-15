@@ -1,0 +1,84 @@
+<div id="selection" class="selection"{% if swap_out_of_band %} hx-swap-oob="true"{% endif %}>
+    {% let options = view.version_options() %}
+    {% if !options.is_empty() %}
+    <section class="panel">
+        <h2><label for="version-select">Version</label></h2>
+        <form action="/specs/{{ view.spec.id }}" method="get"
+              hx-get="/specs/{{ view.spec.id }}/content" hx-trigger="change"
+              hx-target="#content" hx-swap="outerHTML" hx-indicator="#content">
+            <select id="version-select" name="version">
+                {% if view.selected_proposal().is_some() %}
+                <option value="" selected disabled>Showing a proposal</option>
+                {% endif %}
+                {% for option in options %}
+                <option value="{{ option.value }}"{% if option.selected %} selected{% endif %}>{{ option.label }}</option>
+                {% endfor %}
+            </select>
+            {% if view.is_diff() %}
+            <input type="hidden" name="view" value="diff">
+            {% endif %}
+            <noscript><button type="submit">Show version</button></noscript>
+        </form>
+
+        {% let patches = view.patch_links() %}
+        {% if !patches.is_empty() %}
+        <h3>Accepted patches</h3>
+        <ol class="patches">
+            {% for link in patches %}
+            <li>
+                <a href="/specs/{{ view.spec.id }}?{{ link.query }}"
+                   hx-get="/specs/{{ view.spec.id }}/content?{{ link.query }}"
+                   hx-target="#content" hx-swap="outerHTML" hx-indicator="#content"
+                   {% if link.selected %}aria-current="page"{% endif %}>
+                    <span class="patch-author">Proposed by {{ link.patch.proposed_by }} on {{ link.patch.created_at }}</span>
+                    <span class="patch-accepted">Accepted by {{ link.patch.accepted_by }} on {{ link.patch.accepted_at }}</span>
+                </a>
+            </li>
+            {% endfor %}
+        </ol>
+        {% if view.is_patch_selected() %}
+        <p class="patches-all">
+            <a href="/specs/{{ view.spec.id }}?{{ view.scope_query_string() }}"
+               hx-get="/specs/{{ view.spec.id }}/content?{{ view.scope_query_string() }}"
+               hx-target="#content" hx-swap="outerHTML" hx-indicator="#content">Show the whole version</a>
+        </p>
+        {% endif %}
+        {% endif %}
+    </section>
+    {% endif %}
+
+    {% if let Some(proposal) = view.selected_proposal() %}
+    <section class="panel">
+        <h2>This proposal</h2>
+        <dl class="facts">
+            <dt>Proposed by</dt>
+            <dd>{{ proposal.proposed_by }}</dd>
+            <dt>Status</dt>
+            <dd>{{ proposal.status }}</dd>
+            <dt>Created</dt>
+            <dd>{{ proposal.created_at }}</dd>
+            <dt>Updated</dt>
+            <dd>{{ proposal.last_updated_at }}</dd>
+        </dl>
+    </section>
+    {% endif %}
+
+    {% if !view.spec.proposals.is_empty() %}
+    <section class="panel">
+        <h2>Proposals</h2>
+        <ul class="proposals">
+            {% for proposal in view.spec.proposals %}
+            <li>
+                <a href="/specs/{{ view.spec.id }}?{{ view.proposal_query_string(proposal.id.as_str()) }}"
+                   hx-get="/specs/{{ view.spec.id }}/content?{{ view.proposal_query_string(proposal.id.as_str()) }}"
+                   hx-target="#content" hx-swap="outerHTML" hx-indicator="#content"
+                   {% if view.is_selected_proposal(proposal.id.as_str()) %}aria-current="page"{% endif %}>
+                    <span class="proposal-author">By {{ proposal.proposed_by }}</span>
+                    <span class="proposal-state">{{ proposal.status }}, updated {{ proposal.last_updated_at }}</span>
+                </a>
+            </li>
+            {% endfor %}
+        </ul>
+    </section>
+    {% endif %}
+</div>

@@ -5,6 +5,10 @@
 //!
 //! Override the listen address with `MOCK_PROVIDER_ADDR`.
 //!
+//! The `content_uri`s of the known specs point to `cargo run --example mock_content`, at
+//! `MOCK_CONTENT_URL` (default `http://127.0.0.1:50052`). Set it to
+//! `http://host.docker.internal:50052` when the spec-viewer runs in docker.
+//!
 //! `list_specs` serves a fixed catalogue: the two known specs below plus generated ones, so
 //! filtering, searching, ordering and paging can be tried by hand. The generated ones are
 //! `NOT_FOUND` for `get_spec`.
@@ -205,13 +209,13 @@ fn published_spec(id: String) -> Spec {
         versions: vec![
             Version {
                 id: "v1".into(),
-                patches: vec![accepted_patch("patch-1", 1_700_000_000)],
+                patches: vec![accepted_patch("example-spec", "patch-1", 1_700_000_000)],
             },
             Version {
                 id: "v2".into(),
                 patches: vec![
-                    accepted_patch("patch-2", 1_710_000_000),
-                    accepted_patch("patch-3", 1_720_000_000),
+                    accepted_patch("example-spec", "patch-2", 1_710_000_000),
+                    accepted_patch("example-spec", "patch-3", 1_720_000_000),
                 ],
             },
         ],
@@ -226,9 +230,9 @@ fn draft_spec(id: String) -> Draft {
         visibility: DraftVisibility::Public as i32,
         versions: vec![Version {
             id: "v1".into(),
-            patches: vec![accepted_patch("patch-1", 1_700_000_000)],
+            patches: vec![accepted_patch("example-draft", "patch-1", 1_700_000_000)],
         }],
-        unversioned_patches: vec![accepted_patch("patch-2", 1_710_000_000)],
+        unversioned_patches: vec![accepted_patch("example-draft", "patch-2", 1_710_000_000)],
         proposals: vec![
             Proposal {
                 id: "proposal-1".into(),
@@ -236,7 +240,7 @@ fn draft_spec(id: String) -> Draft {
                 created_at: Some(timestamp(1_715_000_000)),
                 last_updated_at: Some(timestamp(1_716_000_000)),
                 status: ProposalStatus::Draft as i32,
-                content_uri: "https://example.com/proposals/1".into(),
+                content_uri: "example-draft/proposal-1.md".into(),
             },
             Proposal {
                 id: "proposal-2".into(),
@@ -244,20 +248,20 @@ fn draft_spec(id: String) -> Draft {
                 created_at: Some(timestamp(1_717_000_000)),
                 last_updated_at: Some(timestamp(1_718_000_000)),
                 status: ProposalStatus::Ready as i32,
-                content_uri: "https://example.com/proposals/2".into(),
+                content_uri: "example-draft/proposal-2.md".into(),
             },
         ],
     }
 }
 
-fn accepted_patch(id: &str, seconds: i64) -> Patch {
+fn accepted_patch(spec: &str, id: &str, seconds: i64) -> Patch {
     Patch {
         id: id.into(),
         proposed_by: "alice".into(),
         created_at: Some(timestamp(seconds)),
         accepted_by: "bob".into(),
         accepted_at: Some(timestamp(seconds + 3_600)),
-        content_uri: format!("https://example.com/patches/{id}"),
+        content_uri: format!("{spec}/{id}.md"),
     }
 }
 

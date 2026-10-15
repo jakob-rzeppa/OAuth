@@ -10,11 +10,16 @@ impl Config {
     pub fn spec_provider_url() -> &'static str {
         &CONFIG.spec_provider_url
     }
+
+    pub fn content_storage_url() -> &'static str {
+        &CONFIG.content_storage_url
+    }
 }
 
 struct ConfigValues {
     app_port: u16,
     spec_provider_url: String,
+    content_storage_url: String,
 }
 
 static CONFIG: LazyLock<ConfigValues> = LazyLock::new(|| {
@@ -26,8 +31,12 @@ static CONFIG: LazyLock<ConfigValues> = LazyLock::new(|| {
     let spec_provider_url =
         std::env::var("SPEC_PROVIDER_URL").expect("SPEC_PROVIDER_URL must be set");
 
+    let content_storage_url =
+        std::env::var("CONTENT_STORAGE_URL").expect("CONTENT_STORAGE_URL must be set");
+
     ConfigValues {
         app_port,
         spec_provider_url,
+        content_storage_url,
     }
 });

@@ -15,6 +15,7 @@ WORKDIR /app
 
 COPY Cargo.toml Cargo.lock askama.toml ./
 COPY templates ./templates
+COPY static ./static
 COPY src ./src
 
 # The target volume outlives the image, and COPY and `watch` sync keep the host
@@ -24,7 +25,7 @@ CMD ["sh", "-c", "find src -name '*.rs' -exec touch {} + && exec cargo watch -x 
 
 # ---------------------------------------------------------------------------
 # builder: compiles the spec-viewer binary.
-# The askama templates are compiled into the binary.
+# The askama templates and the static files are compiled into the binary.
 # ---------------------------------------------------------------------------
 FROM rust:1-slim-trixie AS builder
 
@@ -32,6 +33,7 @@ WORKDIR /app
 
 COPY Cargo.toml Cargo.lock askama.toml ./
 COPY templates ./templates
+COPY static ./static
 COPY src ./src
 
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
