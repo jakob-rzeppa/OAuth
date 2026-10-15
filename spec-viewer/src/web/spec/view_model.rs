@@ -2,7 +2,7 @@ use crate::{
     application::spec_view::{
         Body, PatchInfo, PatchScope, ProposalInfo, Selection, SpecDetail, SpecView, ViewMode,
     },
-    web::spec::params::query_string,
+    web::spec::{content_path, page_path, params::query_string},
 };
 
 /// A spec as the templates of the detail page show it: the text of the application with the
@@ -15,9 +15,16 @@ pub(super) struct SpecViewModel<'a> {
     mode: ViewMode,
 }
 
+/// Where to go to show something else: the page for a plain link, and the partial that htmx
+/// loads instead.
+pub(super) struct Link {
+    pub page_url: String,
+    pub content_url: String,
+}
+
 pub(super) struct PatchLink<'a> {
     pub patch: &'a PatchInfo,
-    pub query: String,
+    pub link: Link,
     pub selected: bool,
 }
 
@@ -99,8 +106,8 @@ impl<'a> SpecViewModel<'a> {
         matches!(self.selection, Some(Selection::Patch { .. }))
     }
 
-    /// The patches of the selected version or of the unreleased changes, each with the url
-    /// query that shows it, keeping the view mode.
+    /// The patches of the selected version or of the unreleased changes, each with the link
+    /// that shows it, keeping the view mode.
     pub fn patch_links(&self) -> Vec<PatchLink<'a>> {
         let Some(scope) = self.selection.and_then(Selection::scope) else {
             return Vec::new();
@@ -116,21 +123,21 @@ impl<'a> SpecViewModel<'a> {
                 };
                 PatchLink {
                     patch,
-                    query: query_string(Some(&selection), self.mode),
+                    link: self.link(Some(&selection), self.mode),
                     selected: self.selection == Some(&selection),
                 }
             })
             .collect()
     }
 
-    /// The url query of the whole version or the unreleased changes, keeping the view mode.
-    pub fn scope_query_string(&self) -> String {
+    /// The link to the whole version or the unreleased changes, keeping the view mode.
+    pub fn scope_link(&self) -> Link {
         let selection = match self.selection.and_then(Selection::scope) {
             Some(PatchScope::Version(number)) => Some(Selection::Version(number)),
             Some(PatchScope::Unreleased) => Some(Selection::Unreleased),
             None => None,
         };
-        query_string(selection.as_ref(), self.mode)
+        self.link(selection.as_ref(), self.mode)
     }
 
     pub fn selected_proposal(&self) -> Option<&'a ProposalInfo> {
@@ -144,24 +151,49 @@ impl<'a> SpecViewModel<'a> {
         matches!(self.selection, Some(Selection::Proposal(selected)) if selected == id)
     }
 
-    /// The url query of what is shown.
-    pub fn query_string(&self) -> String {
-        query_string(self.selection, self.mode)
+    /// The path of the page of the spec.
+    pub fn page_path(&self) -> String {
+        page_path(&self.spec.id)
     }
 
-    /// The url query of the selection as rendered text.
-    pub fn rendered_query_string(&self) -> String {
-        query_string(self.selection, ViewMode::Rendered)
+    /// The path of the partial of the page of the spec.
+    pub fn content_path(&self) -> String {
+        content_path(&self.spec.id)
     }
 
-    /// The url query of the selection as diff.
-    pub fn diff_query_string(&self) -> String {
-        query_string(self.selection, ViewMode::Diff)
+    /// The url of the page as it shows what is shown.
+    pub fn current_url(&self) -> String {
+        self.link(self.selection, self.mode).page_url
     }
 
-    /// The url query of the proposal, keeping the view mode.
-    pub fn proposal_query_string(&self, id: &str) -> String {
-        query_string(Some(&Selection::Proposal(id.to_string())), self.mode)
+    /// The link to the selection as rendered text.
+    pub fn rendered_link(&self) -> Link {
+        self.link(self.selection, ViewMode::Rendered)
+    }
+
+    /// The link to the selection as diff.
+    pub fn diff_link(&self) -> Link {
+        self.link(self.selection, ViewMode::Diff)
+    }
+
+    /// The link to the proposal, keeping the view mode.
+    pub fn proposal_link(&self, id: &str) -> Link {
+        self.link(Some(&Selection::Proposal(id.to_string())), self.mode)
+    }
+
+    fn link(&self, selection: Option<&Selection>, mode: ViewMode) -> Link {
+        let query = query_string(selection, mode);
+        let with_query = |path: String| {
+            if query.is_empty() {
+                path
+            } else {
+                format!("{path}?{query}")
+            }
+        };
+        Link {
+            page_url: with_query(self.page_path()),
+            content_url: with_query(self.content_path()),
+        }
     }
 }
 
@@ -222,19 +254,29 @@ mod tests {
         let view = view(Some(selected), ViewMode::Diff);
         let model = SpecViewModel::new(&view);
 
-        assert_eq!(model.query_string(), "version=1&patch=2&view=diff");
-        assert_eq!(model.scope_query_string(), "version=1&view=diff");
+        assert_eq!(
+            model.current_url(),
+            "/specs/draft?version=1&patch=2&view=diff"
+        );
+        assert_eq!(
+            model.scope_link().page_url,
+            "/specs/draft?version=1&view=diff"
+        );
         assert!(model.is_patch_selected());
         let links = model.patch_links();
         assert_eq!(
             links
                 .iter()
-                .map(|link| (link.query.as_str(), link.selected))
+                .map(|link| (link.link.page_url.as_str(), link.selected))
                 .collect::<Vec<_>>(),
             [
-                ("version=1&patch=1&view=diff", false),
-                ("version=1&patch=2&view=diff", true),
+                ("/specs/draft?version=1&patch=1&view=diff", false),
+                ("/specs/draft?version=1&patch=2&view=diff", true),
             ]
+        );
+        assert_eq!(
+            links[1].link.content_url,
+            "/specs/draft/content?version=1&patch=2&view=diff"
         );
         assert!(
             model
@@ -269,10 +311,24 @@ mod tests {
         let view = view(Some(Selection::Unreleased), ViewMode::Diff);
         let model = SpecViewModel::new(&view);
 
-        assert_eq!(model.query_string(), "version=unreleased&view=diff");
-        assert_eq!(model.rendered_query_string(), "version=unreleased");
-        assert_eq!(model.diff_query_string(), "version=unreleased&view=diff");
-        assert_eq!(model.proposal_query_string("a b"), "proposal=a+b&view=diff");
+        assert_eq!(
+            model.current_url(),
+            "/specs/draft?version=unreleased&view=diff"
+        );
+        assert_eq!(
+            model.rendered_link().page_url,
+            "/specs/draft?version=unreleased"
+        );
+        assert_eq!(
+            model.diff_link().content_url,
+            "/specs/draft/content?version=unreleased&view=diff"
+        );
+        assert_eq!(
+            model.proposal_link("a b").page_url,
+            "/specs/draft?proposal=a+b&view=diff"
+        );
+        assert_eq!(model.page_path(), "/specs/draft");
+        assert_eq!(model.content_path(), "/specs/draft/content");
     }
 
     #[test]
@@ -298,6 +354,15 @@ mod tests {
             model.label_of(&Selection::Proposal("gone".into())),
             "Proposal"
         );
+    }
+
+    #[test]
+    fn links_without_a_query_when_nothing_is_selected() {
+        let view = view(None, ViewMode::Rendered);
+        let model = SpecViewModel::new(&view);
+
+        assert_eq!(model.current_url(), "/specs/draft");
+        assert_eq!(model.rendered_link().content_url, "/specs/draft/content");
     }
 
     #[test]

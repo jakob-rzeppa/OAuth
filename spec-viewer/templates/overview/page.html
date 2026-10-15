@@ -7,7 +7,7 @@
     <h1>Specs</h1>
 
     <form class="filters" action="/" method="get" role="search"
-          hx-get="/spec-list" hx-target="#spec-list" hx-trigger="input changed delay:300ms, submit"
+          hx-get="{{ spec_list_path }}" hx-target="#spec-list" hx-trigger="input changed delay:300ms, submit"
           hx-sync="this:replace" hx-indicator="#spec-list">
         <label class="search-field">
             <span class="visually-hidden">Search by title or abbreviation</span>

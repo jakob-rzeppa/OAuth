@@ -1,11 +1,11 @@
-<div id="selection" class="selection"{% if swap_out_of_band %} hx-swap-oob="true"{% endif %}>
+<div id="selection" class="selection"{% if swap_out_of_band %} hx-swap-oob="true"{% endif %}
+     hx-target="#content" hx-swap="outerHTML" hx-indicator="#content">
     {% let options = view.version_options() %}
     {% if !options.is_empty() %}
     <section class="panel">
         <h2><label for="version-select">Version</label></h2>
-        <form action="/specs/{{ view.spec.id }}" method="get"
-              hx-get="/specs/{{ view.spec.id }}/content" hx-trigger="change"
-              hx-target="#content" hx-swap="outerHTML" hx-indicator="#content">
+        <form action="{{ view.page_path() }}" method="get"
+              hx-get="{{ view.content_path() }}" hx-trigger="change">
             <select id="version-select" name="version">
                 {% if view.selected_proposal().is_some() %}
                 <option value="" selected disabled>Showing a proposal</option>
@@ -26,9 +26,7 @@
         <ol class="patches">
             {% for link in patches %}
             <li>
-                <a href="/specs/{{ view.spec.id }}?{{ link.query }}"
-                   hx-get="/specs/{{ view.spec.id }}/content?{{ link.query }}"
-                   hx-target="#content" hx-swap="outerHTML" hx-indicator="#content"
+                <a href="{{ link.link.page_url }}" hx-get="{{ link.link.content_url }}"
                    {% if link.selected %}aria-current="page"{% endif %}>
                     <span class="patch-author">Proposed by {{ link.patch.proposed_by }} on {{ link.patch.created_at.date_time() }}</span>
                     <span class="patch-accepted">Accepted by {{ link.patch.accepted_by }} on {{ link.patch.accepted_at.date_time() }}</span>
@@ -38,9 +36,8 @@
         </ol>
         {% if view.is_patch_selected() %}
         <p class="patches-all">
-            <a href="/specs/{{ view.spec.id }}?{{ view.scope_query_string() }}"
-               hx-get="/specs/{{ view.spec.id }}/content?{{ view.scope_query_string() }}"
-               hx-target="#content" hx-swap="outerHTML" hx-indicator="#content">Show the whole version</a>
+            {% let whole = view.scope_link() %}
+            <a href="{{ whole.page_url }}" hx-get="{{ whole.content_url }}">Show the whole version</a>
         </p>
         {% endif %}
         {% endif %}
@@ -69,9 +66,8 @@
         <ul class="proposals">
             {% for proposal in view.spec.proposals %}
             <li>
-                <a href="/specs/{{ view.spec.id }}?{{ view.proposal_query_string(proposal.id.as_str()) }}"
-                   hx-get="/specs/{{ view.spec.id }}/content?{{ view.proposal_query_string(proposal.id.as_str()) }}"
-                   hx-target="#content" hx-swap="outerHTML" hx-indicator="#content"
+                {% let link = view.proposal_link(proposal.id.as_str()) %}
+                <a href="{{ link.page_url }}" hx-get="{{ link.content_url }}"
                    {% if view.is_selected_proposal(proposal.id.as_str()) %}aria-current="page"{% endif %}>
                     <span class="proposal-author">By {{ proposal.proposed_by }}</span>
                     <span class="proposal-state">{{ proposal.status.label() }}, updated {{ proposal.last_updated_at.date_time() }}</span>

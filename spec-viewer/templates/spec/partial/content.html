@@ -2,14 +2,13 @@
     {% if let Some(label) = view.selection_label() %}
     <div class="content-bar">
         <h2>{{ label }}</h2>
-        <nav class="view-toggle" aria-label="Show as">
-            <a href="/specs/{{ view.spec.id }}?{{ view.rendered_query_string() }}"
-               hx-get="/specs/{{ view.spec.id }}/content?{{ view.rendered_query_string() }}"
-               hx-target="#content" hx-swap="outerHTML" hx-indicator="#content"
+        <nav class="view-toggle" aria-label="Show as"
+             hx-target="#content" hx-swap="outerHTML" hx-indicator="#content">
+            {% let rendered = view.rendered_link() %}
+            <a href="{{ rendered.page_url }}" hx-get="{{ rendered.content_url }}"
                {% if !view.is_diff() %}aria-current="page"{% endif %}>Text</a>
-            <a href="/specs/{{ view.spec.id }}?{{ view.diff_query_string() }}"
-               hx-get="/specs/{{ view.spec.id }}/content?{{ view.diff_query_string() }}"
-               hx-target="#content" hx-swap="outerHTML" hx-indicator="#content"
+            {% let diff = view.diff_link() %}
+            <a href="{{ diff.page_url }}" hx-get="{{ diff.content_url }}"
                {% if view.is_diff() %}aria-current="page"{% endif %}>Changes</a>
         </nav>
     </div>

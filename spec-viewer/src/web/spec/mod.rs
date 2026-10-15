@@ -21,6 +21,19 @@ mod content;
 mod params;
 mod view_model;
 
+const PAGE_ROUTE: &str = "/specs/{id}";
+const CONTENT_ROUTE: &str = "/specs/{id}/content";
+
+/// The path of the page of the spec.
+pub(super) fn page_path(id: &str) -> String {
+    format!("/specs/{id}")
+}
+
+/// The path of the htmx partial of the page of the spec.
+fn content_path(id: &str) -> String {
+    format!("/specs/{id}/content")
+}
+
 use params::ViewParams;
 use view_model::SpecViewModel;
 
@@ -33,8 +46,8 @@ struct SpecPage<'a> {
 
 pub(super) fn router() -> Router<AppState> {
     Router::new()
-        .route("/specs/{id}", get(spec_page))
-        .route(content::PATH, get(content::content_partial))
+        .route(PAGE_ROUTE, get(spec_page))
+        .route(CONTENT_ROUTE, get(content::content_partial))
 }
 
 async fn spec_page(
@@ -106,6 +119,12 @@ fn proposal_diff_view() -> crate::application::spec_view::SpecView {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_paths_match_the_routes() {
+        assert_eq!(PAGE_ROUTE.replace("{id}", "x y"), page_path("x y"));
+        assert_eq!(CONTENT_ROUTE.replace("{id}", "x y"), content_path("x y"));
+    }
 
     #[test]
     fn renders_the_page_with_the_content_and_the_selection_panel_in_place() {

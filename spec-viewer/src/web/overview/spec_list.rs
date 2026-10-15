@@ -7,11 +7,10 @@ use axum::{
 use serde::Deserialize;
 
 use crate::{
-    application::spec_list::SpecListPage,
+    application::spec_list::{SpecListEntry, SpecListPage},
     state::AppState,
     web::display::{CssClass, Label, TimeDisplay, VersionLabel},
-    web::overview::ListParams,
-    web::{error::fragment::spec_list_unavailable_fragment, render},
+    web::{error::fragment::spec_list_unavailable_fragment, overview::ListParams, render, spec},
 };
 
 pub(super) const PATH: &str = "/spec-list";
@@ -33,8 +32,19 @@ struct SpecListPartial {
     next_page_url: Option<String>,
 }
 
+impl SpecListPartial {
+    /// The path of the page of the spec of the entry.
+    fn entry_path(&self, entry: &SpecListEntry) -> String {
+        spec::page_path(&entry.id)
+    }
+}
+
+/// The url of the page of the list starting at `page_token`, or of the first page.
 pub(super) fn url(query: &ListParams, page_token: Option<&str>) -> String {
-    format!("{PATH}?{}", query.query_string_with_page_token(page_token))
+    match query.query_string_with_page_token(page_token).as_str() {
+        "" => PATH.to_string(),
+        query => format!("{PATH}?{query}"),
+    }
 }
 
 pub(super) async fn spec_list_partial(
@@ -79,4 +89,22 @@ pub(super) async fn spec_list_partial(
         format!("/?{query}")
     };
     ([("HX-Replace-Url", overview_url)], response).into_response()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn builds_the_url_of_a_page_without_a_dangling_question_mark() {
+        let all = ListParams::default();
+        let search = ListParams {
+            search: "bank".into(),
+            ..Default::default()
+        };
+
+        assert_eq!(url(&all, None), "/spec-list");
+        assert_eq!(url(&all, Some("7")), "/spec-list?page_token=7");
+        assert_eq!(url(&search, None), "/spec-list?q=bank");
+    }
 }

@@ -13,6 +13,8 @@ use params::ListParams;
 #[template(path = "overview/page.html")]
 struct OverviewPage {
     query: ListParams,
+    /// Where the form loads the specs from, as the list does for its first page.
+    spec_list_path: &'static str,
     spec_list_url: String,
 }
 
@@ -28,6 +30,7 @@ async fn overview_page(Query(query): Query<ListParams>) -> Response {
         StatusCode::OK,
         &OverviewPage {
             query,
+            spec_list_path: spec_list::PATH,
             spec_list_url,
         },
     )

@@ -2,7 +2,7 @@
 <li class="spec-entry">
     <span class="call-number" aria-hidden="true">{{ entry.abbreviation }}</span>
     <div>
-        <a class="spec-title" href="/specs/{{ entry.id }}">{{ entry.title }}</a>
+        <a class="spec-title" href="{{ self.entry_path(entry) }}">{{ entry.title }}</a>
         <p class="spec-facts">
             <span class="status-badge {{ entry.status.css_class() }}">{{ entry.status.label() }}</span>
             {% if let Some(visibility) = entry.status.visibility() %}

@@ -16,8 +16,6 @@ use crate::{
     },
 };
 
-pub(super) const PATH: &str = "/specs/{id}/content";
-
 /// The text, or the diff, of the selected version or proposal, with the selection panel
 /// of the sidebar replaced out of band.
 #[derive(Template)]
@@ -48,9 +46,8 @@ pub(super) async fn content_partial(
     };
 
     let view = SpecViewModel::new(&view);
-    let page_url = format!("/specs/{id}?{}", view.query_string());
     (
-        [("HX-Push-Url", page_url)],
+        [("HX-Push-Url", view.current_url())],
         render(StatusCode::OK, &ContentPartial { view }),
     )
         .into_response()
@@ -66,7 +63,7 @@ mod tests {
         spec_list::SpecListService,
         spec_view::SpecViewService,
     };
-    use crate::web::spec::proposal_diff_view;
+    use crate::web::spec::{CONTENT_ROUTE, proposal_diff_view};
     use axum::{Router, body::Body as HttpBody, http::Request, routing::get};
     use spec_api::{Patch, Spec, Version, get_spec_response::Kind};
     use tower::ServiceExt;
@@ -103,7 +100,7 @@ mod tests {
         );
 
         Router::new()
-            .route(PATH, get(content_partial))
+            .route(CONTENT_ROUTE, get(content_partial))
             .with_state(state)
     }
 
