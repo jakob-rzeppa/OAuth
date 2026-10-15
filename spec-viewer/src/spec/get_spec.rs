@@ -1,11 +1,11 @@
 use spec_api::{GetSpecRequest, get_spec_response::Kind, spec_provider_client::SpecProviderClient};
+use tonic::transport::Channel;
 
-use crate::config::Config;
+use crate::spec::CLIENT;
 
 #[derive(Debug, thiserror::Error)]
 pub enum GetSpecError {
-    #[error("failed to connect to spec-provider: {0}")]
-    Connect(#[source] tonic::transport::Error),
+    /// Includes a spec-provider that can't be reached, as `UNAVAILABLE`.
     #[error("spec-provider returned an error: {0}")]
     Status(#[source] tonic::Status),
     #[error("spec-provider returned neither spec nor draft")]
@@ -14,14 +14,13 @@ pub enum GetSpecError {
 
 /// Fetches the published spec or draft with the given id from the configured spec-provider.
 pub async fn get_spec(id: &str) -> Result<Kind, GetSpecError> {
-    get_spec_at(Config::spec_provider_url(), id).await
+    get_spec_with(CLIENT.clone(), id).await
 }
 
-async fn get_spec_at(endpoint: &str, id: &str) -> Result<Kind, GetSpecError> {
-    let mut client = SpecProviderClient::connect(endpoint.to_string())
-        .await
-        .map_err(GetSpecError::Connect)?;
-
+async fn get_spec_with(
+    mut client: SpecProviderClient<Channel>,
+    id: &str,
+) -> Result<Kind, GetSpecError> {
     client
         .get_spec(GetSpecRequest { id: id.to_string() })
         .await
@@ -34,6 +33,7 @@ async fn get_spec_at(endpoint: &str, id: &str) -> Result<Kind, GetSpecError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::spec::lazy_client;
     use spec_api::{
         Draft, GetSpecResponse, ListSpecsRequest, ListSpecsResponse, Spec,
         spec_provider_server::{SpecProvider, SpecProviderServer},
@@ -75,7 +75,7 @@ mod tests {
         }
     }
 
-    async fn start_provider() -> String {
+    async fn start_provider() -> SpecProviderClient<Channel> {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
         tokio::spawn(
@@ -83,13 +83,13 @@ mod tests {
                 .add_service(SpecProviderServer::new(FakeProvider))
                 .serve_with_incoming(TcpListenerStream::new(listener)),
         );
-        format!("http://{addr}")
+        lazy_client(&format!("http://{addr}"))
     }
 
     #[tokio::test]
     async fn returns_published_spec() {
-        let url = start_provider().await;
-        match get_spec_at(&url, "published").await.unwrap() {
+        let client = start_provider().await;
+        match get_spec_with(client, "published").await.unwrap() {
             Kind::Published(spec) => assert_eq!(spec.title, "Title"),
             Kind::Draft(_) => panic!("expected published spec"),
         }
@@ -97,14 +97,16 @@ mod tests {
 
     #[tokio::test]
     async fn returns_draft() {
-        let url = start_provider().await;
-        assert!(matches!(get_spec_at(&url, "draft").await, Ok(Kind::Draft(d)) if d.id == "draft"));
+        let client = start_provider().await;
+        assert!(
+            matches!(get_spec_with(client, "draft").await, Ok(Kind::Draft(d)) if d.id == "draft")
+        );
     }
 
     #[tokio::test]
     async fn maps_not_found_to_status_error() {
-        let url = start_provider().await;
-        match get_spec_at(&url, "missing").await {
+        let client = start_provider().await;
+        match get_spec_with(client, "missing").await {
             Err(GetSpecError::Status(status)) => assert_eq!(status.code(), tonic::Code::NotFound),
             other => panic!("unexpected result: {other:?}"),
         }
@@ -112,18 +114,20 @@ mod tests {
 
     #[tokio::test]
     async fn rejects_response_without_kind() {
-        let url = start_provider().await;
+        let client = start_provider().await;
         assert!(matches!(
-            get_spec_at(&url, "empty").await,
+            get_spec_with(client, "empty").await,
             Err(GetSpecError::NotFound)
         ));
     }
 
     #[tokio::test]
-    async fn fails_to_connect_to_unreachable_provider() {
-        assert!(matches!(
-            get_spec_at("http://127.0.0.1:1", "x").await,
-            Err(GetSpecError::Connect(_))
-        ));
+    async fn maps_an_unreachable_provider_to_unavailable() {
+        match get_spec_with(lazy_client("http://127.0.0.1:1"), "x").await {
+            Err(GetSpecError::Status(status)) => {
+                assert_eq!(status.code(), tonic::Code::Unavailable)
+            }
+            other => panic!("unexpected result: {other:?}"),
+        }
     }
 }

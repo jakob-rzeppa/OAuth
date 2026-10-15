@@ -1,11 +1,11 @@
 use spec_api::{ListSpecsRequest, ListSpecsResponse, spec_provider_client::SpecProviderClient};
+use tonic::transport::Channel;
 
-use crate::config::Config;
+use crate::spec::CLIENT;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ListSpecsError {
-    #[error("failed to connect to spec-provider: {0}")]
-    Connect(#[source] tonic::transport::Error),
+    /// Includes a spec-provider that can't be reached, as `UNAVAILABLE`.
     #[error("spec-provider returned an error: {0}")]
     Status(#[source] tonic::Status),
 }
@@ -15,17 +15,13 @@ pub enum ListSpecsError {
 /// To get the next page, send the same request with the `next_page_token` of the response
 /// as its `page_token`.
 pub async fn list_specs(request: ListSpecsRequest) -> Result<ListSpecsResponse, ListSpecsError> {
-    list_specs_at(Config::spec_provider_url(), request).await
+    list_specs_with(CLIENT.clone(), request).await
 }
 
-async fn list_specs_at(
-    endpoint: &str,
+async fn list_specs_with(
+    mut client: SpecProviderClient<Channel>,
     request: ListSpecsRequest,
 ) -> Result<ListSpecsResponse, ListSpecsError> {
-    let mut client = SpecProviderClient::connect(endpoint.to_string())
-        .await
-        .map_err(ListSpecsError::Connect)?;
-
     client
         .list_specs(request)
         .await
@@ -36,6 +32,7 @@ async fn list_specs_at(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::spec::lazy_client;
     use spec_api::{
         GetSpecRequest, GetSpecResponse, ListSpecsFilter, ListSpecsOrder, SortDirection, SpecKind,
         SpecListItem, SpecOverview,
@@ -90,7 +87,7 @@ mod tests {
         }
     }
 
-    async fn start_provider() -> String {
+    async fn start_provider() -> SpecProviderClient<Channel> {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
         tokio::spawn(
@@ -98,7 +95,7 @@ mod tests {
                 .add_service(SpecProviderServer::new(FakeProvider))
                 .serve_with_incoming(TcpListenerStream::new(listener)),
         );
-        format!("http://{addr}")
+        lazy_client(&format!("http://{addr}"))
     }
 
     fn request(search: &str) -> ListSpecsRequest {
@@ -117,7 +114,7 @@ mod tests {
 
     #[tokio::test]
     async fn sends_every_field_of_the_request_to_the_provider() {
-        let url = start_provider().await;
+        let client = start_provider().await;
         let request = ListSpecsRequest {
             page_size: 7,
             page_token: "token".into(),
@@ -131,16 +128,16 @@ mod tests {
             }),
         };
 
-        let response = list_specs_at(&url, request.clone()).await.unwrap();
+        let response = list_specs_with(client, request.clone()).await.unwrap();
 
         assert_eq!(first_title(&response), format!("{request:?}"));
     }
 
     #[tokio::test]
     async fn returns_the_items_and_the_next_page_token() {
-        let url = start_provider().await;
+        let client = start_provider().await;
 
-        let response = list_specs_at(&url, request("bank")).await.unwrap();
+        let response = list_specs_with(client, request("bank")).await.unwrap();
 
         assert_eq!(response.items.len(), 1);
         assert_eq!(response.next_page_token, "next");
@@ -148,22 +145,22 @@ mod tests {
 
     #[tokio::test]
     async fn returns_an_empty_token_on_the_last_page() {
-        let url = start_provider().await;
+        let client = start_provider().await;
         let request = ListSpecsRequest {
             page_token: "next".into(),
             ..request("bank")
         };
 
-        let response = list_specs_at(&url, request).await.unwrap();
+        let response = list_specs_with(client, request).await.unwrap();
 
         assert!(response.next_page_token.is_empty());
     }
 
     #[tokio::test]
     async fn an_empty_page_is_not_an_error() {
-        let url = start_provider().await;
+        let client = start_provider().await;
 
-        let response = list_specs_at(&url, request("none")).await.unwrap();
+        let response = list_specs_with(client, request("none")).await.unwrap();
 
         assert!(response.items.is_empty());
         assert!(response.next_page_token.is_empty());
@@ -171,9 +168,9 @@ mod tests {
 
     #[tokio::test]
     async fn maps_a_provider_error_to_status_error() {
-        let url = start_provider().await;
+        let client = start_provider().await;
 
-        match list_specs_at(&url, request("fail")).await {
+        match list_specs_with(client, request("fail")).await {
             Err(ListSpecsError::Status(status)) => {
                 assert_eq!(status.code(), tonic::Code::InvalidArgument)
             }
@@ -182,10 +179,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn fails_to_connect_to_unreachable_provider() {
-        assert!(matches!(
-            list_specs_at("http://127.0.0.1:1", request("bank")).await,
-            Err(ListSpecsError::Connect(_))
-        ));
+    async fn maps_an_unreachable_provider_to_unavailable() {
+        match list_specs_with(lazy_client("http://127.0.0.1:1"), request("bank")).await {
+            Err(ListSpecsError::Status(status)) => {
+                assert_eq!(status.code(), tonic::Code::Unavailable)
+            }
+            other => panic!("unexpected result: {other:?}"),
+        }
     }
 }
