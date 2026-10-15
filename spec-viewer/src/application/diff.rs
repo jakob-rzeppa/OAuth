@@ -48,48 +48,58 @@ impl Diff {
     }
 }
 
-/// Diffs `old` and `new` line by line.
-pub fn diff(old: &str, new: &str) -> Diff {
-    let text_diff = TextDiff::configure()
-        .timeout(DIFF_TIMEOUT)
-        .diff_lines(old, new);
-    let mut added = 0;
-    let mut removed = 0;
+/// Compares two texts.
+#[derive(Debug, Default)]
+pub struct DiffService;
 
-    let hunks = text_diff
-        .grouped_ops(CONTEXT_LINES)
-        .iter()
-        .map(|ops| Hunk {
-            header: UnifiedHunkHeader::new(ops).to_string(),
-            lines: ops
-                .iter()
-                .flat_map(|op| text_diff.iter_changes(op))
-                .map(|change| {
-                    let kind = match change.tag() {
-                        ChangeTag::Equal => LineKind::Unchanged,
-                        ChangeTag::Insert => LineKind::Added,
-                        ChangeTag::Delete => LineKind::Removed,
-                    };
-                    match kind {
-                        LineKind::Added => added += 1,
-                        LineKind::Removed => removed += 1,
-                        LineKind::Unchanged => {}
-                    }
-                    DiffLine {
-                        kind,
-                        old_number: change.old_index().map(|index| index + 1),
-                        new_number: change.new_index().map(|index| index + 1),
-                        text: change.value().trim_end_matches(['\n', '\r']).to_string(),
-                    }
-                })
-                .collect(),
-        })
-        .collect();
+impl DiffService {
+    pub fn new() -> Self {
+        DiffService
+    }
 
-    Diff {
-        hunks,
-        added,
-        removed,
+    /// Diffs `old` and `new` line by line.
+    pub fn diff(&self, old: &str, new: &str) -> Diff {
+        let text_diff = TextDiff::configure()
+            .timeout(DIFF_TIMEOUT)
+            .diff_lines(old, new);
+        let mut added = 0;
+        let mut removed = 0;
+
+        let hunks = text_diff
+            .grouped_ops(CONTEXT_LINES)
+            .iter()
+            .map(|ops| Hunk {
+                header: UnifiedHunkHeader::new(ops).to_string(),
+                lines: ops
+                    .iter()
+                    .flat_map(|op| text_diff.iter_changes(op))
+                    .map(|change| {
+                        let kind = match change.tag() {
+                            ChangeTag::Equal => LineKind::Unchanged,
+                            ChangeTag::Insert => LineKind::Added,
+                            ChangeTag::Delete => LineKind::Removed,
+                        };
+                        match kind {
+                            LineKind::Added => added += 1,
+                            LineKind::Removed => removed += 1,
+                            LineKind::Unchanged => {}
+                        }
+                        DiffLine {
+                            kind,
+                            old_number: change.old_index().map(|index| index + 1),
+                            new_number: change.new_index().map(|index| index + 1),
+                            text: change.value().trim_end_matches(['\n', '\r']).to_string(),
+                        }
+                    })
+                    .collect(),
+            })
+            .collect();
+
+        Diff {
+            hunks,
+            added,
+            removed,
+        }
     }
 }
 
@@ -108,7 +118,7 @@ mod tests {
 
     #[test]
     fn equal_texts_have_no_hunks() {
-        let diff = diff("a\nb\n", "a\nb\n");
+        let diff = DiffService::new().diff("a\nb\n", "a\nb\n");
 
         assert!(diff.is_empty());
         assert_eq!((diff.added, diff.removed), (0, 0));
@@ -116,7 +126,7 @@ mod tests {
 
     #[test]
     fn numbers_the_lines_of_both_sides() {
-        let diff = diff("a\nb\nc\n", "a\nB\nc\nd\n");
+        let diff = DiffService::new().diff("a\nb\nc\n", "a\nB\nc\nd\n");
 
         assert_eq!(diff.hunks.len(), 1);
         assert_eq!(diff.hunks[0].header, "@@ -1,3 +1,4 @@");
@@ -138,7 +148,7 @@ mod tests {
         let old: String = (1..=20).map(|i| format!("{i}\n")).collect();
         let new = old.replace("2\n", "two\n").replace("19\n", "nineteen\n");
 
-        let diff = diff(&old, &new);
+        let diff = DiffService::new().diff(&old, &new);
 
         assert_eq!(diff.hunks.len(), 2);
         let first = &diff.hunks[0].lines;
@@ -152,7 +162,7 @@ mod tests {
         let new: String = (0..20_000).map(|i| format!("new {i}\n")).collect();
 
         let started = std::time::Instant::now();
-        let diff = diff(&old, &new);
+        let diff = DiffService::new().diff(&old, &new);
 
         assert!(started.elapsed() < DIFF_TIMEOUT * 3);
         assert_eq!((diff.added, diff.removed), (20_000, 20_000));
@@ -160,7 +170,7 @@ mod tests {
 
     #[test]
     fn diffs_against_an_empty_text() {
-        let diff = diff("", "a\nb\n");
+        let diff = DiffService::new().diff("", "a\nb\n");
 
         assert_eq!(diff.added, 2);
         assert!(

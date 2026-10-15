@@ -1,11 +1,21 @@
 use chrono::{DateTime, Utc};
 use prost_types::Timestamp;
 
-/// The time of a timestamp, `None` for a missing or out of range one.
-pub fn to_time(timestamp: Option<&Timestamp>) -> Option<DateTime<Utc>> {
-    timestamp.and_then(|timestamp| {
-        DateTime::from_timestamp(timestamp.seconds, u32::try_from(timestamp.nanos).ok()?)
-    })
+/// Converts the timestamps of the spec-provider's messages.
+#[derive(Debug, Default)]
+pub struct TimestampService;
+
+impl TimestampService {
+    pub fn new() -> Self {
+        TimestampService
+    }
+
+    /// The time of a timestamp, `None` for a missing or out of range one.
+    pub fn to_time(&self, timestamp: Option<&Timestamp>) -> Option<DateTime<Utc>> {
+        timestamp.and_then(|timestamp| {
+            DateTime::from_timestamp(timestamp.seconds, u32::try_from(timestamp.nanos).ok()?)
+        })
+    }
 }
 
 #[cfg(test)]
@@ -20,7 +30,7 @@ mod tests {
         };
 
         assert_eq!(
-            to_time(Some(&timestamp)),
+            TimestampService::new().to_time(Some(&timestamp)),
             DateTime::from_timestamp(1_705_000_000, 0)
         );
     }
@@ -36,8 +46,10 @@ mod tests {
             nanos: -1,
         };
 
-        assert_eq!(to_time(None), None);
-        assert_eq!(to_time(Some(&out_of_range)), None);
-        assert_eq!(to_time(Some(&negative_nanos)), None);
+        let service = TimestampService::new();
+
+        assert_eq!(service.to_time(None), None);
+        assert_eq!(service.to_time(Some(&out_of_range)), None);
+        assert_eq!(service.to_time(Some(&negative_nanos)), None);
     }
 }

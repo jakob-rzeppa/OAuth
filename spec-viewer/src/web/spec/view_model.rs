@@ -200,6 +200,7 @@ impl<'a> SpecViewModel<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::application::timestamp::TimestampService;
     use spec_api::{Draft, DraftVisibility, Patch, Proposal, ProposalStatus, Version};
 
     fn patch(content_uri: &str) -> Patch {
@@ -220,20 +221,23 @@ mod tests {
     /// Version 1 with `v1a` and `v1b`, an empty version 2, unreleased `u` and proposal `p`
     /// by alice.
     fn draft() -> SpecDetail {
-        SpecDetail::from(spec_api::get_spec_response::Kind::Draft(Draft {
-            id: "draft".into(),
-            visibility: DraftVisibility::Public.into(),
-            versions: vec![version(&["v1a", "v1b"]), version(&[])],
-            unversioned_patches: vec![patch("u")],
-            proposals: vec![Proposal {
-                id: "p".into(),
-                proposed_by: "alice".into(),
-                status: ProposalStatus::Ready.into(),
-                content_uri: "proposal".into(),
+        SpecDetail::from_kind(
+            spec_api::get_spec_response::Kind::Draft(Draft {
+                id: "draft".into(),
+                visibility: DraftVisibility::Public.into(),
+                versions: vec![version(&["v1a", "v1b"]), version(&[])],
+                unversioned_patches: vec![patch("u")],
+                proposals: vec![Proposal {
+                    id: "p".into(),
+                    proposed_by: "alice".into(),
+                    status: ProposalStatus::Ready.into(),
+                    content_uri: "proposal".into(),
+                    ..Default::default()
+                }],
                 ..Default::default()
-            }],
-            ..Default::default()
-        }))
+            }),
+            &TimestampService::new(),
+        )
     }
 
     fn view(selection: Option<Selection>, mode: ViewMode) -> SpecView {

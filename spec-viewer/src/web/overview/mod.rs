@@ -39,10 +39,8 @@ async fn overview_page(Query(query): Query<ListParams>) -> Response {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::application::{
-        contract::{content_gateway::MockContentGateway, spec_gateway::MockSpecGateway},
-        spec_list::SpecListService,
-        spec_view::SpecViewService,
+    use crate::application::contract::{
+        content_gateway::MockContentGateway, spec_gateway::MockSpecGateway,
     };
     use axum::{body::Body, http::Request};
     use std::sync::Arc;
@@ -50,10 +48,9 @@ mod tests {
 
     /// The overview page itself calls no service, so the mocks expect no call.
     fn state() -> AppState {
-        let spec_gateway = Arc::new(MockSpecGateway::new());
         AppState::new(
-            SpecViewService::new(spec_gateway.clone(), Arc::new(MockContentGateway::new())),
-            SpecListService::new(spec_gateway),
+            Arc::new(MockSpecGateway::new()),
+            Arc::new(MockContentGateway::new()),
         )
     }
 

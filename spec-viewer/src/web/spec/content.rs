@@ -58,10 +58,8 @@ mod tests {
     use std::sync::Arc;
 
     use super::*;
-    use crate::application::{
-        contract::{content_gateway::MockContentGateway, spec_gateway::MockSpecGateway},
-        spec_list::SpecListService,
-        spec_view::SpecViewService,
+    use crate::application::contract::{
+        content_gateway::MockContentGateway, spec_gateway::MockSpecGateway,
     };
     use crate::web::spec::{CONTENT_ROUTE, proposal_diff_view};
     use axum::{Router, body::Body as HttpBody, http::Request, routing::get};
@@ -93,11 +91,7 @@ mod tests {
         content_gateway
             .expect_get()
             .returning(|_| Ok("# One\n".to_string()));
-        let spec_gateway = Arc::new(spec_gateway);
-        let state = AppState::new(
-            SpecViewService::new(spec_gateway.clone(), Arc::new(content_gateway)),
-            SpecListService::new(spec_gateway),
-        );
+        let state = AppState::new(Arc::new(spec_gateway), Arc::new(content_gateway));
 
         Router::new()
             .route(CONTENT_ROUTE, get(content_partial))

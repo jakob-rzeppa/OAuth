@@ -5,8 +5,9 @@ use crate::application::{
         content_gateway::{ContentGateway, GetContentError},
         spec_gateway::{SpecGateway, SpecGatewayError},
     },
-    diff::{Diff, diff},
-    markdown::render_markdown,
+    diff::{Diff, DiffService},
+    markdown::MarkdownService,
+    timestamp::TimestampService,
 };
 
 mod detail;
@@ -52,16 +53,25 @@ pub enum Body {
 pub struct SpecViewService {
     spec_gateway: Arc<dyn SpecGateway>,
     content_gateway: Arc<dyn ContentGateway>,
+    diff_service: Arc<DiffService>,
+    markdown_service: Arc<MarkdownService>,
+    timestamp_service: Arc<TimestampService>,
 }
 
 impl SpecViewService {
     pub fn new(
         spec_gateway: Arc<dyn SpecGateway>,
         content_gateway: Arc<dyn ContentGateway>,
+        diff_service: Arc<DiffService>,
+        markdown_service: Arc<MarkdownService>,
+        timestamp_service: Arc<TimestampService>,
     ) -> Self {
         SpecViewService {
             spec_gateway,
             content_gateway,
+            diff_service,
+            markdown_service,
+            timestamp_service,
         }
     }
 
@@ -76,7 +86,7 @@ impl SpecViewService {
         mode: ViewMode,
     ) -> Result<SpecView, ViewSpecError> {
         let spec = match self.spec_gateway.get_spec(id).await {
-            Ok(kind) => SpecDetail::from(kind),
+            Ok(kind) => SpecDetail::from_kind(kind, &self.timestamp_service),
             // An id that is not even well formed is as unknown as one that doesn't exist.
             Err(SpecGatewayError::Status(status))
                 if matches!(
@@ -113,7 +123,7 @@ impl SpecViewService {
             ViewMode::Rendered => self
                 .text_at(spec.content_uri(selection))
                 .await
-                .map(|text| Body::Rendered(render_markdown(&text))),
+                .map(|text| Body::Rendered(self.markdown_service.render(&text))),
             ViewMode::Diff => {
                 let base = spec.base_of(selection);
                 let (old, new) = tokio::join!(
@@ -123,7 +133,7 @@ impl SpecViewService {
                 old.and_then(|old| {
                     Ok(Body::Diff {
                         base,
-                        diff: diff(&old, &new?),
+                        diff: self.diff_service.diff(&old, &new?),
                     })
                 })
             }
@@ -199,7 +209,13 @@ mod tests {
         spec_gateway: MockSpecGateway,
         content_gateway: MockContentGateway,
     ) -> SpecViewService {
-        SpecViewService::new(Arc::new(spec_gateway), Arc::new(content_gateway))
+        SpecViewService::new(
+            Arc::new(spec_gateway),
+            Arc::new(content_gateway),
+            Arc::new(DiffService::new()),
+            Arc::new(MarkdownService::new()),
+            Arc::new(TimestampService::new()),
+        )
     }
 
     async fn view_of(

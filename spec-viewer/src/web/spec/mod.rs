@@ -83,7 +83,7 @@ async fn spec_page(
 #[cfg(test)]
 fn proposal_diff_view() -> crate::application::spec_view::SpecView {
     use crate::application::{
-        diff::diff,
+        diff::DiffService,
         spec_status::{ProposalState, SpecStatus, Visibility},
         spec_view::{ProposalInfo, Selection, SpecDetail, SpecView, ViewMode},
     };
@@ -111,7 +111,7 @@ fn proposal_diff_view() -> crate::application::spec_view::SpecView {
         mode: ViewMode::Diff,
         body: Body::Diff {
             base: None,
-            diff: diff("kept\nold <b>\n", "kept\nnew\n"),
+            diff: DiffService::new().diff("kept\nold <b>\n", "kept\nnew\n"),
         },
     }
 }

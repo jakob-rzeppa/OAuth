@@ -9,7 +9,7 @@ use spec_api::{
 use crate::application::{
     contract::spec_gateway::{SpecGateway, SpecGatewayError},
     spec_status::SpecStatus,
-    timestamp::to_time,
+    timestamp::TimestampService,
 };
 
 /// The number of specs loaded at once.
@@ -83,25 +83,25 @@ pub struct SpecListEntry {
     pub created_at: Option<DateTime<Utc>>,
 }
 
-impl From<ListSpecsResponse> for SpecListPage {
-    fn from(response: ListSpecsResponse) -> Self {
+impl SpecListPage {
+    fn from_response(response: ListSpecsResponse, timestamps: &TimestampService) -> Self {
         SpecListPage {
             entries: response
                 .items
                 .into_iter()
                 .filter_map(|item| item.kind)
-                .map(SpecListEntry::from)
+                .map(|kind| SpecListEntry::from_kind(kind, timestamps))
                 .collect(),
             next_page_token: Some(response.next_page_token).filter(|token| !token.is_empty()),
         }
     }
 }
 
-impl From<Kind> for SpecListEntry {
-    fn from(kind: Kind) -> Self {
+impl SpecListEntry {
+    fn from_kind(kind: Kind, timestamps: &TimestampService) -> Self {
         match kind {
             Kind::Published(spec) => SpecListEntry {
-                created_at: to_time(spec.created_at.as_ref()),
+                created_at: timestamps.to_time(spec.created_at.as_ref()),
                 id: spec.id,
                 title: spec.title,
                 abbreviation: spec.abbreviation,
@@ -110,7 +110,7 @@ impl From<Kind> for SpecListEntry {
                 created_by: spec.created_by,
             },
             Kind::Draft(draft) => SpecListEntry {
-                created_at: to_time(draft.created_at.as_ref()),
+                created_at: timestamps.to_time(draft.created_at.as_ref()),
                 status: SpecStatus::Draft {
                     visibility: draft.visibility().into(),
                 },
@@ -127,11 +127,15 @@ impl From<Kind> for SpecListEntry {
 /// The use case of listing the published specs and the drafts.
 pub struct SpecListService {
     spec_gateway: Arc<dyn SpecGateway>,
+    timestamps: Arc<TimestampService>,
 }
 
 impl SpecListService {
-    pub fn new(spec_gateway: Arc<dyn SpecGateway>) -> Self {
-        SpecListService { spec_gateway }
+    pub fn new(spec_gateway: Arc<dyn SpecGateway>, timestamps: Arc<TimestampService>) -> Self {
+        SpecListService {
+            spec_gateway,
+            timestamps,
+        }
     }
 
     /// Loads the page of the list starting at `page_token`, or the first page.
@@ -143,7 +147,7 @@ impl SpecListService {
         self.spec_gateway
             .list_specs(query.to_request(page_token))
             .await
-            .map(SpecListPage::from)
+            .map(|response| SpecListPage::from_response(response, &self.timestamps))
     }
 }
 
@@ -211,7 +215,7 @@ mod tests {
             next_page_token: "next".into(),
         };
 
-        let page = SpecListPage::from(response);
+        let page = SpecListPage::from_response(response, &TimestampService::new());
 
         assert_eq!(page.next_page_token.as_deref(), Some("next"));
         assert_eq!(page.entries.len(), 2);
@@ -232,7 +236,8 @@ mod tests {
 
     #[test]
     fn the_last_page_has_no_next_page_token() {
-        let page = SpecListPage::from(ListSpecsResponse::default());
+        let page =
+            SpecListPage::from_response(ListSpecsResponse::default(), &TimestampService::new());
 
         assert!(page.entries.is_empty());
         assert_eq!(page.next_page_token, None);
@@ -253,7 +258,8 @@ mod tests {
                     next_page_token: "next".into(),
                 })
             });
-        let service = SpecListService::new(Arc::new(spec_gateway));
+        let service =
+            SpecListService::new(Arc::new(spec_gateway), Arc::new(TimestampService::new()));
 
         let page = service
             .list_page(
@@ -273,7 +279,8 @@ mod tests {
         spec_gateway
             .expect_list_specs()
             .returning(|_| Err(SpecGatewayError::Status(tonic::Status::unavailable("down"))));
-        let service = SpecListService::new(Arc::new(spec_gateway));
+        let service =
+            SpecListService::new(Arc::new(spec_gateway), Arc::new(TimestampService::new()));
 
         let result = service.list_page(&ListQuery::default(), None).await;
 

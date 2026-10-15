@@ -4,7 +4,7 @@ use spec_api::{Patch, Proposal, Version, get_spec_response::Kind};
 use crate::application::{
     spec_status::{ProposalState, SpecStatus},
     spec_view::{PatchScope, Selection},
-    timestamp::to_time,
+    timestamp::TimestampService,
 };
 
 /// A published spec or a draft with everything the detail page shows besides its text.
@@ -171,15 +171,15 @@ impl SpecDetail {
     }
 }
 
-impl From<Kind> for SpecDetail {
-    fn from(kind: Kind) -> Self {
+impl SpecDetail {
+    pub fn from_kind(kind: Kind, timestamps: &TimestampService) -> Self {
         match kind {
             Kind::Published(spec) => SpecDetail {
                 id: spec.id,
                 title: spec.title,
                 abbreviation: spec.abbreviation,
                 status: SpecStatus::Published,
-                versions: versions(spec.versions),
+                versions: versions(spec.versions, timestamps),
                 unreleased_patches: Vec::new(),
                 proposals: Vec::new(),
             },
@@ -190,38 +190,42 @@ impl From<Kind> for SpecDetail {
                 id: draft.id,
                 title: draft.title,
                 abbreviation: draft.abbreviation,
-                versions: versions(draft.versions),
+                versions: versions(draft.versions, timestamps),
                 unreleased_patches: draft
                     .unversioned_patches
                     .into_iter()
-                    .map(PatchInfo::from)
+                    .map(|patch| PatchInfo::from_patch(patch, timestamps))
                     .collect(),
                 proposals: draft
                     .proposals
                     .into_iter()
-                    .map(ProposalInfo::from)
+                    .map(|proposal| ProposalInfo::from_proposal(proposal, timestamps))
                     .collect(),
             },
         }
     }
 }
 
-fn versions(versions: Vec<Version>) -> Vec<VersionInfo> {
+fn versions(versions: Vec<Version>, timestamps: &TimestampService) -> Vec<VersionInfo> {
     versions
         .into_iter()
         .enumerate()
         .map(|(index, version)| VersionInfo {
             number: index + 1,
-            patches: version.patches.into_iter().map(PatchInfo::from).collect(),
+            patches: version
+                .patches
+                .into_iter()
+                .map(|patch| PatchInfo::from_patch(patch, timestamps))
+                .collect(),
         })
         .collect()
 }
 
-impl From<Patch> for PatchInfo {
-    fn from(patch: Patch) -> Self {
+impl PatchInfo {
+    fn from_patch(patch: Patch, timestamps: &TimestampService) -> Self {
         PatchInfo {
-            created_at: to_time(patch.created_at.as_ref()),
-            accepted_at: to_time(patch.accepted_at.as_ref()),
+            created_at: timestamps.to_time(patch.created_at.as_ref()),
+            accepted_at: timestamps.to_time(patch.accepted_at.as_ref()),
             proposed_by: patch.proposed_by,
             accepted_by: patch.accepted_by,
             content_uri: patch.content_uri,
@@ -229,11 +233,11 @@ impl From<Patch> for PatchInfo {
     }
 }
 
-impl From<Proposal> for ProposalInfo {
-    fn from(proposal: Proposal) -> Self {
+impl ProposalInfo {
+    fn from_proposal(proposal: Proposal, timestamps: &TimestampService) -> Self {
         ProposalInfo {
-            created_at: to_time(proposal.created_at.as_ref()),
-            last_updated_at: to_time(proposal.last_updated_at.as_ref()),
+            created_at: timestamps.to_time(proposal.created_at.as_ref()),
+            last_updated_at: timestamps.to_time(proposal.last_updated_at.as_ref()),
             status: proposal.status().into(),
             id: proposal.id,
             proposed_by: proposal.proposed_by,
@@ -265,28 +269,34 @@ mod tests {
 
     /// Version 1 with `v1a` and `v1b`, an empty version 2, unreleased `u` and proposal `p`.
     fn draft() -> SpecDetail {
-        SpecDetail::from(Kind::Draft(Draft {
-            id: "draft".into(),
-            visibility: DraftVisibility::Public.into(),
-            versions: vec![version(&["v1a", "v1b"]), version(&[])],
-            unversioned_patches: vec![patch("u")],
-            proposals: vec![Proposal {
-                id: "p".into(),
-                proposed_by: "alice".into(),
-                status: ProposalStatus::Ready.into(),
-                content_uri: "proposal".into(),
+        SpecDetail::from_kind(
+            Kind::Draft(Draft {
+                id: "draft".into(),
+                visibility: DraftVisibility::Public.into(),
+                versions: vec![version(&["v1a", "v1b"]), version(&[])],
+                unversioned_patches: vec![patch("u")],
+                proposals: vec![Proposal {
+                    id: "p".into(),
+                    proposed_by: "alice".into(),
+                    status: ProposalStatus::Ready.into(),
+                    content_uri: "proposal".into(),
+                    ..Default::default()
+                }],
                 ..Default::default()
-            }],
-            ..Default::default()
-        }))
+            }),
+            &TimestampService::new(),
+        )
     }
 
     fn published(versions: Vec<Version>) -> SpecDetail {
-        SpecDetail::from(Kind::Published(Spec {
-            id: "spec".into(),
-            versions,
-            ..Default::default()
-        }))
+        SpecDetail::from_kind(
+            Kind::Published(Spec {
+                id: "spec".into(),
+                versions,
+                ..Default::default()
+            }),
+            &TimestampService::new(),
+        )
     }
 
     #[test]

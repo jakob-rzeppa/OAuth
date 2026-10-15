@@ -7,7 +7,6 @@ use tracing::Level;
 use tracing_subscriber::EnvFilter;
 
 use crate::{
-    application::{spec_list::SpecListService, spec_view::SpecViewService},
     client::{GrpcSpecGateway, HttpContentGateway},
     config::Config,
     state::AppState,
@@ -29,10 +28,7 @@ async fn main() {
             .unwrap_or_else(|error| exit_with(error)),
     );
     let content_gateway = Arc::new(HttpContentGateway::new(&config.content_storage_url));
-    let state = AppState::new(
-        SpecViewService::new(spec_gateway.clone(), content_gateway),
-        SpecListService::new(spec_gateway),
-    );
+    let state = AppState::new(spec_gateway, content_gateway);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], config.app_port));
     let listener = TcpListener::bind(addr)
@@ -121,10 +117,9 @@ mod tests {
     };
 
     fn state() -> AppState {
-        let spec_gateway = Arc::new(MockSpecGateway::new());
         AppState::new(
-            SpecViewService::new(spec_gateway.clone(), Arc::new(MockContentGateway::new())),
-            SpecListService::new(spec_gateway),
+            Arc::new(MockSpecGateway::new()),
+            Arc::new(MockContentGateway::new()),
         )
     }
 
