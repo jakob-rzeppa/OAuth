@@ -192,7 +192,13 @@ impl SpecViewService {
 
         let spec = match self.spec_gateway.get_spec(id).await {
             Ok(kind) => SpecDetail::from(kind),
-            Err(GetSpecError::Status(status)) if status.code() == tonic::Code::NotFound => {
+            // An id that is not even well formed is as unknown as one that doesn't exist.
+            Err(GetSpecError::Status(status))
+                if matches!(
+                    status.code(),
+                    tonic::Code::NotFound | tonic::Code::InvalidArgument
+                ) =>
+            {
                 return Err(ViewSpecError::NotFound);
             }
             Err(error) => return Err(ViewSpecError::Provider(error)),
@@ -1060,6 +1066,36 @@ mod tests {
             .await;
 
         assert!(matches!(result, Err(ViewSpecError::NotFound)));
+    }
+
+    #[tokio::test]
+    async fn maps_a_malformed_id_to_not_found() {
+        let mut spec_gateway = MockSpecGateway::new();
+        spec_gateway.expect_get_spec().returning(|_| {
+            Err(GetSpecError::Status(tonic::Status::invalid_argument(
+                "The provided spec ID is invalid.",
+            )))
+        });
+
+        let result = service(spec_gateway, MockContentGateway::new())
+            .view_spec("not-a-uuid", ViewParams::default())
+            .await;
+
+        assert!(matches!(result, Err(ViewSpecError::NotFound)));
+    }
+
+    #[tokio::test]
+    async fn maps_an_empty_provider_response_to_a_provider_error() {
+        let mut spec_gateway = MockSpecGateway::new();
+        spec_gateway
+            .expect_get_spec()
+            .returning(|_| Err(GetSpecError::MissingKind));
+
+        let result = service(spec_gateway, MockContentGateway::new())
+            .view_spec("spec", ViewParams::default())
+            .await;
+
+        assert!(matches!(result, Err(ViewSpecError::Provider(_))));
     }
 
     #[tokio::test]

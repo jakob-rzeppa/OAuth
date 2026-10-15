@@ -56,7 +56,7 @@ impl SpecGateway for GrpcSpecGateway {
             .map_err(GetSpecError::Status)?
             .into_inner()
             .kind
-            .ok_or(GetSpecError::NotFound)
+            .ok_or(GetSpecError::MissingKind)
     }
 
     async fn list_specs(
@@ -219,7 +219,7 @@ mod tests {
 
         assert!(matches!(
             gateway.get_spec("empty").await,
-            Err(GetSpecError::NotFound)
+            Err(GetSpecError::MissingKind)
         ));
     }
 

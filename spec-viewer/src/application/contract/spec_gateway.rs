@@ -6,8 +6,9 @@ pub enum GetSpecError {
     /// Includes a spec-provider that can't be reached, as `UNAVAILABLE`.
     #[error("spec-provider returned an error: {0}")]
     Status(#[source] tonic::Status),
+    /// The spec-provider answers an unknown id with `NOT_FOUND`, so this is a broken answer.
     #[error("spec-provider returned neither spec nor draft")]
-    NotFound,
+    MissingKind,
 }
 
 #[derive(Debug, thiserror::Error)]
