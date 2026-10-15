@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
-use serde::Deserialize;
 use spec_api::{
     ListSpecsFilter, ListSpecsOrder, ListSpecsRequest, ListSpecsResponse, SortDirection, SpecKind,
     spec_list_item::Kind,
@@ -16,20 +15,16 @@ use crate::application::{
 /// The number of specs loaded at once.
 const PAGE_SIZE: u32 = 20;
 
-/// The search, filters and order of the overview, as kept in the url.
-///
-/// Unknown values fall back to the default, so an edited url never fails.
-#[derive(Debug, Default, Clone, PartialEq, Eq, Deserialize)]
-#[serde(default)]
+/// What the overview lists.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct ListQuery {
-    #[serde(rename = "q")]
+    /// Matched against the title and the abbreviation, empty for every spec.
     pub search: String,
     pub kind: KindFilter,
     pub order: Order,
 }
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Deserialize)]
-#[serde(from = "String")]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum KindFilter {
     #[default]
     All,
@@ -37,77 +32,14 @@ pub enum KindFilter {
     Draft,
 }
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Deserialize)]
-#[serde(from = "String")]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum Order {
     #[default]
     Newest,
     Oldest,
 }
 
-impl From<String> for KindFilter {
-    fn from(value: String) -> Self {
-        match value.as_str() {
-            "published" => KindFilter::Published,
-            "draft" => KindFilter::Draft,
-            _ => KindFilter::All,
-        }
-    }
-}
-
-impl KindFilter {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            KindFilter::All => "all",
-            KindFilter::Published => "published",
-            KindFilter::Draft => "draft",
-        }
-    }
-}
-
-impl From<String> for Order {
-    fn from(value: String) -> Self {
-        match value.as_str() {
-            "oldest" => Order::Oldest,
-            _ => Order::Newest,
-        }
-    }
-}
-
-impl Order {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Order::Newest => "newest",
-            Order::Oldest => "oldest",
-        }
-    }
-}
-
 impl ListQuery {
-    /// The url query of this list, without the defaults so urls stay short.
-    pub fn query_string(&self) -> String {
-        self.query_string_with_page_token(None)
-    }
-
-    /// The url query of the page of this list starting at `page_token`.
-    pub fn query_string_with_page_token(&self, page_token: Option<&str>) -> String {
-        let search = self.search.trim();
-        let mut pairs = Vec::new();
-        if !search.is_empty() {
-            pairs.push(("q", search));
-        }
-        if self.kind != KindFilter::default() {
-            pairs.push(("kind", self.kind.as_str()));
-        }
-        if self.order != Order::default() {
-            pairs.push(("order", self.order.as_str()));
-        }
-        if let Some(page_token) = page_token {
-            pairs.push(("page_token", page_token));
-        }
-        serde_urlencoded::to_string(pairs).expect("string pairs always encode")
-    }
-
     fn to_request(&self, page_token: Option<String>) -> ListSpecsRequest {
         let kind = match self.kind {
             KindFilter::All => SpecKind::Both,
@@ -221,40 +153,18 @@ mod tests {
     use crate::application::{contract::spec_gateway::MockSpecGateway, spec_status::Visibility};
     use spec_api::{DraftOverview, DraftVisibility, SpecListItem, SpecOverview};
 
-    fn parse(query: &str) -> ListQuery {
-        serde_urlencoded::from_str(query).unwrap()
-    }
-
-    #[test]
-    fn parses_the_url_query() {
-        assert_eq!(
-            parse("q=bank&kind=draft&order=oldest"),
-            ListQuery {
-                search: "bank".into(),
-                kind: KindFilter::Draft,
-                order: Order::Oldest,
-            }
-        );
-    }
-
-    #[test]
-    fn falls_back_to_the_defaults_for_missing_and_unknown_values() {
-        assert_eq!(parse(""), ListQuery::default());
-        assert_eq!(parse("kind=everything&order=random"), ListQuery::default());
-    }
-
-    #[test]
-    fn leaves_the_defaults_out_of_the_query_string() {
-        assert_eq!(parse("q=+&kind=all&order=newest").query_string(), "");
-        assert_eq!(
-            parse("q=a b&kind=published&order=oldest").query_string_with_page_token(Some("7")),
-            "q=a+b&kind=published&order=oldest&page_token=7"
-        );
+    fn query(search: &str, kind: KindFilter, order: Order) -> ListQuery {
+        ListQuery {
+            search: search.into(),
+            kind,
+            order,
+        }
     }
 
     #[test]
     fn maps_the_query_to_a_request() {
-        let request = parse("q= bank &kind=published&order=oldest").to_request(Some("next".into()));
+        let request =
+            query(" bank ", KindFilter::Published, Order::Oldest).to_request(Some("next".into()));
 
         assert_eq!(request.page_size, PAGE_SIZE);
         assert_eq!(request.page_token, "next");
@@ -346,7 +256,10 @@ mod tests {
         let service = SpecListService::new(Arc::new(spec_gateway));
 
         let page = service
-            .list_page(&parse("q=bank"), Some("token".into()))
+            .list_page(
+                &query("bank", KindFilter::All, Order::Newest),
+                Some("token".into()),
+            )
             .await
             .unwrap();
 

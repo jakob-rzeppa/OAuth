@@ -17,16 +17,16 @@
         <label class="select-field">
             Show
             <select name="kind">
-                <option value="all"{% if query.kind.as_str() == "all" %} selected{% endif %}>Published and drafts</option>
-                <option value="published"{% if query.kind.as_str() == "published" %} selected{% endif %}>Published</option>
-                <option value="draft"{% if query.kind.as_str() == "draft" %} selected{% endif %}>Drafts</option>
+                <option value="all"{% if query.kind_value() == "all" %} selected{% endif %}>Published and drafts</option>
+                <option value="published"{% if query.kind_value() == "published" %} selected{% endif %}>Published</option>
+                <option value="draft"{% if query.kind_value() == "draft" %} selected{% endif %}>Drafts</option>
             </select>
         </label>
         <label class="select-field">
             Sort
             <select name="order">
-                <option value="newest"{% if query.order.as_str() == "newest" %} selected{% endif %}>Newest first</option>
-                <option value="oldest"{% if query.order.as_str() == "oldest" %} selected{% endif %}>Oldest first</option>
+                <option value="newest"{% if query.order_value() == "newest" %} selected{% endif %}>Newest first</option>
+                <option value="oldest"{% if query.order_value() == "oldest" %} selected{% endif %}>Oldest first</option>
             </select>
         </label>
     </form>

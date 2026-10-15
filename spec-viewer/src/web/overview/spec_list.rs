@@ -7,9 +7,10 @@ use axum::{
 use serde::Deserialize;
 
 use crate::{
-    application::spec_list::{ListQuery, SpecListPage},
+    application::spec_list::SpecListPage,
     state::AppState,
     web::display::{CssClass, Label, TimeDisplay, VersionLabel},
+    web::overview::ListParams,
     web::{error::fragment::spec_list_unavailable_fragment, render},
 };
 
@@ -18,7 +19,7 @@ pub(super) const PATH: &str = "/spec-list";
 #[derive(Deserialize)]
 pub(super) struct Params {
     #[serde(flatten)]
-    query: ListQuery,
+    query: ListParams,
     page_token: Option<String>,
 }
 
@@ -32,7 +33,7 @@ struct SpecListPartial {
     next_page_url: Option<String>,
 }
 
-pub(super) fn url(query: &ListQuery, page_token: Option<&str>) -> String {
+pub(super) fn url(query: &ListParams, page_token: Option<&str>) -> String {
     format!("{PATH}?{}", query.query_string_with_page_token(page_token))
 }
 
@@ -43,7 +44,7 @@ pub(super) async fn spec_list_partial(
     let is_first_page = params.page_token.is_none();
     let page = match state
         .spec_list_service
-        .list_page(&params.query, params.page_token)
+        .list_page(&params.query.query(), params.page_token)
         .await
     {
         Ok(page) => page,

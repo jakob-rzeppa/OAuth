@@ -20,9 +20,9 @@
     <p class="status-message">This spec has no text yet. It appears here once the first patch is accepted.</p>
     {% when Body::Rendered(html) %}
     <div class="prose">{{ html|safe }}</div>
-    {% when Body::Diff { base_label, diff } %}
+    {% when Body::Diff { base, diff } %}
     <p class="diff-summary">
-        Compared with {% if let Some(base_label) = base_label %}{{ base_label }}{% else %}an empty text{% endif %}:
+        Compared with {% if let Some(base) = base %}{{ view.label_of(base) }}{% else %}an empty text{% endif %}:
         <span class="added-count">{{ diff.added }} lines added</span>,
         <span class="removed-count">{{ diff.removed }} removed</span>
     </p>

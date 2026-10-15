@@ -1,15 +1,18 @@
 use askama::Template;
 use axum::{Router, extract::Query, http::StatusCode, response::Response, routing::get};
 
-use crate::{application::spec_list::ListQuery, state::AppState, web::render};
+use crate::{state::AppState, web::render};
 
+mod params;
 mod spec_list;
+
+use params::ListParams;
 
 /// The search and filters, with the specs loaded by the [`spec_list`] partial.
 #[derive(Template)]
 #[template(path = "overview/page.html")]
 struct OverviewPage {
-    query: ListQuery,
+    query: ListParams,
     spec_list_url: String,
 }
 
@@ -19,7 +22,7 @@ pub(super) fn router() -> Router<AppState> {
         .route(spec_list::PATH, get(spec_list::spec_list_partial))
 }
 
-async fn overview_page(Query(query): Query<ListQuery>) -> Response {
+async fn overview_page(Query(query): Query<ListParams>) -> Response {
     let spec_list_url = spec_list::url(&query, None);
     render(
         StatusCode::OK,

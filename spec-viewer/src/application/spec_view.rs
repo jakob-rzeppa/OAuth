@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
-use serde::Deserialize;
 use spec_api::{Patch, Proposal, Version, get_spec_response::Kind};
 
 use crate::application::{
@@ -85,7 +84,7 @@ pub enum PatchScope {
 
 impl Selection {
     /// The version or the unreleased changes this selection is part of, `None` for proposals.
-    fn scope(&self) -> Option<PatchScope> {
+    pub fn scope(&self) -> Option<PatchScope> {
         match self {
             Selection::Version(number) => Some(PatchScope::Version(*number)),
             Selection::Unreleased => Some(PatchScope::Unreleased),
@@ -102,20 +101,6 @@ pub enum ViewMode {
     Rendered,
     /// The changes against the text before, like `git diff`.
     Diff,
-}
-
-/// The url query of the detail page.
-///
-/// `version` is a version number or `unreleased`, `proposal` a proposal id and wins over
-/// `version`, `patch` is the 1-based number of a patch of that version or of the unreleased
-/// changes, and `view=diff` shows the changes instead of the text.
-#[derive(Debug, Default, Deserialize)]
-#[serde(default)]
-pub struct ViewParams {
-    pub version: String,
-    pub patch: String,
-    pub proposal: String,
-    pub view: String,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -144,23 +129,11 @@ pub enum Body {
     Rendered(String),
     Diff {
         /// What the selection is compared with, `None` for an empty text.
-        base_label: Option<String>,
+        base: Option<Selection>,
         diff: Diff,
     },
     /// The text could not be loaded from the content storage.
     Unavailable,
-}
-
-pub struct PatchLink<'a> {
-    pub patch: &'a PatchInfo,
-    pub query: String,
-    pub selected: bool,
-}
-
-pub struct VersionOption {
-    pub value: String,
-    pub label: String,
-    pub selected: bool,
 }
 
 /// The use case of showing a spec with the text of one of its versions or proposals.
@@ -180,13 +153,16 @@ impl SpecViewService {
         }
     }
 
-    /// Loads the spec with the given id and the text of the selection in `params`.
+    /// Loads the spec with the given id and the text of the selection.
     ///
     /// Without a selection, the latest version is shown. When the text can not be loaded the
     /// view is still returned, with [`Body::Unavailable`].
-    pub async fn view_spec(&self, id: &str, params: ViewParams) -> Result<SpecView, ViewSpecError> {
-        let (selection, mode) = params.parse()?;
-
+    pub async fn view_spec(
+        &self,
+        id: &str,
+        selection: Option<Selection>,
+        mode: ViewMode,
+    ) -> Result<SpecView, ViewSpecError> {
         let spec = match self.spec_gateway.get_spec(id).await {
             Ok(kind) => SpecDetail::from(kind),
             // An id that is not even well formed is as unknown as one that doesn't exist.
@@ -234,7 +210,7 @@ impl SpecViewService {
                 );
                 old.and_then(|old| {
                     Ok(Body::Diff {
-                        base_label: base.map(|base| spec.label(&base)),
+                        base,
                         diff: diff(&old, &new?),
                     })
                 })
@@ -256,43 +232,12 @@ impl SpecViewService {
     }
 }
 
-impl ViewParams {
-    fn parse(self) -> Result<(Option<Selection>, ViewMode), ViewSpecError> {
-        let scope = match self.version.as_str() {
-            "" => None,
-            "unreleased" => Some(PatchScope::Unreleased),
-            version => Some(PatchScope::Version(
-                version.parse().map_err(|_| ViewSpecError::NotFound)?,
-            )),
-        };
-        let selection = match (self.proposal.as_str(), scope, self.patch.as_str()) {
-            (proposal, _, _) if !proposal.is_empty() => {
-                Some(Selection::Proposal(proposal.to_string()))
-            }
-            (_, None, "") => None,
-            (_, Some(PatchScope::Version(number)), "") => Some(Selection::Version(number)),
-            (_, Some(PatchScope::Unreleased), "") => Some(Selection::Unreleased),
-            (_, Some(scope), number) => Some(Selection::Patch {
-                scope,
-                number: number.parse().map_err(|_| ViewSpecError::NotFound)?,
-            }),
-            // A patch is only addressable within its version.
-            (_, None, _) => return Err(ViewSpecError::NotFound),
-        };
-        let mode = match self.view.as_str() {
-            "diff" => ViewMode::Diff,
-            _ => ViewMode::Rendered,
-        };
-        Ok((selection, mode))
-    }
-}
-
 impl SpecDetail {
     pub fn is_draft(&self) -> bool {
         self.status.is_draft()
     }
 
-    fn contains(&self, selection: &Selection) -> bool {
+    pub fn contains(&self, selection: &Selection) -> bool {
         match selection {
             Selection::Version(number) => (1..=self.versions.len()).contains(number),
             Selection::Unreleased => !self.unreleased_patches.is_empty(),
@@ -311,7 +256,7 @@ impl SpecDetail {
     }
 
     /// The patches of a scope that [`Self::has_scope`].
-    fn patches_of(&self, scope: PatchScope) -> &[PatchInfo] {
+    pub fn patches_of(&self, scope: PatchScope) -> &[PatchInfo] {
         match scope {
             PatchScope::Version(number) => &self.versions[number - 1].patches,
             PatchScope::Unreleased => &self.unreleased_patches,
@@ -326,7 +271,7 @@ impl SpecDetail {
             .find_map(|version| version.patches.last())
     }
 
-    fn proposal(&self, id: &str) -> Option<&ProposalInfo> {
+    pub fn proposal(&self, id: &str) -> Option<&ProposalInfo> {
         self.proposals.iter().find(|proposal| proposal.id == id)
     }
 
@@ -402,159 +347,6 @@ impl SpecDetail {
         }
         .map(|patch| patch.content_uri.as_str())
     }
-
-    fn label(&self, selection: &Selection) -> String {
-        match selection {
-            Selection::Version(number) => format!("Version {number}"),
-            Selection::Unreleased => "Unreleased changes".to_string(),
-            Selection::Proposal(id) => match self.proposal(id) {
-                Some(proposal) => format!("Proposal by {}", proposal.proposed_by),
-                None => "Proposal".to_string(),
-            },
-            Selection::Patch { scope, number } => {
-                let scope = match scope {
-                    PatchScope::Version(number) => format!("Version {number}"),
-                    PatchScope::Unreleased => "Unreleased changes".to_string(),
-                };
-                format!("{scope}, patch {number}")
-            }
-        }
-    }
-}
-
-impl SpecView {
-    pub fn is_diff(&self) -> bool {
-        self.mode == ViewMode::Diff
-    }
-
-    /// Like `Version 2`, `None` when the spec has no text yet.
-    pub fn selection_label(&self) -> Option<String> {
-        self.selection
-            .as_ref()
-            .map(|selection| self.spec.label(selection))
-    }
-
-    pub fn version_options(&self) -> Vec<VersionOption> {
-        let scope = self.selection.as_ref().and_then(Selection::scope);
-        let unreleased = self
-            .spec
-            .contains(&Selection::Unreleased)
-            .then(|| VersionOption {
-                value: "unreleased".to_string(),
-                label: self.spec.label(&Selection::Unreleased),
-                selected: scope == Some(PatchScope::Unreleased),
-            });
-        let latest = self.spec.versions.len();
-        let versions = self
-            .spec
-            .versions
-            .iter()
-            .rev()
-            .map(|version| VersionOption {
-                value: version.number.to_string(),
-                label: if version.number == latest {
-                    format!("Version {} (latest)", version.number)
-                } else {
-                    format!("Version {}", version.number)
-                },
-                selected: scope == Some(PatchScope::Version(version.number)),
-            });
-        unreleased.into_iter().chain(versions).collect()
-    }
-
-    /// Whether the selection is a single patch, rather than the whole version.
-    pub fn is_patch_selected(&self) -> bool {
-        matches!(self.selection, Some(Selection::Patch { .. }))
-    }
-
-    /// The patches of the selected version or of the unreleased changes, each with the url
-    /// query that shows it, keeping the view mode.
-    pub fn patch_links(&self) -> Vec<PatchLink<'_>> {
-        let Some(scope) = self.selection.as_ref().and_then(Selection::scope) else {
-            return Vec::new();
-        };
-        self.spec
-            .patches_of(scope)
-            .iter()
-            .enumerate()
-            .map(|(index, patch)| {
-                let selection = Selection::Patch {
-                    scope,
-                    number: index + 1,
-                };
-                PatchLink {
-                    patch,
-                    query: query_string(Some(&selection), self.mode),
-                    selected: self.selection.as_ref() == Some(&selection),
-                }
-            })
-            .collect()
-    }
-
-    /// The url query of the whole version or the unreleased changes, keeping the view mode.
-    pub fn scope_query_string(&self) -> String {
-        let selection = match self.selection.as_ref().and_then(Selection::scope) {
-            Some(PatchScope::Version(number)) => Some(Selection::Version(number)),
-            Some(PatchScope::Unreleased) => Some(Selection::Unreleased),
-            None => None,
-        };
-        query_string(selection.as_ref(), self.mode)
-    }
-
-    pub fn selected_proposal(&self) -> Option<&ProposalInfo> {
-        match &self.selection {
-            Some(Selection::Proposal(id)) => self.spec.proposal(id),
-            _ => None,
-        }
-    }
-
-    pub fn is_selected_proposal(&self, id: &str) -> bool {
-        matches!(&self.selection, Some(Selection::Proposal(selected)) if selected == id)
-    }
-
-    /// The url query of what is shown.
-    pub fn query_string(&self) -> String {
-        query_string(self.selection.as_ref(), self.mode)
-    }
-
-    /// The url query of the selection as rendered text.
-    pub fn rendered_query_string(&self) -> String {
-        query_string(self.selection.as_ref(), ViewMode::Rendered)
-    }
-
-    /// The url query of the selection as diff.
-    pub fn diff_query_string(&self) -> String {
-        query_string(self.selection.as_ref(), ViewMode::Diff)
-    }
-
-    /// The url query of the proposal, keeping the view mode.
-    pub fn proposal_query_string(&self, id: &str) -> String {
-        query_string(Some(&Selection::Proposal(id.to_string())), self.mode)
-    }
-}
-
-fn query_string(selection: Option<&Selection>, mode: ViewMode) -> String {
-    let mut pairs = Vec::new();
-    match selection {
-        Some(Selection::Version(number)) => pairs.push(("version", number.to_string())),
-        Some(Selection::Unreleased) => pairs.push(("version", "unreleased".to_string())),
-        Some(Selection::Proposal(id)) => pairs.push(("proposal", id.clone())),
-        Some(Selection::Patch { scope, number }) => {
-            pairs.push((
-                "version",
-                match scope {
-                    PatchScope::Version(number) => number.to_string(),
-                    PatchScope::Unreleased => "unreleased".to_string(),
-                },
-            ));
-            pairs.push(("patch", number.to_string()));
-        }
-        None => {}
-    }
-    if mode == ViewMode::Diff {
-        pairs.push(("view", "diff".to_string()));
-    }
-    serde_urlencoded::to_string(pairs).expect("string pairs always encode")
 }
 
 impl From<Kind> for SpecDetail {
@@ -678,78 +470,6 @@ mod tests {
         }))
     }
 
-    fn params(version: &str, proposal: &str, view: &str) -> ViewParams {
-        ViewParams {
-            version: version.into(),
-            proposal: proposal.into(),
-            view: view.into(),
-            ..Default::default()
-        }
-    }
-
-    fn patch_params(version: &str, patch: &str) -> ViewParams {
-        ViewParams {
-            version: version.into(),
-            patch: patch.into(),
-            ..Default::default()
-        }
-    }
-
-    fn view(spec: SpecDetail, selection: Option<Selection>, mode: ViewMode) -> SpecView {
-        SpecView {
-            spec,
-            selection,
-            mode,
-            body: Body::Empty,
-        }
-    }
-
-    #[test]
-    fn parses_the_url_query() {
-        assert_eq!(
-            params("", "", "").parse().unwrap(),
-            (None, ViewMode::Rendered)
-        );
-        assert_eq!(
-            params("2", "", "diff").parse().unwrap(),
-            (Some(Selection::Version(2)), ViewMode::Diff)
-        );
-        assert_eq!(
-            params("unreleased", "", "other").parse().unwrap(),
-            (Some(Selection::Unreleased), ViewMode::Rendered)
-        );
-        assert_eq!(
-            params("2", "p", "").parse().unwrap().0,
-            Some(Selection::Proposal("p".into()))
-        );
-    }
-
-    #[test]
-    fn parses_a_patch() {
-        assert_eq!(
-            patch_params("1", "2").parse().unwrap().0,
-            Some(Selection::Patch {
-                scope: PatchScope::Version(1),
-                number: 2
-            })
-        );
-        assert_eq!(
-            patch_params("unreleased", "1").parse().unwrap().0,
-            Some(Selection::Patch {
-                scope: PatchScope::Unreleased,
-                number: 1
-            })
-        );
-        assert!(matches!(
-            patch_params("", "1").parse(),
-            Err(ViewSpecError::NotFound)
-        ));
-        assert!(matches!(
-            patch_params("1", "first").parse(),
-            Err(ViewSpecError::NotFound)
-        ));
-    }
-
     #[test]
     fn shows_every_patch_of_a_version() {
         let spec = draft();
@@ -771,10 +491,6 @@ mod tests {
             spec.content_uri(&patch(PatchScope::Version(1), 2)),
             Some("v1b")
         );
-        assert_eq!(
-            spec.label(&patch(PatchScope::Unreleased, 1)),
-            "Unreleased changes, patch 1"
-        );
     }
 
     #[test]
@@ -792,43 +508,6 @@ mod tests {
             spec.base_of(&patch(PatchScope::Unreleased, 1)),
             Some(patch(PatchScope::Version(1), 2))
         );
-    }
-
-    #[test]
-    fn builds_the_url_queries_of_patches() {
-        let selected = Selection::Patch {
-            scope: PatchScope::Version(1),
-            number: 2,
-        };
-        let view = view(draft(), Some(selected), ViewMode::Diff);
-
-        assert_eq!(view.query_string(), "version=1&patch=2&view=diff");
-        assert_eq!(view.scope_query_string(), "version=1&view=diff");
-        assert!(view.is_patch_selected());
-        let links = view.patch_links();
-        assert_eq!(
-            links
-                .iter()
-                .map(|link| (link.query.as_str(), link.selected))
-                .collect::<Vec<_>>(),
-            [
-                ("version=1&patch=1&view=diff", false),
-                ("version=1&patch=2&view=diff", true),
-            ]
-        );
-        assert!(
-            view.version_options()
-                .iter()
-                .any(|option| option.value == "1" && option.selected)
-        );
-    }
-
-    #[test]
-    fn rejects_an_invalid_version() {
-        assert!(matches!(
-            params("latest", "", "").parse(),
-            Err(ViewSpecError::NotFound)
-        ));
     }
 
     #[test]
@@ -927,49 +606,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn lists_the_unreleased_changes_and_the_newest_version_first() {
-        let view = view(draft(), Some(Selection::Version(1)), ViewMode::Rendered);
-
-        let options: Vec<_> = view
-            .version_options()
-            .into_iter()
-            .map(|option| (option.value, option.label, option.selected))
-            .collect();
-
-        assert_eq!(
-            options,
-            [
-                ("unreleased".into(), "Unreleased changes".into(), false),
-                ("2".into(), "Version 2 (latest)".into(), false),
-                ("1".into(), "Version 1".into(), true),
-            ]
-        );
-    }
-
-    #[test]
-    fn builds_the_url_queries() {
-        let view = view(draft(), Some(Selection::Unreleased), ViewMode::Diff);
-
-        assert_eq!(view.query_string(), "version=unreleased&view=diff");
-        assert_eq!(view.rendered_query_string(), "version=unreleased");
-        assert_eq!(view.proposal_query_string("a b"), "proposal=a+b&view=diff");
-    }
-
-    #[test]
-    fn labels_the_selection() {
-        let view = view(
-            draft(),
-            Some(Selection::Proposal("p".into())),
-            ViewMode::Rendered,
-        );
-
-        assert_eq!(view.selection_label().as_deref(), Some("Proposal by alice"));
-        assert!(view.is_selected_proposal("p"));
-        assert_eq!(view.selected_proposal().unwrap().proposed_by, "alice");
-        assert!(view.patch_links().is_empty());
-    }
-
     /// Knows a published spec `spec` with version 1 with the patches `p1` and `p2`, a provider
     /// that is `down`, and no other spec.
     fn spec_gateway() -> MockSpecGateway {
@@ -1006,15 +642,19 @@ mod tests {
         SpecViewService::new(Arc::new(spec_gateway), Arc::new(content_gateway))
     }
 
-    async fn view_of(id: &str, params: ViewParams) -> Result<SpecView, ViewSpecError> {
+    async fn view_of(
+        id: &str,
+        selection: Option<Selection>,
+        mode: ViewMode,
+    ) -> Result<SpecView, ViewSpecError> {
         service(spec_gateway(), content_gateway())
-            .view_spec(id, params)
+            .view_spec(id, selection, mode)
             .await
     }
 
     #[tokio::test]
     async fn shows_the_latest_version_rendered_by_default() {
-        let view = view_of("spec", ViewParams::default()).await.unwrap();
+        let view = view_of("spec", None, ViewMode::Rendered).await.unwrap();
 
         assert_eq!(view.selection, Some(Selection::Version(1)));
         assert!(matches!(view.body, Body::Rendered(html) if html.contains("<h1>Two</h1>")));
@@ -1022,21 +662,32 @@ mod tests {
 
     #[tokio::test]
     async fn loads_the_diff_and_the_text_of_a_patch() {
-        let view = view_of("spec", params("1", "", "diff")).await.unwrap();
-        assert!(matches!(&view.body, Body::Diff { base_label: None, diff } if diff.added == 1));
+        let view = view_of("spec", Some(Selection::Version(1)), ViewMode::Diff)
+            .await
+            .unwrap();
+        assert!(matches!(&view.body, Body::Diff { base: None, diff } if diff.added == 1));
 
-        let view = view_of("spec", patch_params("1", "2")).await.unwrap();
+        let view = view_of(
+            "spec",
+            Some(Selection::Patch {
+                scope: PatchScope::Version(1),
+                number: 2,
+            }),
+            ViewMode::Rendered,
+        )
+        .await
+        .unwrap();
         assert!(matches!(view.body, Body::Rendered(html) if html.contains("<h1>Two</h1>")));
     }
 
     #[tokio::test]
     async fn maps_unknown_specs_and_selections_to_not_found() {
         assert!(matches!(
-            view_of("missing", ViewParams::default()).await,
+            view_of("missing", None, ViewMode::Rendered).await,
             Err(ViewSpecError::NotFound)
         ));
         assert!(matches!(
-            view_of("spec", params("2", "", "")).await,
+            view_of("spec", Some(Selection::Version(2)), ViewMode::Rendered).await,
             Err(ViewSpecError::NotFound)
         ));
     }
@@ -1047,7 +698,7 @@ mod tests {
         content_gateway.expect_get().never();
 
         let result = service(spec_gateway(), content_gateway)
-            .view_spec("spec", params("2", "", ""))
+            .view_spec("spec", Some(Selection::Version(2)), ViewMode::Rendered)
             .await;
 
         assert!(matches!(result, Err(ViewSpecError::NotFound)));
@@ -1063,7 +714,7 @@ mod tests {
         });
 
         let result = service(spec_gateway, MockContentGateway::new())
-            .view_spec("not-a-uuid", ViewParams::default())
+            .view_spec("not-a-uuid", None, ViewMode::Rendered)
             .await;
 
         assert!(matches!(result, Err(ViewSpecError::NotFound)));
@@ -1077,7 +728,7 @@ mod tests {
             .returning(|_| Err(SpecGatewayError::MissingKind));
 
         let result = service(spec_gateway, MockContentGateway::new())
-            .view_spec("spec", ViewParams::default())
+            .view_spec("spec", None, ViewMode::Rendered)
             .await;
 
         assert!(matches!(result, Err(ViewSpecError::Provider(_))));
@@ -1086,7 +737,7 @@ mod tests {
     #[tokio::test]
     async fn maps_an_unreachable_provider_to_a_provider_error() {
         assert!(matches!(
-            view_of("down", ViewParams::default()).await,
+            view_of("down", None, ViewMode::Rendered).await,
             Err(ViewSpecError::Provider(_))
         ));
     }
@@ -1099,7 +750,7 @@ mod tests {
             .returning(|uri| Err(GetContentError::Request(format!("{uri} is unreachable"))));
 
         let view = service(spec_gateway(), content_gateway)
-            .view_spec("spec", ViewParams::default())
+            .view_spec("spec", None, ViewMode::Rendered)
             .await
             .unwrap();
 

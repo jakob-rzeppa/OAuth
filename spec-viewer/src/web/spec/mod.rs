@@ -8,7 +8,7 @@ use axum::{
 };
 
 use crate::{
-    application::spec_view::{SpecView, ViewParams, ViewSpecError},
+    application::spec_view::ViewSpecError,
     state::AppState,
     web::display::Label,
     web::{
@@ -18,12 +18,17 @@ use crate::{
 };
 
 mod content;
+mod params;
+mod view_model;
+
+use params::ViewParams;
+use view_model::SpecViewModel;
 
 /// The text of a spec with its metadata, versions and proposals in a sidebar.
 #[derive(Template)]
 #[template(path = "spec/page.html")]
 struct SpecPage<'a> {
-    view: &'a SpecView,
+    view: SpecViewModel<'a>,
     content: content::ContentPartial<'a>,
     selection: content::SelectionPanel<'a>,
 }
@@ -39,7 +44,14 @@ async fn spec_page(
     Path(id): Path<String>,
     Query(params): Query<ViewParams>,
 ) -> Response {
-    let view = match state.spec_view_service.view_spec(&id, params).await {
+    let Ok((selection, mode)) = params.parse() else {
+        return not_found_page();
+    };
+    let view = match state
+        .spec_view_service
+        .view_spec(&id, selection, mode)
+        .await
+    {
         Ok(view) => view,
         Err(ViewSpecError::NotFound) => return not_found_page(),
         Err(ViewSpecError::Provider(error)) => {
@@ -48,13 +60,14 @@ async fn spec_page(
         }
     };
 
+    let view = SpecViewModel::new(&view);
     render(
         StatusCode::OK,
         &SpecPage {
-            view: &view,
-            content: content::ContentPartial { view: &view },
+            view,
+            content: content::ContentPartial { view },
             selection: content::SelectionPanel {
-                view: &view,
+                view,
                 swap_out_of_band: false,
             },
         },

@@ -6,10 +6,11 @@ use axum::{
 };
 
 use crate::{
-    application::spec_view::{Body, SpecView, ViewParams, ViewSpecError},
+    application::spec_view::{Body, ViewSpecError},
     state::AppState,
     web::display::{CssClass, Label, Sign, TimeDisplay},
     web::error::fragment::{content_not_found_fragment, content_unavailable_fragment},
+    web::spec::{SpecViewModel, ViewParams},
 };
 
 pub(super) const PATH: &str = "/specs/{id}/content";
@@ -18,7 +19,7 @@ pub(super) const PATH: &str = "/specs/{id}/content";
 #[derive(Template)]
 #[template(path = "spec/content.html")]
 pub(super) struct ContentPartial<'a> {
-    pub(super) view: &'a SpecView,
+    pub(super) view: SpecViewModel<'a>,
 }
 
 /// The version selector and proposals in the sidebar, with the details of the selection.
@@ -27,7 +28,7 @@ pub(super) struct ContentPartial<'a> {
 #[derive(Template)]
 #[template(path = "spec/selection.html")]
 pub(super) struct SelectionPanel<'a> {
-    pub(super) view: &'a SpecView,
+    pub(super) view: SpecViewModel<'a>,
     pub(super) swap_out_of_band: bool,
 }
 
@@ -36,7 +37,14 @@ pub(super) async fn content_partial(
     Path(id): Path<String>,
     Query(params): Query<ViewParams>,
 ) -> Response {
-    let view = match state.spec_view_service.view_spec(&id, params).await {
+    let Ok((selection, mode)) = params.parse() else {
+        return content_not_found_fragment();
+    };
+    let view = match state
+        .spec_view_service
+        .view_spec(&id, selection, mode)
+        .await
+    {
         Ok(view) => view,
         Err(ViewSpecError::NotFound) => return content_not_found_fragment(),
         Err(ViewSpecError::Provider(error)) => {
@@ -45,9 +53,10 @@ pub(super) async fn content_partial(
         }
     };
 
-    let rendered = ContentPartial { view: &view }.render().and_then(|content| {
+    let view = SpecViewModel::new(&view);
+    let rendered = ContentPartial { view }.render().and_then(|content| {
         let selection = SelectionPanel {
-            view: &view,
+            view,
             swap_out_of_band: true,
         }
         .render()?;
@@ -71,7 +80,7 @@ mod tests {
     use crate::application::{
         diff::diff,
         spec_status::{ProposalState, SpecStatus, Visibility},
-        spec_view::{ProposalInfo, Selection, SpecDetail, ViewMode},
+        spec_view::{ProposalInfo, Selection, SpecDetail, SpecView, ViewMode},
     };
 
     fn proposal_diff_view() -> SpecView {
@@ -97,7 +106,7 @@ mod tests {
             selection: Some(Selection::Proposal("p".into())),
             mode: ViewMode::Diff,
             body: Body::Diff {
-                base_label: None,
+                base: None,
                 diff: diff("kept\nold <b>\n", "kept\nnew\n"),
             },
         }
@@ -107,7 +116,11 @@ mod tests {
     fn renders_the_diff_escaped() {
         let view = proposal_diff_view();
 
-        let html = ContentPartial { view: &view }.render().unwrap();
+        let html = ContentPartial {
+            view: SpecViewModel::new(&view),
+        }
+        .render()
+        .unwrap();
 
         assert!(html.contains(r#"<article id="content""#), "{html}");
         assert!(html.contains("Proposal by alice"), "{html}");
@@ -122,13 +135,13 @@ mod tests {
         let view = proposal_diff_view();
 
         let in_page = SelectionPanel {
-            view: &view,
+            view: SpecViewModel::new(&view),
             swap_out_of_band: false,
         }
         .render()
         .unwrap();
         let in_partial = SelectionPanel {
-            view: &view,
+            view: SpecViewModel::new(&view),
             swap_out_of_band: true,
         }
         .render()
