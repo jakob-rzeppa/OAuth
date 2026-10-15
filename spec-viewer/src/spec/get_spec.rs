@@ -1,5 +1,7 @@
 use spec_api::{GetSpecRequest, get_spec_response::Kind, spec_provider_client::SpecProviderClient};
 
+use crate::config::Config;
+
 #[derive(Debug, thiserror::Error)]
 pub enum GetSpecError {
     #[error("failed to connect to spec-provider: {0}")]
@@ -10,8 +12,12 @@ pub enum GetSpecError {
     NotFound,
 }
 
-/// Fetches the published spec or draft with the given id from the spec-provider.
-pub async fn get_spec(endpoint: &str, id: &str) -> Result<Kind, GetSpecError> {
+/// Fetches the published spec or draft with the given id from the configured spec-provider.
+pub async fn get_spec(id: &str) -> Result<Kind, GetSpecError> {
+    get_spec_at(Config::spec_provider_url(), id).await
+}
+
+async fn get_spec_at(endpoint: &str, id: &str) -> Result<Kind, GetSpecError> {
     let mut client = SpecProviderClient::connect(endpoint.to_string())
         .await
         .map_err(GetSpecError::Connect)?;
@@ -29,7 +35,7 @@ pub async fn get_spec(endpoint: &str, id: &str) -> Result<Kind, GetSpecError> {
 mod tests {
     use super::*;
     use spec_api::{
-        Draft, GetSpecResponse, Spec,
+        Draft, GetSpecResponse, ListSpecsRequest, ListSpecsResponse, Spec,
         spec_provider_server::{SpecProvider, SpecProviderServer},
     };
     use tokio::net::TcpListener;
@@ -60,6 +66,13 @@ mod tests {
             };
             Ok(Response::new(GetSpecResponse { kind }))
         }
+
+        async fn list_specs(
+            &self,
+            _: Request<ListSpecsRequest>,
+        ) -> Result<Response<ListSpecsResponse>, Status> {
+            Err(Status::unimplemented("list_specs"))
+        }
     }
 
     async fn start_provider() -> String {
@@ -76,7 +89,7 @@ mod tests {
     #[tokio::test]
     async fn returns_published_spec() {
         let url = start_provider().await;
-        match get_spec(&url, "published").await.unwrap() {
+        match get_spec_at(&url, "published").await.unwrap() {
             Kind::Published(spec) => assert_eq!(spec.title, "Title"),
             Kind::Draft(_) => panic!("expected published spec"),
         }
@@ -85,13 +98,13 @@ mod tests {
     #[tokio::test]
     async fn returns_draft() {
         let url = start_provider().await;
-        assert!(matches!(get_spec(&url, "draft").await, Ok(Kind::Draft(d)) if d.id == "draft"));
+        assert!(matches!(get_spec_at(&url, "draft").await, Ok(Kind::Draft(d)) if d.id == "draft"));
     }
 
     #[tokio::test]
     async fn maps_not_found_to_status_error() {
         let url = start_provider().await;
-        match get_spec(&url, "missing").await {
+        match get_spec_at(&url, "missing").await {
             Err(GetSpecError::Status(status)) => assert_eq!(status.code(), tonic::Code::NotFound),
             other => panic!("unexpected result: {other:?}"),
         }
@@ -101,7 +114,7 @@ mod tests {
     async fn rejects_response_without_kind() {
         let url = start_provider().await;
         assert!(matches!(
-            get_spec(&url, "empty").await,
+            get_spec_at(&url, "empty").await,
             Err(GetSpecError::NotFound)
         ));
     }
@@ -109,7 +122,7 @@ mod tests {
     #[tokio::test]
     async fn fails_to_connect_to_unreachable_provider() {
         assert!(matches!(
-            get_spec("http://127.0.0.1:1", "x").await,
+            get_spec_at("http://127.0.0.1:1", "x").await,
             Err(GetSpecError::Connect(_))
         ));
     }

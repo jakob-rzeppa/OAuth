@@ -923,7 +923,7 @@ dependencies = [
 [[package]]
 name = "spec-api"
 version = "0.1.0"
-source = "git+https://github.com/jakob-rzeppa/auth.git#a55d5a6fa4c42e5e9ff8bf57e5faefc3b53ec28a"
+source = "git+https://github.com/jakob-rzeppa/auth.git#8873979439334faa12474e46ad7816911d41f25d"
 dependencies = [
  "prost",
  "prost-types",
