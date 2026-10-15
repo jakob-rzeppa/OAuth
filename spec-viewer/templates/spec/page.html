@@ -18,10 +18,10 @@
             <h2>About this spec</h2>
             <dl class="facts">
                 <dt>Status</dt>
-                <dd>{{ view.spec.status }}</dd>
-                {% if let Some(visibility) = view.spec.visibility %}
+                <dd>{{ view.spec.status.label() }}</dd>
+                {% if let Some(visibility) = view.spec.status.visibility() %}
                 <dt>Visibility</dt>
-                <dd>{{ visibility }}</dd>
+                <dd>{{ visibility.label() }}</dd>
                 {% endif %}
                 <dt>Versions</dt>
                 <dd>{{ view.spec.versions.len() }}</dd>

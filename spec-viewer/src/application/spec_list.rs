@@ -8,7 +8,7 @@ use spec_api::{
 
 use crate::application::{
     contract::spec_gateway::{SpecGateway, SpecGatewayError},
-    spec_view::visibility_label,
+    spec_status::SpecStatus,
     timestamp::format_date,
 };
 
@@ -143,34 +143,20 @@ pub struct SpecListEntry {
     pub id: String,
     pub title: String,
     pub abbreviation: String,
-    pub status: Status,
+    pub status: SpecStatus,
+    /// `None` for a published spec, `Some(0)` for a draft without a version yet.
+    pub current_version: Option<u32>,
     pub created_by: String,
     pub created_at: String,
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub enum Status {
-    Published,
-    Draft {
-        visibility: &'static str,
-        /// Like `Version 3`, or `No version yet`.
-        current_version: String,
-    },
-}
-
-impl Status {
-    pub fn label(&self) -> &'static str {
-        match self {
-            Status::Published => "Published",
-            Status::Draft { .. } => "Draft",
-        }
-    }
-
-    pub fn css_class(&self) -> &'static str {
-        match self {
-            Status::Published => "published",
-            Status::Draft { .. } => "draft",
-        }
+impl SpecListEntry {
+    /// Like `Version 3`, or `No version yet`. `None` for a published spec.
+    pub fn current_version_label(&self) -> Option<String> {
+        self.current_version.map(|version| match version {
+            0 => "No version yet".to_string(),
+            version => format!("Version {version}"),
+        })
     }
 }
 
@@ -196,18 +182,16 @@ impl From<Kind> for SpecListEntry {
                 id: spec.id,
                 title: spec.title,
                 abbreviation: spec.abbreviation,
-                status: Status::Published,
+                status: SpecStatus::Published,
+                current_version: None,
                 created_by: spec.created_by,
             },
             Kind::Draft(draft) => SpecListEntry {
                 created_at: format_date(draft.created_at.as_ref()),
-                status: Status::Draft {
-                    visibility: visibility_label(draft.visibility()),
-                    current_version: match draft.current_version {
-                        0 => "No version yet".to_string(),
-                        version => format!("Version {version}"),
-                    },
+                status: SpecStatus::Draft {
+                    visibility: draft.visibility().into(),
                 },
+                current_version: Some(draft.current_version),
                 id: draft.id,
                 title: draft.title,
                 abbreviation: draft.abbreviation,
@@ -243,7 +227,7 @@ impl SpecListService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::application::contract::spec_gateway::MockSpecGateway;
+    use crate::application::{contract::spec_gateway::MockSpecGateway, spec_status::Visibility};
     use spec_api::{DraftOverview, DraftVisibility, SpecListItem, SpecOverview};
 
     fn parse(query: &str) -> ListQuery {
@@ -331,14 +315,37 @@ mod tests {
         assert_eq!(page.next_page_token.as_deref(), Some("next"));
         assert_eq!(page.entries.len(), 2);
         assert_eq!(page.entries[0].created_at, "2024-01-11");
-        assert_eq!(page.entries[0].status, Status::Published);
+        assert_eq!(page.entries[0].status, SpecStatus::Published);
+        assert_eq!(page.entries[0].current_version_label(), None);
         assert_eq!(
             page.entries[1].status,
-            Status::Draft {
-                visibility: "Private",
-                current_version: "Version 3".into(),
+            SpecStatus::Draft {
+                visibility: Visibility::Private
             }
         );
+        assert_eq!(
+            page.entries[1].current_version_label().as_deref(),
+            Some("Version 3")
+        );
+    }
+
+    #[test]
+    fn labels_the_version_of_a_draft() {
+        let entry = |version| SpecListEntry {
+            id: String::new(),
+            title: String::new(),
+            abbreviation: String::new(),
+            status: SpecStatus::Published,
+            current_version: version,
+            created_by: String::new(),
+            created_at: String::new(),
+        };
+
+        assert_eq!(
+            entry(Some(0)).current_version_label().unwrap(),
+            "No version yet"
+        );
+        assert_eq!(entry(Some(2)).current_version_label().unwrap(), "Version 2");
     }
 
     #[test]

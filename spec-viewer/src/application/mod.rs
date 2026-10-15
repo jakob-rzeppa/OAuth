@@ -5,5 +5,6 @@ pub mod contract;
 pub mod diff;
 pub mod markdown;
 pub mod spec_list;
+pub mod spec_status;
 pub mod spec_view;
 mod timestamp;

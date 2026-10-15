@@ -1,9 +1,7 @@
 use std::sync::Arc;
 
 use serde::Deserialize;
-use spec_api::{
-    DraftVisibility, Patch, Proposal, ProposalStatus, Version, get_spec_response::Kind,
-};
+use spec_api::{Patch, Proposal, Version, get_spec_response::Kind};
 
 use crate::application::{
     contract::{
@@ -12,6 +10,7 @@ use crate::application::{
     },
     diff::{Diff, diff},
     markdown::render_markdown,
+    spec_status::{ProposalState, SpecStatus},
     timestamp::format_date_time,
 };
 
@@ -21,10 +20,7 @@ pub struct SpecDetail {
     pub id: String,
     pub title: String,
     pub abbreviation: String,
-    /// `Published` or `Draft`.
-    pub status: &'static str,
-    /// `None` for a published spec.
-    pub visibility: Option<&'static str>,
+    pub status: SpecStatus,
     /// The first version first.
     pub versions: Vec<VersionInfo>,
     /// The patches applied to the next version when it is cut. Always empty for published specs.
@@ -56,7 +52,7 @@ pub struct ProposalInfo {
     pub proposed_by: String,
     pub created_at: String,
     pub last_updated_at: String,
-    pub status: &'static str,
+    pub status: ProposalState,
     /// Where the full text of the spec with this proposal applied is stored.
     pub content_uri: String,
 }
@@ -292,7 +288,7 @@ impl ViewParams {
 
 impl SpecDetail {
     pub fn is_draft(&self) -> bool {
-        self.visibility.is_some()
+        self.status.is_draft()
     }
 
     fn contains(&self, selection: &Selection) -> bool {
@@ -560,15 +556,6 @@ fn query_string(selection: Option<&Selection>, mode: ViewMode) -> String {
     serde_urlencoded::to_string(pairs).expect("string pairs always encode")
 }
 
-pub fn visibility_label(visibility: DraftVisibility) -> &'static str {
-    match visibility {
-        DraftVisibility::Public => "Public",
-        DraftVisibility::Private => "Private",
-        DraftVisibility::Hidden => "Hidden",
-        DraftVisibility::Unspecified => "Unknown",
-    }
-}
-
 impl From<Kind> for SpecDetail {
     fn from(kind: Kind) -> Self {
         match kind {
@@ -576,15 +563,15 @@ impl From<Kind> for SpecDetail {
                 id: spec.id,
                 title: spec.title,
                 abbreviation: spec.abbreviation,
-                status: "Published",
-                visibility: None,
+                status: SpecStatus::Published,
                 versions: versions(spec.versions),
                 unreleased_patches: Vec::new(),
                 proposals: Vec::new(),
             },
             Kind::Draft(draft) => SpecDetail {
-                status: "Draft",
-                visibility: Some(visibility_label(draft.visibility())),
+                status: SpecStatus::Draft {
+                    visibility: draft.visibility().into(),
+                },
                 id: draft.id,
                 title: draft.title,
                 abbreviation: draft.abbreviation,
@@ -632,11 +619,7 @@ impl From<Proposal> for ProposalInfo {
         ProposalInfo {
             created_at: format_date_time(proposal.created_at.as_ref()),
             last_updated_at: format_date_time(proposal.last_updated_at.as_ref()),
-            status: match proposal.status() {
-                ProposalStatus::Draft => "Work in progress",
-                ProposalStatus::Ready => "Ready for review",
-                ProposalStatus::Unspecified => "Unknown",
-            },
+            status: proposal.status().into(),
             id: proposal.id,
             proposed_by: proposal.proposed_by,
             content_uri: proposal.content_uri,
@@ -650,7 +633,8 @@ mod tests {
     use crate::application::contract::{
         content_gateway::MockContentGateway, spec_gateway::MockSpecGateway,
     };
-    use spec_api::{Draft, Spec};
+    use crate::application::spec_status::Visibility;
+    use spec_api::{Draft, DraftVisibility, ProposalStatus, Spec};
 
     fn patch(content_uri: &str) -> Patch {
         Patch {
@@ -851,10 +835,10 @@ mod tests {
         let spec = draft();
 
         assert!(spec.is_draft());
-        assert_eq!(spec.visibility, Some("Public"));
+        assert_eq!(spec.status.visibility(), Some(Visibility::Public));
         assert_eq!(spec.versions[1].number, 2);
         assert_eq!(spec.unreleased_patches[0].content_uri, "u");
-        assert_eq!(spec.proposals[0].status, "Ready for review");
+        assert_eq!(spec.proposals[0].status, ProposalState::ReadyForReview);
     }
 
     #[test]
@@ -862,7 +846,7 @@ mod tests {
         let spec = published(vec![version(&["v1"])]);
 
         assert!(!spec.is_draft());
-        assert_eq!(spec.status, "Published");
+        assert_eq!(spec.status, SpecStatus::Published);
         assert!(spec.unreleased_patches.is_empty());
         assert!(spec.proposals.is_empty());
     }

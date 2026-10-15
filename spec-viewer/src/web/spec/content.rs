@@ -69,6 +69,7 @@ mod tests {
     use super::*;
     use crate::application::{
         diff::diff,
+        spec_status::{ProposalState, SpecStatus, Visibility},
         spec_view::{ProposalInfo, Selection, SpecDetail, ViewMode},
     };
 
@@ -78,8 +79,9 @@ mod tests {
                 id: "draft".into(),
                 title: "Draft".into(),
                 abbreviation: "D".into(),
-                status: "Draft",
-                visibility: Some("Public"),
+                status: SpecStatus::Draft {
+                    visibility: Visibility::Public,
+                },
                 versions: Vec::new(),
                 unreleased_patches: Vec::new(),
                 proposals: vec![ProposalInfo {
@@ -87,7 +89,7 @@ mod tests {
                     proposed_by: "alice".into(),
                     created_at: String::new(),
                     last_updated_at: String::new(),
-                    status: "Ready for review",
+                    status: ProposalState::ReadyForReview,
                     content_uri: String::new(),
                 }],
             },

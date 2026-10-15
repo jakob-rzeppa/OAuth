@@ -7,7 +7,7 @@ use axum::{
 use serde::Deserialize;
 
 use crate::{
-    application::spec_list::{ListQuery, SpecListPage, Status},
+    application::spec_list::{ListQuery, SpecListPage},
     state::AppState,
     web::{error::fragment::spec_list_unavailable_fragment, render},
 };

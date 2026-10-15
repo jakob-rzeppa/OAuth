@@ -5,9 +5,11 @@
         <a class="spec-title" href="/specs/{{ entry.id }}">{{ entry.title }}</a>
         <p class="spec-facts">
             <span class="status-badge {{ entry.status.css_class() }}">{{ entry.status.label() }}</span>
-            {% if let Status::Draft { visibility, current_version } = entry.status %}
-            <span>{{ visibility }}</span>
-            <span>{{ current_version }}</span>
+            {% if let Some(visibility) = entry.status.visibility() %}
+            <span>{{ visibility.label() }}</span>
+            {% endif %}
+            {% if let Some(version) = entry.current_version_label() %}
+            <span>{{ version }}</span>
             {% endif %}
             <span>Created {{ entry.created_at }} by {{ entry.created_by }}</span>
         </p>

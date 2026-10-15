@@ -54,7 +54,7 @@
             <dt>Proposed by</dt>
             <dd>{{ proposal.proposed_by }}</dd>
             <dt>Status</dt>
-            <dd>{{ proposal.status }}</dd>
+            <dd>{{ proposal.status.label() }}</dd>
             <dt>Created</dt>
             <dd>{{ proposal.created_at }}</dd>
             <dt>Updated</dt>
@@ -74,7 +74,7 @@
                    hx-target="#content" hx-swap="outerHTML" hx-indicator="#content"
                    {% if view.is_selected_proposal(proposal.id.as_str()) %}aria-current="page"{% endif %}>
                     <span class="proposal-author">By {{ proposal.proposed_by }}</span>
-                    <span class="proposal-state">{{ proposal.status }}, updated {{ proposal.last_updated_at }}</span>
+                    <span class="proposal-state">{{ proposal.status.label() }}, updated {{ proposal.last_updated_at }}</span>
                 </a>
             </li>
             {% endfor %}
