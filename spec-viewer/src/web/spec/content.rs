@@ -1,12 +1,13 @@
 use askama::Template;
 use axum::{
-    extract::{Path, Query},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::{Html, IntoResponse, Response},
 };
 
 use crate::{
-    application::spec_view::{Body, SpecView, ViewParams, ViewSpecError, view_spec},
+    application::spec_view::{Body, SpecView, ViewParams, ViewSpecError},
+    state::AppState,
     web::error::fragment::{content_not_found_fragment, content_unavailable_fragment},
 };
 
@@ -30,10 +31,11 @@ pub(super) struct SelectionPanel<'a> {
 }
 
 pub(super) async fn content_partial(
+    State(state): State<AppState>,
     Path(id): Path<String>,
     Query(params): Query<ViewParams>,
 ) -> Response {
-    let view = match view_spec(&id, params).await {
+    let view = match state.spec_view_service.view_spec(&id, params).await {
         Ok(view) => view,
         Err(ViewSpecError::NotFound) => return content_not_found_fragment(),
         Err(ViewSpecError::Provider(error)) => {

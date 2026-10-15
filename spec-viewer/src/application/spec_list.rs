@@ -1,12 +1,15 @@
+use std::sync::Arc;
+
 use serde::Deserialize;
 use spec_api::{
     ListSpecsFilter, ListSpecsOrder, ListSpecsRequest, ListSpecsResponse, SortDirection, SpecKind,
     spec_list_item::Kind,
 };
 
-use crate::{
-    application::{spec_view::visibility_label, timestamp::format_date},
-    spec::{ListSpecsError, list_specs},
+use crate::application::{
+    contract::spec_gateway::{ListSpecsError, SpecGateway},
+    spec_view::visibility_label,
+    timestamp::format_date,
 };
 
 /// The number of specs loaded at once.
@@ -214,19 +217,33 @@ impl From<Kind> for SpecListEntry {
     }
 }
 
-/// Loads the page of the list starting at `page_token`, or the first page.
-pub async fn list_page(
-    query: &ListQuery,
-    page_token: Option<String>,
-) -> Result<SpecListPage, ListSpecsError> {
-    list_specs(query.to_request(page_token))
-        .await
-        .map(SpecListPage::from)
+/// The use case of listing the published specs and the drafts.
+pub struct SpecListService {
+    spec_gateway: Arc<dyn SpecGateway>,
+}
+
+impl SpecListService {
+    pub fn new(spec_gateway: Arc<dyn SpecGateway>) -> Self {
+        SpecListService { spec_gateway }
+    }
+
+    /// Loads the page of the list starting at `page_token`, or the first page.
+    pub async fn list_page(
+        &self,
+        query: &ListQuery,
+        page_token: Option<String>,
+    ) -> Result<SpecListPage, ListSpecsError> {
+        self.spec_gateway
+            .list_specs(query.to_request(page_token))
+            .await
+            .map(SpecListPage::from)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::application::contract::spec_gateway::MockSpecGateway;
     use spec_api::{DraftOverview, DraftVisibility, SpecListItem, SpecOverview};
 
     fn parse(query: &str) -> ListQuery {
@@ -330,5 +347,44 @@ mod tests {
 
         assert!(page.entries.is_empty());
         assert_eq!(page.next_page_token, None);
+    }
+
+    #[tokio::test]
+    async fn lists_a_page_through_the_gateway() {
+        let mut spec_gateway = MockSpecGateway::new();
+        spec_gateway
+            .expect_list_specs()
+            .withf(|request| request.page_token == "token" && request.search == "bank")
+            .times(1)
+            .returning(|_| {
+                Ok(ListSpecsResponse {
+                    items: vec![SpecListItem {
+                        kind: Some(Kind::Published(SpecOverview::default())),
+                    }],
+                    next_page_token: "next".into(),
+                })
+            });
+        let service = SpecListService::new(Arc::new(spec_gateway));
+
+        let page = service
+            .list_page(&parse("q=bank"), Some("token".into()))
+            .await
+            .unwrap();
+
+        assert_eq!(page.entries.len(), 1);
+        assert_eq!(page.next_page_token.as_deref(), Some("next"));
+    }
+
+    #[tokio::test]
+    async fn passes_on_a_provider_error() {
+        let mut spec_gateway = MockSpecGateway::new();
+        spec_gateway
+            .expect_list_specs()
+            .returning(|_| Err(ListSpecsError::Status(tonic::Status::unavailable("down"))));
+        let service = SpecListService::new(Arc::new(spec_gateway));
+
+        let result = service.list_page(&ListQuery::default(), None).await;
+
+        assert!(matches!(result, Err(ListSpecsError::Status(_))));
     }
 }

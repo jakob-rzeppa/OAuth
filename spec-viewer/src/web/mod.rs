@@ -5,12 +5,14 @@ use axum::{
     response::{Html, IntoResponse, Response},
 };
 
+use crate::state::AppState;
+
 mod assets;
 mod error;
 mod overview;
 mod spec;
 
-pub fn router() -> Router {
+pub fn router() -> Router<AppState> {
     Router::new()
         .merge(assets::router())
         .merge(overview::router())

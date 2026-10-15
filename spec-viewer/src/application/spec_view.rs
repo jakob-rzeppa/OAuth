@@ -1,16 +1,18 @@
+use std::sync::Arc;
+
 use serde::Deserialize;
 use spec_api::{
     DraftVisibility, Patch, Proposal, ProposalStatus, Version, get_spec_response::Kind,
 };
 
-use crate::{
-    application::{
-        diff::{Diff, diff},
-        markdown::render_markdown,
-        timestamp::format_date_time,
+use crate::application::{
+    contract::{
+        content_gateway::{ContentGateway, GetContentError},
+        spec_gateway::{GetSpecError, SpecGateway},
     },
-    content::{GetContentError, get_content},
-    spec::{GetSpecError, get_spec},
+    diff::{Diff, diff},
+    markdown::render_markdown,
+    timestamp::format_date_time,
 };
 
 /// A published spec or a draft with everything the detail page shows besides its text.
@@ -164,71 +166,90 @@ pub struct VersionOption {
     pub selected: bool,
 }
 
-/// Loads the spec with the given id and the text of the selection in `params`.
-///
-/// Without a selection, the latest version is shown. When the text can not be loaded the
-/// view is still returned, with [`Body::Unavailable`].
-pub async fn view_spec(id: &str, params: ViewParams) -> Result<SpecView, ViewSpecError> {
-    let (selection, mode) = params.parse()?;
-
-    let spec = match get_spec(id).await {
-        Ok(kind) => SpecDetail::from(kind),
-        Err(GetSpecError::Status(status)) if status.code() == tonic::Code::NotFound => {
-            return Err(ViewSpecError::NotFound);
-        }
-        Err(error) => return Err(ViewSpecError::Provider(error)),
-    };
-
-    let selection = match selection {
-        Some(selection) if spec.contains(&selection) => Some(selection),
-        Some(_) => return Err(ViewSpecError::NotFound),
-        None => spec.default_selection(),
-    };
-
-    let body = match &selection {
-        Some(selection) => load_body(&spec, selection, mode).await,
-        None => Body::Empty,
-    };
-
-    Ok(SpecView {
-        spec,
-        selection,
-        mode,
-        body,
-    })
+/// The use case of showing a spec with the text of one of its versions or proposals.
+pub struct SpecViewService {
+    spec_gateway: Arc<dyn SpecGateway>,
+    content_gateway: Arc<dyn ContentGateway>,
 }
 
-async fn load_body(spec: &SpecDetail, selection: &Selection, mode: ViewMode) -> Body {
-    let body = match mode {
-        ViewMode::Rendered => text_at(spec.content_uri(selection))
-            .await
-            .map(|text| Body::Rendered(render_markdown(&text))),
-        ViewMode::Diff => {
-            let base = spec.base_of(selection);
-            let (old, new) = tokio::join!(
-                text_at(base.as_ref().and_then(|base| spec.content_uri(base))),
-                text_at(spec.content_uri(selection)),
-            );
-            old.and_then(|old| {
-                Ok(Body::Diff {
-                    base_label: base.map(|base| spec.label(&base)),
-                    diff: diff(&old, &new?),
+impl SpecViewService {
+    pub fn new(
+        spec_gateway: Arc<dyn SpecGateway>,
+        content_gateway: Arc<dyn ContentGateway>,
+    ) -> Self {
+        SpecViewService {
+            spec_gateway,
+            content_gateway,
+        }
+    }
+
+    /// Loads the spec with the given id and the text of the selection in `params`.
+    ///
+    /// Without a selection, the latest version is shown. When the text can not be loaded the
+    /// view is still returned, with [`Body::Unavailable`].
+    pub async fn view_spec(&self, id: &str, params: ViewParams) -> Result<SpecView, ViewSpecError> {
+        let (selection, mode) = params.parse()?;
+
+        let spec = match self.spec_gateway.get_spec(id).await {
+            Ok(kind) => SpecDetail::from(kind),
+            Err(GetSpecError::Status(status)) if status.code() == tonic::Code::NotFound => {
+                return Err(ViewSpecError::NotFound);
+            }
+            Err(error) => return Err(ViewSpecError::Provider(error)),
+        };
+
+        let selection = match selection {
+            Some(selection) if spec.contains(&selection) => Some(selection),
+            Some(_) => return Err(ViewSpecError::NotFound),
+            None => spec.default_selection(),
+        };
+
+        let body = match &selection {
+            Some(selection) => self.load_body(&spec, selection, mode).await,
+            None => Body::Empty,
+        };
+
+        Ok(SpecView {
+            spec,
+            selection,
+            mode,
+            body,
+        })
+    }
+
+    async fn load_body(&self, spec: &SpecDetail, selection: &Selection, mode: ViewMode) -> Body {
+        let body = match mode {
+            ViewMode::Rendered => self
+                .text_at(spec.content_uri(selection))
+                .await
+                .map(|text| Body::Rendered(render_markdown(&text))),
+            ViewMode::Diff => {
+                let base = spec.base_of(selection);
+                let (old, new) = tokio::join!(
+                    self.text_at(base.as_ref().and_then(|base| spec.content_uri(base))),
+                    self.text_at(spec.content_uri(selection)),
+                );
+                old.and_then(|old| {
+                    Ok(Body::Diff {
+                        base_label: base.map(|base| spec.label(&base)),
+                        diff: diff(&old, &new?),
+                    })
                 })
-            })
+            }
+        };
+
+        body.unwrap_or_else(|error| {
+            eprintln!("failed to load the text of spec {}: {error}", spec.id);
+            Body::Unavailable
+        })
+    }
+
+    /// The text at `uri`, or an empty text without any.
+    async fn text_at(&self, uri: Option<&str>) -> Result<String, GetContentError> {
+        match uri {
+            Some(uri) => self.content_gateway.get(uri).await,
+            None => Ok(String::new()),
         }
-    };
-
-    body.unwrap_or_else(|error| {
-        eprintln!("failed to load the text of spec {}: {error}", spec.id);
-        Body::Unavailable
-    })
-}
-
-/// The text at `uri`, or an empty text without any.
-async fn text_at(uri: Option<&str>) -> Result<String, GetContentError> {
-    match uri {
-        Some(uri) => get_content(uri).await,
-        None => Ok(String::new()),
     }
 }
 
@@ -620,6 +641,9 @@ impl From<Proposal> for ProposalInfo {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::application::contract::{
+        content_gateway::MockContentGateway, spec_gateway::MockSpecGateway,
+    };
     use spec_api::{Draft, Spec};
 
     fn patch(content_uri: &str) -> Patch {
@@ -953,5 +977,111 @@ mod tests {
         assert!(view.is_selected_proposal("p"));
         assert_eq!(view.selected_proposal().unwrap().proposed_by, "alice");
         assert!(view.patch_links().is_empty());
+    }
+
+    /// Knows a published spec `spec` with version 1 with the patches `p1` and `p2`, a provider
+    /// that is `down`, and no other spec.
+    fn spec_gateway() -> MockSpecGateway {
+        let mut gateway = MockSpecGateway::new();
+        gateway.expect_get_spec().returning(|id| match id {
+            "spec" => Ok(Kind::Published(Spec {
+                id: id.into(),
+                versions: vec![version(&["p1", "p2"])],
+                ..Default::default()
+            })),
+            "down" => Err(GetSpecError::Status(tonic::Status::unavailable("down"))),
+            _ => Err(GetSpecError::Status(tonic::Status::not_found(
+                "no such spec",
+            ))),
+        });
+        gateway
+    }
+
+    /// Has the texts `p1` and `p2`, and answers `404` for any other.
+    fn content_gateway() -> MockContentGateway {
+        let mut gateway = MockContentGateway::new();
+        gateway.expect_get().returning(|uri| match uri {
+            "p1" => Ok("# One\n".to_string()),
+            "p2" => Ok("# Two\n".to_string()),
+            _ => Err(GetContentError::Status(404, uri.to_string())),
+        });
+        gateway
+    }
+
+    fn service(
+        spec_gateway: MockSpecGateway,
+        content_gateway: MockContentGateway,
+    ) -> SpecViewService {
+        SpecViewService::new(Arc::new(spec_gateway), Arc::new(content_gateway))
+    }
+
+    async fn view_of(id: &str, params: ViewParams) -> Result<SpecView, ViewSpecError> {
+        service(spec_gateway(), content_gateway())
+            .view_spec(id, params)
+            .await
+    }
+
+    #[tokio::test]
+    async fn shows_the_latest_version_rendered_by_default() {
+        let view = view_of("spec", ViewParams::default()).await.unwrap();
+
+        assert_eq!(view.selection, Some(Selection::Version(1)));
+        assert!(matches!(view.body, Body::Rendered(html) if html.contains("<h1>Two</h1>")));
+    }
+
+    #[tokio::test]
+    async fn loads_the_diff_and_the_text_of_a_patch() {
+        let view = view_of("spec", params("1", "", "diff")).await.unwrap();
+        assert!(matches!(&view.body, Body::Diff { base_label: None, diff } if diff.added == 1));
+
+        let view = view_of("spec", patch_params("1", "2")).await.unwrap();
+        assert!(matches!(view.body, Body::Rendered(html) if html.contains("<h1>Two</h1>")));
+    }
+
+    #[tokio::test]
+    async fn maps_unknown_specs_and_selections_to_not_found() {
+        assert!(matches!(
+            view_of("missing", ViewParams::default()).await,
+            Err(ViewSpecError::NotFound)
+        ));
+        assert!(matches!(
+            view_of("spec", params("2", "", "")).await,
+            Err(ViewSpecError::NotFound)
+        ));
+    }
+
+    #[tokio::test]
+    async fn does_not_load_any_text_for_an_unknown_selection() {
+        let mut content_gateway = MockContentGateway::new();
+        content_gateway.expect_get().never();
+
+        let result = service(spec_gateway(), content_gateway)
+            .view_spec("spec", params("2", "", ""))
+            .await;
+
+        assert!(matches!(result, Err(ViewSpecError::NotFound)));
+    }
+
+    #[tokio::test]
+    async fn maps_an_unreachable_provider_to_a_provider_error() {
+        assert!(matches!(
+            view_of("down", ViewParams::default()).await,
+            Err(ViewSpecError::Provider(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn still_shows_the_spec_when_its_text_is_unavailable() {
+        let mut content_gateway = MockContentGateway::new();
+        content_gateway
+            .expect_get()
+            .returning(|uri| Err(GetContentError::Request(format!("{uri} is unreachable"))));
+
+        let view = service(spec_gateway(), content_gateway)
+            .view_spec("spec", ViewParams::default())
+            .await
+            .unwrap();
+
+        assert!(matches!(view.body, Body::Unavailable));
     }
 }

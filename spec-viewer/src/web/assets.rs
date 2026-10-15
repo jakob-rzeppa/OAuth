@@ -7,10 +7,12 @@ use axum::{
     routing::get,
 };
 
+use crate::state::AppState;
+
 const HTMX: &str = include_str!("../../static/htmx.min.js");
 const STYLE: &str = include_str!("../../static/style.css");
 
-pub(super) fn router() -> Router {
+pub(super) fn router() -> Router<AppState> {
     Router::new()
         .route(
             "/static/htmx.min.js",

@@ -1,13 +1,14 @@
 use askama::Template;
 use axum::{
-    extract::Query,
+    extract::{Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
 use serde::Deserialize;
 
 use crate::{
-    application::spec_list::{ListQuery, SpecListPage, Status, list_page},
+    application::spec_list::{ListQuery, SpecListPage, Status},
+    state::AppState,
     web::{error::fragment::spec_list_unavailable_fragment, render},
 };
 
@@ -34,9 +35,16 @@ pub(super) fn url(query: &ListQuery, page_token: Option<&str>) -> String {
     format!("{PATH}?{}", query.query_string_with_page_token(page_token))
 }
 
-pub(super) async fn spec_list_partial(Query(params): Query<Params>) -> Response {
+pub(super) async fn spec_list_partial(
+    State(state): State<AppState>,
+    Query(params): Query<Params>,
+) -> Response {
     let is_first_page = params.page_token.is_none();
-    let page = match list_page(&params.query, params.page_token).await {
+    let page = match state
+        .spec_list_service
+        .list_page(&params.query, params.page_token)
+        .await
+    {
         Ok(page) => page,
         Err(error) => {
             eprintln!("failed to list specs: {error}");

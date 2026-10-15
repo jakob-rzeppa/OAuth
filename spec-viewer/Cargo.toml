@@ -10,6 +10,7 @@ tokio = { version = "1.53.1", features = ["full"] }
 prost-types = "0.14"
 tonic = "0.14"
 thiserror = "2.0.19"
+async-trait = "0.1"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_urlencoded = "0.7.1"
 chrono = { version = "0.4.45", default-features = false, features = ["std"] }
@@ -22,6 +23,7 @@ similar = "3.2.0"
 spec-api = { git = "https://github.com/jakob-rzeppa/auth.git" }
 
 [dev-dependencies]
+mockall = "0.15.0"
 spec-api = { git = "https://github.com/jakob-rzeppa/auth.git", features = ["server"] }
 tokio-stream = { version = "0.1", features = ["net"] }
 tower = { version = "0.5.3", features = ["util"] }
