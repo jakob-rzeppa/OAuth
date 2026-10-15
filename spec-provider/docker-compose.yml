@@ -1,0 +1,19 @@
+services:
+  spec-provider:
+    build:
+      context: .
+      target: runtime
+    env_file:
+      - path: .env
+        required: true
+      - path: .env.local
+        required: false
+    ports:
+      - "${APP_HOST_PORT}:${APP_PORT}"
+    healthcheck:
+      # gRPC, not HTTP: check that the port accepts connections (bash is in the image, curl is not).
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/localhost/$$APP_PORT'"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s

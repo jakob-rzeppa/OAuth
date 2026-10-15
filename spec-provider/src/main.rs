@@ -16,6 +16,8 @@ mod application;
 mod domain;
 mod persistence;
 
+const DEFAULT_PORT: u16 = 50051;
+
 #[tokio::main]
 async fn main() {
     println!("[STARTUP] Application starting...");
@@ -26,7 +28,11 @@ async fn main() {
     );
     let spec_provider_service = SpecProviderService::new(spec_service);
 
-    let addr = SocketAddr::from(([0, 0, 0, 0], 50051));
+    let port = std::env::var("APP_PORT")
+        .ok()
+        .and_then(|port| port.parse().ok())
+        .unwrap_or(DEFAULT_PORT);
+    let addr = SocketAddr::from(([0, 0, 0, 0], port));
 
     println!("[STARTUP] Server running at {}", addr);
     Server::builder()
