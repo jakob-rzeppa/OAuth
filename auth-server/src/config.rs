@@ -42,7 +42,8 @@ impl Config {
         CONFIG.authorization_code_ttl
     }
 
-    /// The origin (`scheme://host[:port]`) browsers reach the auth-server under.
+    /// The origin (`scheme://host[:port]`) browsers reach the auth-server under. Also the issuer
+    /// identifier (`iss`).
     pub fn iss() -> &'static str {
         &CONFIG.iss
     }
