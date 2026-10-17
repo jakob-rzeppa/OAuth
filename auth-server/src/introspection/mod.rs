@@ -1,4 +1,4 @@
-use axum::{Router, routing::post};
+use axum::{Router, middleware::map_response, routing::post};
 
 use crate::{
     config::Config,
@@ -7,6 +7,7 @@ use crate::{
         response::IntrospectionResponse,
     },
     persistence::access_tokens::find_by_token_hash::find_access_token_by_token_hash,
+    security::cache_control::no_store,
     util::token::hash_token,
 };
 
@@ -15,7 +16,9 @@ mod request;
 mod response;
 
 pub fn router() -> Router {
-    Router::new().route("/introspect", post(introspection_endpoint))
+    Router::new()
+        .route("/introspect", post(introspection_endpoint))
+        .layer(map_response(no_store))
 }
 
 #[axum::debug_handler]
@@ -42,4 +45,28 @@ pub async fn introspection_endpoint(
         exp: *access_token.exp(),
         iss: Config::iss().to_string(),
     })
+}
+
+#[cfg(test)]
+mod cache_control_tests {
+    use axum::{
+        body::Body,
+        http::{Request, header},
+    };
+    use tower::ServiceExt;
+
+    #[tokio::test]
+    async fn sends_no_store() {
+        // An invalid body is rejected before touching any persistence.
+        let request = Request::post("/introspect")
+            .body(Body::from("not json"))
+            .unwrap();
+
+        let response = super::router().oneshot(request).await.unwrap();
+
+        assert_eq!(
+            response.headers().get(header::CACHE_CONTROL).unwrap(),
+            "no-store"
+        );
+    }
 }

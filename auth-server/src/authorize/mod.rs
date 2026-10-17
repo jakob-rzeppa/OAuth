@@ -10,7 +10,7 @@ use axum::{
 
 use crate::{
     authorize::{page::authorize_page_endpoint, submit::authorize_submit_endpoint},
-    security::fetch_metadata::reject_cross_site,
+    security::{cache_control::no_store, fetch_metadata::reject_cross_site},
     util::headers::{prevent_framing, set_referrer_policy},
 };
 
@@ -21,6 +21,7 @@ pub fn router() -> Router {
             get(authorize_page_endpoint).post(authorize_submit_endpoint),
         )
         .layer(from_fn(reject_cross_site))
+        .layer(map_response(no_store))
         .layer(map_response(set_referrer_policy))
         .layer(map_response(prevent_framing))
 }
@@ -34,6 +35,20 @@ mod tests {
         http::{Request, StatusCode, header},
     };
     use tower::ServiceExt;
+
+    #[tokio::test]
+    async fn sends_no_store() {
+        // Without query parameters the page responds with an error page,
+        // before touching any persistence.
+        let request = Request::get("/authorize").body(Body::empty()).unwrap();
+
+        let response = router().oneshot(request).await.unwrap();
+
+        assert_eq!(
+            response.headers().get(header::CACHE_CONTROL).unwrap(),
+            "no-store"
+        );
+    }
 
     #[tokio::test]
     async fn sets_referrer_policy() {

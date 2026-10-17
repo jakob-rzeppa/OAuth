@@ -6,6 +6,10 @@ pub struct Config;
 
 #[fnmock::fakeable]
 impl Config {
+    pub fn init() {
+        LazyLock::force(&CONFIG);
+    }
+
     pub fn redis_url() -> &'static str {
         &CONFIG.redis_url
     }
@@ -43,6 +47,11 @@ impl Config {
         &CONFIG.iss
     }
 
+    /// Path of the PEM file with the RSA private key ID tokens are signed with.
+    pub fn signing_key_path() -> &'static str {
+        &CONFIG.signing_key_path
+    }
+
     pub fn log_level() -> LevelFilter {
         CONFIG.log_level
     }
@@ -58,6 +67,7 @@ struct ConfigValues {
     par_ttl: u64,
     authorization_code_ttl: u64,
     iss: String,
+    signing_key_path: String,
     log_level: LevelFilter,
 }
 
@@ -110,6 +120,9 @@ static CONFIG: LazyLock<ConfigValues> = LazyLock::new(|| {
         parse_iss(&std::env::var("ISSUER_ORIGIN").expect("ISSUER_ORIGIN must be set"))
             .expect("ISSUER_ORIGIN must be an origin like https://auth.example.com");
 
+    let signing_key_path =
+        std::env::var("SIGNING_KEY_PATH").expect("SIGNING_KEY_PATH must be set");
+
     let log_level =
         crate::logging::parse_level(&std::env::var("LOG_LEVEL").expect("LOG_LEVEL must be set"))
             .expect("LOG_LEVEL must be one of debug, info, warn, error");
@@ -124,6 +137,7 @@ static CONFIG: LazyLock<ConfigValues> = LazyLock::new(|| {
         par_ttl,
         authorization_code_ttl,
         iss,
+        signing_key_path,
         log_level,
     }
 });

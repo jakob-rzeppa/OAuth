@@ -59,6 +59,8 @@ services:
     networks:
       - auth-server-internal
       - auth-server
+    volumes:
+      - ./keys:/keys:ro
     ports:
       - "${APP_HOST_PORT:-8081}:${APP_PORT:-8080}"
     healthcheck:

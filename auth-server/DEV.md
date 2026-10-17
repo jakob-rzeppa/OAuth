@@ -16,6 +16,19 @@ docker compose -f docker-compose.yml down
 The database and redis are on an internal network and are not reachable from the host.
 The server is published on `APP_HOST_PORT` (`8081`).
 
+## Signing key
+
+ID tokens are signed with an RSA key, and its public half is served at `/jwks.json`. The
+server exits at startup if `SIGNING_KEY_PATH` is missing or not an RSA private key in PEM
+format. Generate one before the first start (`keys/` is git-ignored):
+
+```sh
+mkdir -p keys
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out keys/signing-key.pem
+```
+
+The `kid` is the key's RFC 7638 thumbprint, so it changes when the key does.
+
 ## Running the dev stack
 
 `docker-compose.dev.yml` switches to the live-reload image and publishes the database

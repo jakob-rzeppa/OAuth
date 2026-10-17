@@ -1,9 +1,10 @@
-use axum::{Router, routing::post};
+use axum::{Router, middleware::map_response, routing::post};
 use chrono::Utc;
 
 use crate::{
     domain::access_token::BEARER,
     persistence::access_tokens::register::register_access_token,
+    security::cache_control::no_store,
     token::{error_response::TokenErrorResponse, request::TokenRequest, response::TokenResponse},
 };
 
@@ -18,7 +19,9 @@ mod grant {
 }
 
 pub fn router() -> Router {
-    Router::new().route("/token", post(token_endpoint))
+    Router::new()
+        .route("/token", post(token_endpoint))
+        .layer(map_response(no_store))
 }
 
 #[axum::debug_handler]
@@ -269,5 +272,29 @@ mod tests {
         let log = capture.contents();
         assert!(log.contains("ERROR"), "{log}");
         assert!(log.contains("postgres is down"), "{log}");
+    }
+}
+
+#[cfg(test)]
+mod cache_control_tests {
+    use axum::{
+        body::Body,
+        http::{Request, header},
+    };
+    use tower::ServiceExt;
+
+    #[tokio::test]
+    async fn sends_no_store() {
+        // An invalid body is rejected before touching any persistence.
+        let request = Request::post("/token")
+            .body(Body::from("not json"))
+            .unwrap();
+
+        let response = super::router().oneshot(request).await.unwrap();
+
+        assert_eq!(
+            response.headers().get(header::CACHE_CONTROL).unwrap(),
+            "no-store"
+        );
     }
 }

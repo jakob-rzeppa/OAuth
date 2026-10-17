@@ -1,4 +1,4 @@
-use axum::{Router, routing::post};
+use axum::{Router, middleware::map_response, routing::post};
 use uuid::Uuid;
 
 use crate::{
@@ -6,6 +6,7 @@ use crate::{
     domain::authorization_code::request::AuthorizationRequest,
     par::{error_response::ParErrorResponse, request::ParRequest, response::ParResponse},
     persistence::{clients::find_by_id::find_client_by_id, pars::save::save_par},
+    security::cache_control::no_store,
 };
 
 mod error_response;
@@ -13,7 +14,9 @@ mod request;
 mod response;
 
 pub fn router() -> Router {
-    Router::new().route("/par", post(par_endpoint))
+    Router::new()
+        .route("/par", post(par_endpoint))
+        .layer(map_response(no_store))
 }
 
 pub async fn par_endpoint(
@@ -229,5 +232,29 @@ mod tests {
         let result = par_endpoint(valid_request(client_id)).await;
 
         assert!(matches!(result, Err(ParErrorResponse::ServerError(_))));
+    }
+}
+
+#[cfg(test)]
+mod cache_control_tests {
+    use axum::{
+        body::Body,
+        http::{Request, header},
+    };
+    use tower::ServiceExt;
+
+    #[tokio::test]
+    async fn sends_no_store() {
+        // An invalid body is rejected before touching any persistence.
+        let request = Request::post("/par")
+            .body(Body::from("not json"))
+            .unwrap();
+
+        let response = super::router().oneshot(request).await.unwrap();
+
+        assert_eq!(
+            response.headers().get(header::CACHE_CONTROL).unwrap(),
+            "no-store"
+        );
     }
 }
