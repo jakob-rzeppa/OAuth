@@ -1,5 +1,5 @@
 use api_macros::ApiErrorResponse;
-use axum::extract::rejection::JsonRejection;
+use axum::extract::rejection::FormRejection;
 
 use crate::{error::InternalError, util::oauth_error::OAuthErrorCode};
 
@@ -15,8 +15,8 @@ pub enum IntrospectionErrorResponse {
     ServerError(InternalError),
 }
 
-impl From<JsonRejection> for IntrospectionErrorResponse {
-    fn from(_: JsonRejection) -> Self {
+impl From<FormRejection> for IntrospectionErrorResponse {
+    fn from(_: FormRejection) -> Self {
         IntrospectionErrorResponse::InvalidRequestBody
     }
 }

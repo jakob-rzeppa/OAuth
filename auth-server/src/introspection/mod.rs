@@ -59,7 +59,7 @@ mod cache_control_tests {
     async fn sends_no_store() {
         // An invalid body is rejected before touching any persistence.
         let request = Request::post("/introspect")
-            .body(Body::from("not json"))
+            .body(Body::from("not a form"))
             .unwrap();
 
         let response = super::router().oneshot(request).await.unwrap();
@@ -68,5 +68,56 @@ mod cache_control_tests {
             response.headers().get(header::CACHE_CONTROL).unwrap(),
             "no-store"
         );
+    }
+}
+
+#[cfg(test)]
+mod body_format_tests {
+    use axum::{
+        body::Body,
+        http::{Request, StatusCode, header},
+    };
+    use fnmock::predicate;
+    use tower::ServiceExt;
+
+    use crate::{
+        persistence::access_tokens::find_by_token_hash::find_access_token_by_token_hash_mock,
+        util::token::hash_token,
+    };
+
+    async fn post(content_type: &str, body: &'static str) -> (StatusCode, serde_json::Value) {
+        let request = Request::post("/introspect")
+            .header(header::CONTENT_TYPE, content_type)
+            .body(Body::from(body))
+            .unwrap();
+
+        let response = super::router().oneshot(request).await.unwrap();
+
+        let status = response.status();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        (status, serde_json::from_slice(&body).unwrap())
+    }
+
+    #[tokio::test]
+    async fn reads_a_form_urlencoded_body() {
+        let mock = find_access_token_by_token_hash_mock();
+        mock.setup(|_| Ok(None));
+        mock.expect(predicate::eq(hash_token("the-token"))).once();
+
+        let (status, body) = post("application/x-www-form-urlencoded", "token=the-token").await;
+
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body, serde_json::json!({ "active": false }));
+        mock.assert();
+    }
+
+    #[tokio::test]
+    async fn rejects_a_json_body_as_invalid_request() {
+        let (status, body) = post("application/json", r#"{"token":"the-token"}"#).await;
+
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert_eq!(body["error"], "invalid_request");
     }
 }

@@ -1,5 +1,5 @@
 use api_macros::ApiErrorResponse;
-use axum::extract::rejection::JsonRejection;
+use axum::extract::rejection::FormRejection;
 
 use crate::{
     domain::authorization_code::request::validate::{FatalValidationError, ValidationError},
@@ -33,8 +33,8 @@ pub enum ParErrorResponse {
     ServerError(InternalError),
 }
 
-impl From<JsonRejection> for ParErrorResponse {
-    fn from(_: JsonRejection) -> Self {
+impl From<FormRejection> for ParErrorResponse {
+    fn from(_: FormRejection) -> Self {
         ParErrorResponse::InvalidRequestBody
     }
 }

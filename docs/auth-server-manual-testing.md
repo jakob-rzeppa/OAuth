@@ -12,18 +12,10 @@ The `request_uri` expires after 3 minutes and the code after 5 minutes. Both can
 
 `POST http://localhost:8081/par`
 
-Body (JSON):
+Body (form, `application/x-www-form-urlencoded`):
 
-```json
-{
-  "client_id": "75937f94-eaa9-485c-997e-f93f339f5f59",
-  "redirect_uri": "http://example.com",
-  "response_type": "code",
-  "scope": "read write",
-  "state": "manual-test-state",
-  "code_challenge": "SUqfUdBKsRh7fZquwd-cCvI8iG9v-ascNovGCKRsJo4",
-  "code_challenge_method": "S256"
-}
+```
+client_id=75937f94-eaa9-485c-997e-f93f339f5f59&redirect_uri=http%3A%2F%2Fexample.com&response_type=code&scope=read%20write&state=manual-test-state&code_challenge=SUqfUdBKsRh7fZquwd-cCvI8iG9v-ascNovGCKRsJo4&code_challenge_method=S256
 ```
 
 ## Authorize page
@@ -50,25 +42,18 @@ client_id=75937f94-eaa9-485c-997e-f93f339f5f59&request_uri=<REQUEST_URI>&decisio
 
 `POST http://localhost:8081/token`
 
-Body (JSON):
+Body (form, `application/x-www-form-urlencoded`):
 
-```json
-{
-  "grant_type": "authorization_code",
-  "client_id": "75937f94-eaa9-485c-997e-f93f339f5f59",
-  "code": "<CODE>",
-  "code_verifier": "manual-testing-code-verifier-0123456789abcdefghijklmnop"
-}
+```
+grant_type=authorization_code&client_id=75937f94-eaa9-485c-997e-f93f339f5f59&code=<CODE>&code_verifier=manual-testing-code-verifier-0123456789abcdefghijklmnop
 ```
 
 ## Introspection
 
 `POST http://localhost:8081/introspect`
 
-Body (JSON):
+Body (form, `application/x-www-form-urlencoded`):
 
-```json
-{
-  "token": "<ACCESS_TOKEN>"
-}
+```
+token=<ACCESS_TOKEN>
 ```

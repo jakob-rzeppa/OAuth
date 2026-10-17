@@ -6,7 +6,7 @@ use std::{
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use e2e_tests::{Config, client};
 use reqwest::Url;
-use serde_json::{Value, json};
+use serde_json::Value;
 use sha2::{Digest, Sha256};
 
 const PAR_TTL_SECONDS: u64 = 180;
@@ -49,15 +49,15 @@ async fn auth_flow() {
 
     let par_res = client
         .post(cfg.auth_url("/par"))
-        .json(&json!({
-            "client_id": cfg.client_id(),
-            "redirect_uri": cfg.redirect_uri(),
-            "response_type": "code",
-            "scope": cfg.scope(),
-            "state": state,
-            "code_challenge": code_challenge,
-            "code_challenge_method": "S256",
-        }))
+        .form(&[
+            ("client_id", cfg.client_id()),
+            ("redirect_uri", cfg.redirect_uri()),
+            ("response_type", "code"),
+            ("scope", cfg.scope()),
+            ("state", state),
+            ("code_challenge", code_challenge.as_str()),
+            ("code_challenge_method", "S256"),
+        ])
         .send()
         .await
         .unwrap();
@@ -112,12 +112,12 @@ async fn auth_flow() {
 
     let token_res = client
         .post(cfg.auth_url("/token"))
-        .json(&json!({
-            "grant_type": "authorization_code",
-            "client_id": cfg.client_id(),
-            "code": code,
-            "code_verifier": code_verifier,
-        }))
+        .form(&[
+            ("grant_type", "authorization_code"),
+            ("client_id", cfg.client_id()),
+            ("code", code.as_str()),
+            ("code_verifier", code_verifier),
+        ])
         .send()
         .await
         .unwrap();
@@ -139,7 +139,7 @@ async fn auth_flow() {
 
     let introspect_res = client
         .post(cfg.auth_url("/introspect"))
-        .json(&json!({ "token": access_token }))
+        .form(&[("token", access_token)])
         .send()
         .await
         .unwrap();

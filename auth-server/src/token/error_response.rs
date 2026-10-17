@@ -1,5 +1,5 @@
 use api_macros::ApiErrorResponse;
-use axum::extract::rejection::JsonRejection;
+use axum::extract::rejection::FormRejection;
 
 use crate::{error::InternalError, util::oauth_error::OAuthErrorCode};
 
@@ -41,8 +41,8 @@ pub enum TokenErrorResponse {
     ServerError(InternalError),
 }
 
-impl From<JsonRejection> for TokenErrorResponse {
-    fn from(_: JsonRejection) -> Self {
+impl From<FormRejection> for TokenErrorResponse {
+    fn from(_: FormRejection) -> Self {
         TokenErrorResponse::InvalidRequestBody
     }
 }
