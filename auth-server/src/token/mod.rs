@@ -110,6 +110,7 @@ mod tests {
                 CODE_CHALLENGE.to_string(),
                 "S256".to_string(),
                 None,
+                Utc::now(),
             )))
         });
         generate_access_token_mock().setup(move |_, _, _| {

@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -17,15 +18,11 @@ pub struct AuthorizationCode {
     code_challenge: String,
     code_challenge_method: String,
 
-    // OCID params, optional
-    /// Only set if the `openid` scope was granted.
-    openid: Option<OpenIdParams>,
-}
-
-/// The parameters of an OpenID Connect request, which are only part of the code if the `openid` scope was granted.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-struct OpenIdParams {
-    nonce: String,
+    // OIDC params
+    /// Only set if the `openid` scope was granted, else ignored.
+    nonce: Option<String>,
+    /// When the user logged in, which becomes the `auth_time` claim of the ID token.
+    auth_time: DateTime<Utc>,
 }
 
 impl AuthorizationCode {
@@ -37,10 +34,9 @@ impl AuthorizationCode {
         code_challenge: String,
         code_challenge_method: String,
         nonce: Option<String>,
+        auth_time: DateTime<Utc>,
     ) -> Self {
-        let openid = nonce
-            .filter(|_| has_openid_scope(&scope))
-            .map(|nonce| OpenIdParams { nonce });
+        let nonce = nonce.filter(|_| has_openid_scope(&scope));
 
         Self {
             code,
@@ -49,7 +45,8 @@ impl AuthorizationCode {
             sub,
             code_challenge,
             code_challenge_method,
-            openid,
+            nonce,
+            auth_time,
         }
     }
 
@@ -79,7 +76,12 @@ impl AuthorizationCode {
 
     #[allow(dead_code)] // read by the ID token grant, which is not implemented yet
     pub fn nonce(&self) -> Option<&str> {
-        self.openid.as_ref().map(|openid| openid.nonce.as_str())
+        self.nonce.as_deref()
+    }
+
+    #[allow(dead_code)] // read by the ID token grant, which is not implemented yet
+    pub fn auth_time(&self) -> &DateTime<Utc> {
+        &self.auth_time
     }
 }
 
@@ -96,6 +98,7 @@ mod tests {
             "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM".to_string(),
             "S256".to_string(),
             nonce,
+            Utc::now(),
         )
     }
 
@@ -129,9 +132,27 @@ mod tests {
     }
 
     #[test]
+    fn keeps_the_auth_time() {
+        let auth_time = DateTime::from_timestamp(1_700_000_000, 0).unwrap();
+
+        let code = AuthorizationCode::new(
+            "the-code".to_string(),
+            Uuid::new_v4(),
+            "openid".to_string(),
+            Uuid::new_v4(),
+            "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM".to_string(),
+            "S256".to_string(),
+            Some("some-nonce".to_string()),
+            auth_time,
+        );
+
+        assert_eq!(code.auth_time(), &auth_time);
+    }
+
+    #[test]
     fn codes_stored_without_a_nonce_still_deserialize() {
         let mut value = serde_json::to_value(make_code(None)).unwrap();
-        value.as_object_mut().unwrap().remove("openid");
+        value.as_object_mut().unwrap().remove("nonce");
 
         let restored: AuthorizationCode = serde_json::from_value(value).unwrap();
 

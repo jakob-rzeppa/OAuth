@@ -37,6 +37,7 @@ pub async fn authorize_submit_endpoint(
     // If not, return a redirect to the login page.
     let session = require_login(session_token, client_id, &request_uri).await?;
     let user_id = session.user_id();
+    let auth_time = session.authenticated_at();
 
     // Consume the pushed authorization request always, even if the user denied the request or the CSRF token is invalid.
     // Every invalid request is treated as a attack and the request is consumed.
@@ -79,6 +80,7 @@ pub async fn authorize_submit_endpoint(
         code_challenge,
         code_challenge_method,
         nonce,
+        auth_time,
     );
 
     let ttl_seconds = Config::authorization_code_ttl();
@@ -115,12 +117,16 @@ mod tests {
         },
         util::oauth_error::OAuthErrorCode,
     };
+    use chrono::{DateTime, Utc};
     use fnmock::predicate;
     use uuid::Uuid;
 
     use crate::util::token::random_token_fake;
 
     const CODE_TTL_SECONDS: u64 = 300;
+
+    /// When the user of the faked session logged in.
+    const AUTH_TIME: DateTime<Utc> = DateTime::UNIX_EPOCH;
 
     fn session_token() -> Option<SessionToken> {
         Some(SessionToken::new("session-token".to_string()))
@@ -132,7 +138,7 @@ mod tests {
         Config::user_session_ttl_fake().setup(|| 1800);
         access_session_fake().setup(move |_, _| {
             Ok(Some(
-                serde_json::to_string(&UserSession::new(user_id)).unwrap(),
+                serde_json::to_string(&UserSession::new(user_id, AUTH_TIME)).unwrap(),
             ))
         });
         user_id
@@ -203,6 +209,7 @@ mod tests {
                     && code.scope() == "read write"
                     && code.code_challenge() == "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"
                     && code.code_challenge_method() == "S256"
+                    && code.auth_time() == &AUTH_TIME
                     && *ttl_seconds == CODE_TTL_SECONDS
             })
             .once();

@@ -4,6 +4,7 @@ use axum::{
     http::header,
     response::{AppendHeaders, IntoResponse, Redirect, Response},
 };
+use chrono::Utc;
 
 use crate::{
     domain::user_session::UserSession,
@@ -54,7 +55,7 @@ pub async fn login_submit_endpoint(
 
     // Allow temporary passwords for now.
 
-    let session_cookie = session::issue(&UserSession::new(user.id)).await?;
+    let session_cookie = session::issue(&UserSession::new(user.id, Utc::now())).await?;
 
     tracing::info!(user_id = %user.id, "user logged in");
 
@@ -118,10 +119,12 @@ mod tests {
             Ok(())
         });
 
+        let before = Utc::now();
         let response = login_submit_endpoint(return_to("/authorize?client_id=1"), form())
             .await
             .ok()
             .expect("expected a successful result");
+        let after = Utc::now();
 
         assert_eq!(response.status(), StatusCode::SEE_OTHER);
         assert_eq!(
@@ -159,10 +162,9 @@ mod tests {
 
         let (key, value, ttl_seconds) = saved.lock().unwrap().clone().unwrap();
         assert_eq!(key, format!("session:user:{}", hash_token(token)));
-        assert_eq!(
-            serde_json::from_str::<UserSession>(&value).unwrap(),
-            UserSession::new(user_id)
-        );
+        let session = serde_json::from_str::<UserSession>(&value).unwrap();
+        assert_eq!(session.user_id(), user_id);
+        assert!((before..=after).contains(&session.authenticated_at()));
         assert_eq!(ttl_seconds, 1800);
 
         let log = capture.contents();

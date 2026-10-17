@@ -87,7 +87,7 @@ mod tests {
         Config::user_session_ttl_fake().setup(|| 1800);
         access_session_fake().setup(move |_, _| {
             Ok(Some(
-                serde_json::to_string(&UserSession::new(user_id)).unwrap(),
+                serde_json::to_string(&UserSession::new(user_id, chrono::Utc::now())).unwrap(),
             ))
         });
 

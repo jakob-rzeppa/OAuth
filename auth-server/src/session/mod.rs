@@ -75,7 +75,7 @@ mod tests {
                 Some((key.to_string(), value.to_string(), ttl_seconds));
             Ok(())
         });
-        let user_session = UserSession::new(uuid::Uuid::new_v4());
+        let user_session = UserSession::new(uuid::Uuid::new_v4(), chrono::Utc::now());
 
         let cookie = issue(&user_session).await.unwrap();
 
@@ -96,13 +96,23 @@ mod tests {
             assert_eq!(key, format!("session:user:{}", hash_token("token-123")));
             assert_eq!(ttl_seconds, 1800);
             Ok(Some(
-                serde_json::to_string(&UserSession::new(uuid::Uuid::nil())).unwrap(),
+                serde_json::to_string(&UserSession::new(
+                    uuid::Uuid::nil(),
+                    chrono::DateTime::UNIX_EPOCH,
+                ))
+                .unwrap(),
             ))
         });
 
         let session = access(&token("token-123")).await.unwrap();
 
-        assert_eq!(session, Some(UserSession::new(uuid::Uuid::nil())));
+        assert_eq!(
+            session,
+            Some(UserSession::new(
+                uuid::Uuid::nil(),
+                chrono::DateTime::UNIX_EPOCH
+            ))
+        );
     }
 
     #[tokio::test]
