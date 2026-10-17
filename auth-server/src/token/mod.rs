@@ -294,7 +294,7 @@ mod tests {
             panic!("expected an error");
         };
         assert!(matches!(error, TokenErrorResponse::ClientNotFound));
-        assert_eq!(error.into_response().status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(error.into_response().status(), StatusCode::BAD_REQUEST);
     }
 
     #[tokio::test]

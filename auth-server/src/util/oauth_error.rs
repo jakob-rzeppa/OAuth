@@ -33,9 +33,11 @@ impl OAuthErrorCode {
         }
     }
 
+    /// `invalid_client` is a 400 as well: RFC 6749, section 5.2 only requires a 401 for clients
+    /// that authenticated through the `Authorization` header, and a 401 has to carry a
+    /// `WWW-Authenticate` challenge. All clients are public, so there is no scheme to name.
     pub fn status(&self) -> StatusCode {
         match self {
-            OAuthErrorCode::InvalidClient => StatusCode::UNAUTHORIZED,
             OAuthErrorCode::ServerError => StatusCode::INTERNAL_SERVER_ERROR,
             _ => StatusCode::BAD_REQUEST,
         }
@@ -93,10 +95,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn invalid_client_is_unauthorized_and_server_error_is_internal() {
+    fn server_error_is_internal_and_everything_else_a_bad_request() {
         assert_eq!(
             OAuthErrorCode::InvalidClient.status(),
-            StatusCode::UNAUTHORIZED
+            StatusCode::BAD_REQUEST
         );
         assert_eq!(
             OAuthErrorCode::ServerError.status(),

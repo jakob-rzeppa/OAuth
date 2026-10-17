@@ -52,11 +52,21 @@ pub fn init(level: LevelFilter) {
 pub(crate) mod testing {
     use std::{
         io,
-        sync::{Arc, Mutex},
+        sync::{Arc, Mutex, OnceLock},
     };
 
-    use tracing::subscriber::DefaultGuard;
+    use tracing::{
+        Dispatch,
+        subscriber::{DefaultGuard, NoSubscriber},
+    };
     use tracing_subscriber::fmt::MakeWriter;
+
+    /// A second dispatcher, registered for the whole test run. While at most one dispatcher is
+    /// registered, tracing-core skips its lock and computes the interest of a call site that is hit
+    /// for the first time from the hitting thread's default alone. A test without a capture would
+    /// then cache "never" for that call site while a capture is installed on another thread, and
+    /// that capture would miss the call site's events.
+    static SECOND_DISPATCHER: OnceLock<Dispatch> = OnceLock::new();
 
     /// Collects log output so tests can assert on what was (and was not) logged.
     #[derive(Clone, Default)]
@@ -67,6 +77,8 @@ pub(crate) mod testing {
         /// until the returned guard is dropped. `#[tokio::test]` runs on a single thread, so the
         /// guard also covers everything the test awaits.
         pub fn install(&self) -> DefaultGuard {
+            SECOND_DISPATCHER.get_or_init(|| Dispatch::new(NoSubscriber::default()));
+
             let subscriber = tracing_subscriber::fmt()
                 .with_max_level(tracing::Level::DEBUG)
                 .with_writer(self.clone())

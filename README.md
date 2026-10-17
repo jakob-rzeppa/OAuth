@@ -30,6 +30,7 @@ The services are tested together by [`e2e-tests`](e2e-tests), black-box tests ag
 - CSRF protection for the authorize endpoint
 - [Openid Connect](https://openid.net/specs/openid-connect-core-1_0.html)
 - **HTTPS**
+- **Introspection access control**: [RFC 7662](https://www.rfc-editor.org/rfc/rfc7662#section-2.1) requires callers of `/introspect` to authenticate, as clients or with a bearer token
 - **Client registration and management**
   - Dynamic client registration ([RFC 7591](https://www.rfc-editor.org/info/rfc7591))
   - Client management ([RFC 7592](https://www.rfc-editor.org/info/rfc7592))

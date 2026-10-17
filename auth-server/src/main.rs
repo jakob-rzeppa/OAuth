@@ -27,6 +27,7 @@ mod jwks;
 mod login;
 mod par;
 mod token;
+mod userinfo;
 
 #[tokio::main]
 async fn main() {
@@ -61,6 +62,7 @@ fn app() -> Router {
         .merge(token::router())
         .merge(introspection::router())
         .merge(jwks::router())
+        .merge(userinfo::router())
         .merge(authorize::router())
         .merge(login::router())
         // Outermost, so it sees the final response. Only the method and path are recorded: the

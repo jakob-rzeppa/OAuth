@@ -8,4 +8,3 @@ clients:
       - write
       - openid
       - profile
-      - email
