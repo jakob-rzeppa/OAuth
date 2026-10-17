@@ -10,13 +10,11 @@ use crate::{
 
 mod access_token;
 mod error_response;
+mod id_token;
 mod pkce;
 mod request;
 mod response;
-
-mod grant {
-    pub mod authorization_code;
-}
+mod grant;
 
 pub fn router() -> Router {
     Router::new()
@@ -26,7 +24,11 @@ pub fn router() -> Router {
 
 #[axum::debug_handler]
 pub async fn token_endpoint(request: TokenRequest) -> Result<TokenResponse, TokenErrorResponse> {
-    let (token, access_token_entity) = match request.grant_type.as_str() {
+    let grant::IssuedTokens {
+        access_token,
+        access_token_entity,
+        id_token,
+    } = match request.grant_type.as_str() {
         "authorization_code" => {
             grant::authorization_code::handle_authorization_code_grant(request).await?
         }
@@ -43,20 +45,23 @@ pub async fn token_endpoint(request: TokenRequest) -> Result<TokenResponse, Toke
         client_id = %access_token_entity.client_id(),
         scope = %access_token_entity.scope(),
         expires_in,
+        id_token_issued = id_token.is_some(),
         "access token issued"
     );
 
     Ok(TokenResponse {
-        access_token: token,
+        access_token,
         token_type: BEARER.to_string(),
         expires_in,
         scope: access_token_entity.scope().to_string(),
+        id_token,
     })
 }
 
 #[cfg(test)]
 mod tests {
     use super::access_token::generate_access_token_mock;
+    use super::id_token::generate_id_token_mock;
     use super::*;
     use crate::{
         domain::{
@@ -100,12 +105,16 @@ mod tests {
 
     /// An authorization code the grant accepts for `token_request`, and a generated token.
     fn setup_valid_grant(client_id: Uuid, user_id: Option<Uuid>) {
+        setup_valid_grant_with_scope(client_id, user_id, "read write");
+    }
+
+    fn setup_valid_grant_with_scope(client_id: Uuid, user_id: Option<Uuid>, scope: &'static str) {
         fake_registered_client();
         take_authorization_code_fake().setup(move |_| {
             Ok(Some(AuthorizationCode::new(
                 "the-code".to_string(),
                 client_id,
-                "read write".to_string(),
+                scope.to_string(),
                 Uuid::new_v4(),
                 CODE_CHALLENGE.to_string(),
                 "S256".to_string(),
@@ -151,6 +160,56 @@ mod tests {
         assert!(!log.contains("the-code"), "{log}");
         assert!(!log.contains(CODE_VERIFIER), "{log}");
         assert!(!log.contains(CODE_CHALLENGE), "{log}");
+    }
+
+    #[tokio::test]
+    async fn issues_an_id_token_when_the_openid_scope_was_granted() {
+        let client_id = Uuid::new_v4();
+        setup_valid_grant_with_scope(client_id, None, "openid read");
+        register_access_token_fake().setup(|_| Ok(()));
+        let id_token_mock = generate_id_token_mock();
+        id_token_mock.setup(|_| Ok("the-id-token".to_string()));
+        id_token_mock
+            .expectf(move |code: &AuthorizationCode| {
+                code.code() == "the-code" && code.client_id() == &client_id
+            })
+            .once();
+
+        let response = token_endpoint(token_request(client_id)).await.ok().unwrap();
+
+        assert_eq!(response.id_token.as_deref(), Some("the-id-token"));
+        id_token_mock.assert();
+    }
+
+    #[tokio::test]
+    async fn leaves_the_id_token_out_without_the_openid_scope() {
+        let client_id = Uuid::new_v4();
+        setup_valid_grant(client_id, None);
+        register_access_token_fake().setup(|_| Ok(()));
+        let id_token_mock = generate_id_token_mock();
+        id_token_mock.expect_never();
+
+        let response = token_endpoint(token_request(client_id)).await.ok().unwrap();
+
+        assert_eq!(response.id_token, None);
+        let body = axum::body::to_bytes(response.into_response().into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert!(body.get("id_token").is_none(), "{body}");
+        id_token_mock.assert();
+    }
+
+    #[tokio::test]
+    async fn does_not_register_an_access_token_when_signing_the_id_token_fails() {
+        let client_id = Uuid::new_v4();
+        setup_valid_grant_with_scope(client_id, None, "openid");
+        generate_id_token_mock().setup(|_| Err(InternalError::Invariant("signing failed")));
+        register_access_token_fake().setup(|_| panic!("no access token must be registered"));
+
+        let result = token_endpoint(token_request(client_id)).await;
+
+        assert!(matches!(result, Err(TokenErrorResponse::ServerError(_))));
     }
 
     #[tokio::test]

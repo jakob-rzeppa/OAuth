@@ -1,19 +1,20 @@
 use uuid::Uuid;
 
 use crate::{
-    domain::access_token::AccessToken,
+    domain::authorization_code::openid::has_openid_scope,
     persistence::{
         authorization_codes::take::take_authorization_code, clients::find_by_id::find_client_by_id,
     },
     token::{
         access_token::generate_access_token, error_response::TokenErrorResponse,
-        pkce::verify_code_challenge, request::TokenRequest,
+        grant::IssuedTokens, id_token::generate_id_token, pkce::verify_code_challenge,
+        request::TokenRequest,
     },
 };
 
 pub async fn handle_authorization_code_grant(
     request: TokenRequest,
-) -> Result<(String, AccessToken), TokenErrorResponse> {
+) -> Result<IssuedTokens, TokenErrorResponse> {
     let Some(client_id) = Uuid::parse_str(&request.client_id).ok() else {
         return Err(TokenErrorResponse::InvalidClientId);
     };
@@ -49,9 +50,21 @@ pub async fn handle_authorization_code_grant(
         return Err(TokenErrorResponse::InvalidCodeVerifier);
     }
 
-    Ok(generate_access_token(
+    let id_token = if has_openid_scope(authorization_code.scope()) {
+        Some(generate_id_token(&authorization_code)?)
+    } else {
+        None
+    };
+
+    let (access_token, access_token_entity) = generate_access_token(
         client_id,
         Some(authorization_code.sub().clone()),
         authorization_code.scope(),
-    ))
+    );
+
+    Ok(IssuedTokens {
+        access_token,
+        access_token_entity,
+        id_token,
+    })
 }

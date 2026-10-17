@@ -53,8 +53,7 @@ impl ValidationError {
                 }
                 RedirectableValidationError::InvalidScope => OAuthErrorCode::InvalidScope,
                 RedirectableValidationError::InvalidCodeChallengeMethod
-                | RedirectableValidationError::InvalidCodeChallenge
-                | RedirectableValidationError::MissingNonce => OAuthErrorCode::InvalidRequest,
+                | RedirectableValidationError::InvalidCodeChallenge => OAuthErrorCode::InvalidRequest,
             },
         }
     }
@@ -83,9 +82,6 @@ impl ValidationError {
                 }
                 RedirectableValidationError::InvalidCodeChallenge => {
                     "The code_challenge parameter is missing or invalid."
-                }
-                RedirectableValidationError::MissingNonce => {
-                    "The nonce parameter is required when the openid scope is requested."
                 }
             },
         }
@@ -127,10 +123,6 @@ mod tests {
         );
         assert_eq!(
             redirectable(RedirectableValidationError::InvalidCodeChallenge).oauth_code(),
-            OAuthErrorCode::InvalidRequest
-        );
-        assert_eq!(
-            redirectable(RedirectableValidationError::MissingNonce).oauth_code(),
             OAuthErrorCode::InvalidRequest
         );
     }

@@ -162,26 +162,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn fails_when_the_openid_scope_is_requested_without_a_nonce() {
-        let client_id = Uuid::new_v4();
-        let client = make_client(client_id);
-        find_client_by_id_fake().setup(move |_| Some(client.clone()));
-
-        let mut request = valid_request(client_id);
-        request.scope = "openid read".to_string();
-        request.nonce = None;
-        let result = par_endpoint(request).await;
-
-        assert!(matches!(
-            result,
-            Err(ParErrorResponse::InvalidAuthorizationRequest {
-                code: OAuthErrorCode::InvalidRequest,
-                ..
-            })
-        ));
-    }
-
-    #[tokio::test]
     async fn fails_with_invalid_client_id_when_client_id_is_not_a_uuid() {
         let mut request = valid_request(Uuid::new_v4());
         request.client_id = "not-a-uuid".to_string();

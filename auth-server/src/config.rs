@@ -42,6 +42,10 @@ impl Config {
         CONFIG.authorization_code_ttl
     }
 
+    pub fn id_token_ttl() -> u64 {
+        CONFIG.id_token_ttl
+    }
+
     /// The origin (`scheme://host[:port]`) browsers reach the auth-server under. Also the issuer
     /// identifier (`iss`).
     pub fn iss() -> &'static str {
@@ -67,6 +71,7 @@ struct ConfigValues {
     user_session_ttl: u64,
     par_ttl: u64,
     authorization_code_ttl: u64,
+    id_token_ttl: u64,
     iss: String,
     signing_key_path: String,
     log_level: LevelFilter,
@@ -117,6 +122,11 @@ static CONFIG: LazyLock<ConfigValues> = LazyLock::new(|| {
         .parse()
         .expect("AUTHORIZATION_CODE_TTL must be a valid duration");
 
+    let id_token_ttl = std::env::var("ID_TOKEN_TTL")
+        .expect("ID_TOKEN_TTL must be set")
+        .parse()
+        .expect("ID_TOKEN_TTL must be a valid duration");
+
     let iss =
         parse_iss(&std::env::var("ISSUER_ORIGIN").expect("ISSUER_ORIGIN must be set"))
             .expect("ISSUER_ORIGIN must be an origin like https://auth.example.com");
@@ -137,6 +147,7 @@ static CONFIG: LazyLock<ConfigValues> = LazyLock::new(|| {
         user_session_ttl,
         par_ttl,
         authorization_code_ttl,
+        id_token_ttl,
         iss,
         signing_key_path,
         log_level,

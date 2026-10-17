@@ -39,6 +39,12 @@ The services are tested together by [`e2e-tests`](e2e-tests), black-box tests ag
   - DPoP ([RFC 9449](https://www.rfc-editor.org/info/rfc9449))
   - or mTLS ([RFC 8705](https://www.rfc-editor.org/info/rfc8705))
 - **Client credentials flow** ([OAuth 2.1](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1#section-4.4))
+- **[FAPI 2.0 Security Profile](https://openid.net/specs/fapi-security-profile-2_0-final.html) compliance**
+  - Confidential clients, authenticated with `private_key_jwt` or mTLS
+  - Sender-constrained access tokens (the proof of possession item above)
+- **Conformance testing** with the [OpenID conformance suite](https://gitlab.com/openid/conformance-suite), run locally with Docker
+  - OpenID Connect test plans, once discovery and UserInfo are in
+  - FAPI 2.0 test plans, for the OAuth side (PAR, PKCE, proof of possession)
 
 ## License
 

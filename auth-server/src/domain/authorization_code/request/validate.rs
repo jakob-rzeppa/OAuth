@@ -1,7 +1,7 @@
 use uuid::Uuid;
 
 use crate::domain::{
-    authorization_code::{openid::has_openid_scope, request::AuthorizationRequest},
+    authorization_code::request::AuthorizationRequest,
     client::Client,
 };
 
@@ -92,16 +92,6 @@ impl AuthorizationRequest {
             ));
         }
 
-        // ==== nonce ====
-        // Only required for OpenID Connect requests, where it binds the ID token to the client's session.
-        if has_openid_scope(self.scope()) && self.nonce().is_none_or(str::is_empty) {
-            return Err(ValidationError::redirectable(
-                RedirectableValidationError::MissingNonce,
-                self.redirect_uri().to_string(),
-                self.state().to_string(),
-            ));
-        }
-
         // ==== code_challenge_method ====
         if self.code_challenge_method() != "S256" {
             return Err(ValidationError::redirectable(
@@ -146,7 +136,6 @@ pub enum RedirectableValidationError {
     InvalidScope,
     InvalidCodeChallengeMethod,
     InvalidCodeChallenge,
-    MissingNonce,
 }
 
 #[derive(Debug, PartialEq)]
@@ -263,26 +252,6 @@ mod tests {
         let request = make_openid_request(client_id, Some("some-nonce"));
 
         assert_eq!(request.validate_against_client(&client), Ok(()));
-    }
-
-    #[test]
-    fn rejects_openid_request_without_a_nonce() {
-        let client_id = Uuid::new_v4();
-        let client = make_client(client_id);
-
-        for nonce in [None, Some("")] {
-            let request = make_openid_request(client_id, nonce);
-
-            assert_eq!(
-                request.validate_against_client(&client),
-                Err(ValidationError::redirectable(
-                    RedirectableValidationError::MissingNonce,
-                    "https://example.com/callback".to_string(),
-                    "some-state".to_string(),
-                )),
-                "nonce: {nonce:?}"
-            );
-        }
     }
 
     #[test]

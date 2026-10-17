@@ -77,6 +77,7 @@ impl AuthorizationRequest {
         &self.code_challenge_method
     }
 
+    #[cfg(test)]
     pub fn nonce(&self) -> Option<&str> {
         self.nonce.as_deref()
     }

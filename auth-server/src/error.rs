@@ -13,6 +13,9 @@ pub enum InternalError {
     #[error("(de)serializing stored data failed: {0}")]
     Serde(#[from] serde_json::Error),
 
+    #[error("signing a JWT failed: {0}")]
+    Jwt(#[from] jsonwebtoken::errors::Error),
+
     #[error("identity-server request failed: {0}")]
     IdentityServerRequest(#[from] reqwest::Error),
 
