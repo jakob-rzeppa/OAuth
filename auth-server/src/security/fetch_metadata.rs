@@ -2,10 +2,14 @@ use axum::{
     extract::Request,
     http::{HeaderMap, Method, StatusCode, header::ORIGIN},
     middleware::Next,
-    response::Response,
+    response::{IntoResponse, Response},
 };
 
-use crate::{config::Config, util::html::render_error_page};
+use crate::{
+    config::Config,
+    error::page::PageError,
+    util::oauth_error::OAuthErrorCode,
+};
 
 const SEC_FETCH_SITE: &str = "sec-fetch-site";
 
@@ -26,11 +30,12 @@ pub async fn reject_cross_site(request: Request, next: Next) -> Response {
             reason = rejected.reason(),
             "rejected a request"
         );
-        return render_error_page(
-            StatusCode::FORBIDDEN,
-            "invalid_request",
+        return PageError::with_status(
+            OAuthErrorCode::InvalidRequest,
             rejected.description(),
-        );
+            StatusCode::FORBIDDEN,
+        )
+        .into_response();
     }
 
     next.run(request).await

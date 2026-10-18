@@ -1,47 +1,43 @@
-use api_macros::ApiErrorResponse;
 use axum::extract::rejection::FormRejection;
 
 use crate::{
-    error::InternalError,
-    util::{html::render_error_page, oauth_error::OAuthErrorCode},
+    error::{InternalError, into_response_via, page::PageError},
+    util::oauth_error::OAuthErrorCode,
 };
 
-#[ApiErrorResponse(render = render_error_page)]
+#[derive(Debug)]
 pub enum LoginErrorResponse {
-    #[code(OAuthErrorCode::InvalidRequest)]
-    #[description("The request is malformed.")]
     MalformedRequest,
-
-    #[code(OAuthErrorCode::InvalidRequest)]
-    #[description("The return_to parameter is missing or is not a path on this server.")]
     InvalidReturnTo,
-
-    #[server_error]
     ServerError(InternalError),
+}
+
+impl From<LoginErrorResponse> for PageError {
+    fn from(error: LoginErrorResponse) -> Self {
+        match error {
+            LoginErrorResponse::MalformedRequest => PageError::new(
+                OAuthErrorCode::InvalidRequest,
+                "The request is malformed.",
+            ),
+            LoginErrorResponse::InvalidReturnTo => PageError::new(
+                OAuthErrorCode::InvalidRequest,
+                "The return_to parameter is missing or is not a path on this server.",
+            ),
+            LoginErrorResponse::ServerError(source) => PageError::Server(source),
+        }
+    }
+}
+
+into_response_via!(LoginErrorResponse => PageError);
+
+impl From<InternalError> for LoginErrorResponse {
+    fn from(error: InternalError) -> Self {
+        LoginErrorResponse::ServerError(error)
+    }
 }
 
 impl From<FormRejection> for LoginErrorResponse {
     fn from(_: FormRejection) -> Self {
         LoginErrorResponse::MalformedRequest
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use axum::{http::StatusCode, response::IntoResponse};
-
-    #[tokio::test]
-    async fn server_error_renders_server_error_page() {
-        let response = LoginErrorResponse::ServerError(InternalError::Invariant("redis is down"))
-            .into_response();
-
-        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .unwrap();
-        let body = String::from_utf8(body.to_vec()).unwrap();
-        assert!(body.contains("<h1>server_error</h1>"));
-        assert!(!body.contains("redis is down"), "{body}");
     }
 }

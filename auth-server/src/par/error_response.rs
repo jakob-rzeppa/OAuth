@@ -1,36 +1,52 @@
-use api_macros::ApiErrorResponse;
 use axum::extract::rejection::FormRejection;
 
 use crate::{
     domain::authorization_code::request::validate::{FatalValidationError, ValidationError},
-    error::InternalError,
+    error::{InternalError, api::ApiError, into_response_via},
     util::oauth_error::OAuthErrorCode,
 };
 
-#[ApiErrorResponse]
+#[derive(Debug)]
 pub enum ParErrorResponse {
-    #[code(OAuthErrorCode::InvalidRequest)]
-    #[description("Invalid request body.")]
     InvalidRequestBody,
-
-    #[code(OAuthErrorCode::InvalidRequest)]
-    #[description("The client_id parameter is missing or invalid.")]
     InvalidClientId,
-
-    #[code(OAuthErrorCode::InvalidClient)]
-    #[description("The client was not found.")]
     ClientNotFound,
-
     /// The pushed request failed validation against the client.
-    #[code(code)]
-    #[description("{description}")]
     InvalidAuthorizationRequest {
         code: OAuthErrorCode,
         description: &'static str,
     },
-
-    #[server_error]
     ServerError(InternalError),
+}
+
+impl From<ParErrorResponse> for ApiError {
+    fn from(error: ParErrorResponse) -> Self {
+        use ParErrorResponse::*;
+        match error {
+            InvalidRequestBody => ApiError::new(
+                OAuthErrorCode::InvalidRequest,
+                "Invalid request body.",
+            ),
+            InvalidClientId => ApiError::new(
+                OAuthErrorCode::InvalidRequest,
+                "The client_id parameter is missing or invalid.",
+            ),
+            ClientNotFound => ApiError::new(
+                OAuthErrorCode::InvalidClient,
+                "The client was not found.",
+            ),
+            InvalidAuthorizationRequest { code, description } => ApiError::new(code, description),
+            ServerError(source) => ApiError::Server(source),
+        }
+    }
+}
+
+into_response_via!(ParErrorResponse => ApiError);
+
+impl From<InternalError> for ParErrorResponse {
+    fn from(error: InternalError) -> Self {
+        ParErrorResponse::ServerError(error)
+    }
 }
 
 impl From<FormRejection> for ParErrorResponse {

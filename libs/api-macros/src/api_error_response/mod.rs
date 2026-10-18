@@ -53,27 +53,20 @@ pub fn expand(args: ErrorResponseArgs, mut item: ItemEnum) -> Result<TokenStream
     }
 
     let headers = args.headers.to_tokens();
-    let response = match (&args.render, headers) {
-        (None, Some(headers)) => quote! {
+    let response = match headers {
+        Some(headers) => quote! {
             let body = axum::Json(::serde_json::json!({
                 "error": error_code,
                 "error_description": error_description,
             }));
             axum::response::IntoResponse::into_response((status, #headers, body))
         },
-        (None, None) => quote! {
+        None => quote! {
             let body = axum::Json(::serde_json::json!({
                 "error": error_code,
                 "error_description": error_description,
             }));
             axum::response::IntoResponse::into_response((status, body))
-        },
-        (Some(render), Some(headers)) => quote! {
-            let response: axum::response::Response = #render(status, &error_code, &error_description);
-            axum::response::IntoResponse::into_response((#headers, response))
-        },
-        (Some(render), None) => quote! {
-            #render(status, &error_code, &error_description)
         },
     };
 

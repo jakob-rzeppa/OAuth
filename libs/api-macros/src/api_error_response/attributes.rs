@@ -1,14 +1,13 @@
 //! Reading the helper attributes off a variant: `#[status_code(..)]`, `#[error(..)]`,
-//! `#[code(..)]`, `#[description(..)]`, `#[server_error]` and `#[into_response]`.
+//! `#[description(..)]`, `#[server_error]` and `#[into_response]`.
 
 use syn::{Attribute, Error, LitStr, Meta, Variant, spanned::Spanned};
 
 use super::combine;
 
-const HELPERS: [&str; 6] = [
+const HELPERS: [&str; 5] = [
     "status_code",
     "error",
-    "code",
     "description",
     "server_error",
     "into_response",

@@ -42,7 +42,6 @@ fn server_error(variant: &Variant) -> Result<VariantExpansion, Error> {
         &[
             "status_code",
             "error",
-            "code",
             "description",
             "into_response",
         ],
@@ -80,7 +79,6 @@ fn into_response(variant: &Variant) -> Result<VariantExpansion, Error> {
         &[
             "status_code",
             "error",
-            "code",
             "description",
             "server_error",
         ],
@@ -101,54 +99,33 @@ fn into_response(variant: &Variant) -> Result<VariantExpansion, Error> {
     })
 }
 
-/// A variant described by its attributes: either `#[code(..)]`, or `#[status_code(..)]`
-/// together with `#[error(..)]`, and always `#[description(..)]`.
+/// A variant described by its attributes: `#[status_code(..)]`, `#[error(..)]` and
+/// `#[description(..)]`.
 fn described(variant: &Variant) -> Result<VariantExpansion, Error> {
     let mut errors: Option<Error> = None;
 
     let ident = &variant.ident;
     let (pattern, args) = pattern_and_args(ident, &variant.fields);
 
-    let status_and_code = if has(variant, "code") {
-        forbid(variant, "code", &["status_code", "error"], &mut errors);
-        optional(variant, "code", &mut errors, |attr| {
-            attr.parse_args::<Expr>()
-        })
-        .map(|code| {
-            (
-                quote!((#code).status()),
-                quote!(::std::string::String::from((#code).as_str())),
-            )
-        })
-    } else {
-        let status_code = required(variant, "status_code", &mut errors, |attr| {
-            attr.parse_args::<Expr>()
-        });
-        let error_code = required(variant, "error", &mut errors, format_string);
-        status_code
-            .zip(error_code)
-            .map(|(status_code, error_code)| {
-                (
-                    quote!(#status_code),
-                    quote!(::std::format!(#error_code #(, #args)*)),
-                )
-            })
-    };
+    let status_code = required(variant, "status_code", &mut errors, |attr| {
+        attr.parse_args::<Expr>()
+    });
+    let error_code = required(variant, "error", &mut errors, format_string);
     let description = required(variant, "description", &mut errors, format_string);
 
     if let Some(err) = errors {
         return Err(err);
     }
 
-    let (status_code, error_code) = status_and_code.unwrap();
-    let description = description.unwrap();
+    let (status_code, error_code, description) =
+        (status_code.unwrap(), error_code.unwrap(), description.unwrap());
 
     Ok(VariantExpansion {
         arm: quote! {
             #[allow(unused_variables)]
             #pattern => (
                 #status_code,
-                #error_code,
+                ::std::format!(#error_code #(, #args)*),
                 ::std::format!(#description #(, #args)*),
             ),
         },

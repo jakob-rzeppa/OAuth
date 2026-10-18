@@ -1,5 +1,6 @@
-//! The error codes of OAuth 2.0 (RFC 6749 §4.1.2.1 and §5.2) and the HTTP status each one
-//! is answered with, so an endpoint can't pair a code with the wrong status.
+//! The error codes of OAuth 2.0 (RFC 6749 §4.1.2.1 and §5.2), of protected resources
+//! (RFC 6750 §3.1) and of request URIs (RFC 9101 §7), and the HTTP status each one is answered
+//! with, so an endpoint can't pair a code with the wrong status.
 
 use axum::http::StatusCode;
 
@@ -16,6 +17,11 @@ pub enum OAuthErrorCode {
     UnsupportedResponseType,
     InvalidScope,
     AccessDenied,
+    // Reported once an unknown or expired request_uri is answered with it.
+    #[allow(dead_code)]
+    InvalidRequestUri,
+    InvalidToken,
+    InsufficientScope,
     ServerError,
 }
 
@@ -29,6 +35,9 @@ impl OAuthErrorCode {
             OAuthErrorCode::UnsupportedResponseType => "unsupported_response_type",
             OAuthErrorCode::InvalidScope => "invalid_scope",
             OAuthErrorCode::AccessDenied => "access_denied",
+            OAuthErrorCode::InvalidRequestUri => "invalid_request_uri",
+            OAuthErrorCode::InvalidToken => "invalid_token",
+            OAuthErrorCode::InsufficientScope => "insufficient_scope",
             OAuthErrorCode::ServerError => "server_error",
         }
     }
@@ -38,6 +47,8 @@ impl OAuthErrorCode {
     /// `WWW-Authenticate` challenge. All clients are public, so there is no scheme to name.
     pub fn status(&self) -> StatusCode {
         match self {
+            OAuthErrorCode::InvalidToken => StatusCode::UNAUTHORIZED,
+            OAuthErrorCode::InsufficientScope => StatusCode::FORBIDDEN,
             OAuthErrorCode::ServerError => StatusCode::INTERNAL_SERVER_ERROR,
             _ => StatusCode::BAD_REQUEST,
         }
@@ -106,6 +117,22 @@ mod tests {
         );
         assert_eq!(
             OAuthErrorCode::InvalidGrant.status(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+
+    #[test]
+    fn protected_resource_errors_are_unauthorized_and_forbidden() {
+        assert_eq!(
+            OAuthErrorCode::InvalidToken.status(),
+            StatusCode::UNAUTHORIZED
+        );
+        assert_eq!(
+            OAuthErrorCode::InsufficientScope.status(),
+            StatusCode::FORBIDDEN
+        );
+        assert_eq!(
+            OAuthErrorCode::InvalidRequestUri.status(),
             StatusCode::BAD_REQUEST
         );
     }

@@ -22,9 +22,6 @@ use api_response::ApiResponseArgs;
 ///   description are format strings in the style of `thiserror`, so they may interpolate
 ///   the variant's own fields: named fields by name (`{email}`), tuple fields by
 ///   position (`{0}`).
-/// - `#[code(..)]` and `#[description(..)]`. `code` is an expression of a type with
-///   `fn status(&self) -> StatusCode` and `fn as_str(&self) -> &str` methods, typically
-///   an enum of the error codes a protocol defines, so the status always matches the code.
 /// - `#[server_error]` on a tuple variant with one field, the source of the failure.
 ///   It responds with a 500, the code `server_error` and a generic description; the
 ///   source is logged with `tracing::error!` (so the crate must depend on `tracing`)
@@ -41,10 +38,6 @@ use api_response::ApiResponseArgs;
 ///     #[description("Invalid request body.")]
 ///     InvalidBody,
 ///
-///     #[code(OAuthErrorCode::InvalidClient)]
-///     #[description("The client was not found.")]
-///     ClientNotFound,
-///
 ///     #[server_error]
 ///     ServerError(InternalError),
 /// }
@@ -52,20 +45,13 @@ use api_response::ApiResponseArgs;
 ///
 /// The response body is `{"error": <code>, "error_description": <description>}`.
 ///
-/// The macro optionally takes, in any order:
-///
-/// - `headers(<name> => <value>, ..)`, which adds the given headers to the response of
-///   every variant. Each name is a [`axum::http::HeaderName`] expression and each value
-///   anything convertible into an [`axum::http::HeaderValue`].
-/// - `render = <path>`, a function `fn(StatusCode, &str, &str) -> Response` that renders
-///   the status, error code and description instead of the JSON body, e.g. as an HTML page.
+/// The macro optionally takes `headers(<name> => <value>, ..)`, which adds the given headers
+/// to the response of every variant. Each name is a [`axum::http::HeaderName`] expression and
+/// each value anything convertible into an [`axum::http::HeaderValue`].
 ///
 /// ```ignore
 /// #[ApiErrorResponse(headers(axum::http::header::CACHE_CONTROL => "no-store"))]
 /// pub enum CreateUserErrorResponse { /* .. */ }
-///
-/// #[ApiErrorResponse(render = crate::util::html::render_error_page)]
-/// pub enum LoginErrorResponse { /* .. */ }
 /// ```
 #[proc_macro_attribute]
 pub fn ApiErrorResponse(attr: TokenStream, item: TokenStream) -> TokenStream {

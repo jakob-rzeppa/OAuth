@@ -2,7 +2,7 @@ use crate::{
     authorize::{
         error_page::AuthorizeErrorPage,
         submit::{
-            error_response::{AuthorizeSubmitErrorResponse, ClientRedirectError},
+            error_response::AuthorizeSubmitErrorResponse,
             request::AuthorizeSubmitRequest,
             response::AuthorizeSubmitResponse,
         },
@@ -16,8 +16,9 @@ use crate::{
         pars::take::take_par,
     },
     security::require_login::require_login,
+    error::redirect::RedirectError,
     session::SessionToken,
-    util::token::random_token,
+    util::{oauth_error::OAuthErrorCode, token::random_token},
 };
 
 mod error_response;
@@ -64,7 +65,13 @@ pub async fn authorize_submit_endpoint(
     // We only check the decision afer a full validation run, so we only return a redirect error if the request, client etc. are valid.
     if decision == false {
         tracing::info!(%client_id, "consent denied");
-        return Err(ClientRedirectError::access_denied(redirect_uri, state).into());
+        return Err(RedirectError::new(
+            OAuthErrorCode::AccessDenied,
+            "The user denied the request.",
+            redirect_uri,
+            state,
+        )
+        .into());
     }
 
     // With the request validated and the user's approval, we can now generate an authorization code and return it to the client.
@@ -86,7 +93,7 @@ pub async fn authorize_submit_endpoint(
     let ttl_seconds = Config::authorization_code_ttl();
 
     if let Err(error) = save_authorization_code(authorization_code, ttl_seconds).await {
-        return Err(ClientRedirectError::server_error(error, redirect_uri, state).into());
+        return Err(RedirectError::server(error, redirect_uri, state).into());
     }
 
     tracing::info!(%client_id, scope = %issued_scope, "authorization code issued");
@@ -108,14 +115,13 @@ mod tests {
             authorization_code::request::AuthorizationRequest, client::Client,
             user_session::UserSession,
         },
-        error::InternalError,
+        error::{InternalError, redirect::RedirectReason},
         logging::testing::LogCapture,
         persistence::{
             authorization_codes::save::save_authorization_code_mock,
             clients::find_by_id::find_client_by_id_fake, pars::take::take_par_mock,
             user_sessions::access::access_session_fake,
         },
-        util::oauth_error::OAuthErrorCode,
     };
     use chrono::{DateTime, Utc};
     use fnmock::predicate;
@@ -458,11 +464,14 @@ mod tests {
             authorize_submit_endpoint(session_token(), submit_request(client_id, request_uri))
                 .await;
 
-        let Err(AuthorizeSubmitErrorResponse::Redirect(ClientRedirectError {
-            code: OAuthErrorCode::InvalidScope,
+        let Err(AuthorizeSubmitErrorResponse::Redirect(RedirectError {
+            reason:
+                RedirectReason::Described {
+                    code: OAuthErrorCode::InvalidScope,
+                    ..
+                },
             redirect_uri,
             state,
-            ..
         })) = result
         else {
             panic!("expected an invalid_scope redirect error");
@@ -498,11 +507,10 @@ mod tests {
             authorize_submit_endpoint(session_token(), submit_request(client_id, request_uri))
                 .await;
 
-        let Err(AuthorizeSubmitErrorResponse::Redirect(ClientRedirectError {
-            code: OAuthErrorCode::ServerError,
+        let Err(AuthorizeSubmitErrorResponse::Redirect(RedirectError {
+            reason: RedirectReason::Server(_),
             redirect_uri,
             state,
-            ..
         })) = result
         else {
             panic!("expected a server_error redirect error");
@@ -542,11 +550,14 @@ mod tests {
         )
         .await;
 
-        let Err(AuthorizeSubmitErrorResponse::Redirect(ClientRedirectError {
-            code: OAuthErrorCode::AccessDenied,
+        let Err(AuthorizeSubmitErrorResponse::Redirect(RedirectError {
+            reason:
+                RedirectReason::Described {
+                    code: OAuthErrorCode::AccessDenied,
+                    ..
+                },
             redirect_uri,
             state,
-            ..
         })) = result
         else {
             panic!("expected an access_denied redirect error");
