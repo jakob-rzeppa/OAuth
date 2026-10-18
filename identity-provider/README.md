@@ -1,4 +1,4 @@
-# Identity Server
+# Identity Provider
 
 The user source of truth. This service is responsible for managing users and their credentials.
 
@@ -18,4 +18,4 @@ The user source of truth. This service is responsible for managing users and the
 
 ## Credentials
 
-The identity server uses a simple username and password authentication. The password is stored as a hash. New users are created with a temporary password, which must be changed on first login (enforced by the auth-server).
+The identity provider uses a simple username and password authentication. The password is stored as a hash. New users are created with a temporary password, which must be changed on first login (enforced by the auth-server).

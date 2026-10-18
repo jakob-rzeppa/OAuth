@@ -16,26 +16,26 @@ struct GetUserResponse {
     data: User,
 }
 
-/// The `{"error": ..., "error_description": ...}` body of an identity-server error response.
+/// The `{"error": ..., "error_description": ...}` body of an identity-provider error response.
 #[derive(Deserialize)]
 struct ErrorResponse {
     error: String,
 }
 
-/// Looks a user up at the identity-server (`GET /v1/users/{user_id}`).
+/// Looks a user up at the identity-provider (`GET /v1/users/{user_id}`).
 /// Returns `None` if no user with this id exists (anymore).
 #[fnmock::mockable]
 pub async fn find_user_by_id(user_id: Uuid) -> Result<Option<User>, InternalError> {
-    find_user_by_id_at(Config::identity_server_url(), user_id).await
+    find_user_by_id_at(Config::identity_provider_url(), user_id).await
 }
 
 async fn find_user_by_id_at(base_url: &str, user_id: Uuid) -> Result<Option<User>, InternalError> {
     let url = format!("{}/v1/users/{user_id}", base_url.trim_end_matches('/'));
-    tracing::debug!(%url, "calling identity-server get user");
+    tracing::debug!(%url, "calling identity-provider get user");
 
     let response = reqwest::Client::new().get(url).send().await?;
     let status = response.status();
-    tracing::debug!(%status, "identity-server get user responded");
+    tracing::debug!(%status, "identity-provider get user responded");
 
     if status.is_success() {
         return Ok(Some(response.json::<GetUserResponse>().await?.data));
@@ -44,7 +44,7 @@ async fn find_user_by_id_at(base_url: &str, user_id: Uuid) -> Result<Option<User
     let error = response.json::<ErrorResponse>().await?.error;
     match error.as_str() {
         "user_not_found" => Ok(None),
-        _ => Err(InternalError::IdentityServerResponse(format!(
+        _ => Err(InternalError::IdentityProviderResponse(format!(
             "get user failed with {status} {error}"
         ))),
     }
@@ -59,7 +59,7 @@ mod tests {
     use super::*;
 
     /// Serves `GET /v1/users/{user_id}` with a fixed response and returns the base url.
-    async fn identity_server(status: StatusCode, body: Value) -> String {
+    async fn identity_provider(status: StatusCode, body: Value) -> String {
         let app = Router::new().route(
             "/v1/users/{user_id}",
             get(move |Path(_): Path<String>| async move { (status, Json(body)) }),
@@ -73,7 +73,7 @@ mod tests {
     #[tokio::test]
     async fn returns_the_user() {
         let id = Uuid::new_v4();
-        let base_url = identity_server(
+        let base_url = identity_provider(
             StatusCode::OK,
             json!({"data": {
                 "id": id, "user_name": "alice", "display_name": "Alice",
@@ -96,7 +96,7 @@ mod tests {
 
     #[tokio::test]
     async fn returns_none_for_an_unknown_user() {
-        let base_url = identity_server(
+        let base_url = identity_provider(
             StatusCode::NOT_FOUND,
             json!({"error": "user_not_found", "error_description": "x"}),
         )
@@ -108,8 +108,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn fails_with_internal_error_when_the_identity_server_fails() {
-        let base_url = identity_server(
+    async fn fails_with_internal_error_when_the_identity_provider_fails() {
+        let base_url = identity_provider(
             StatusCode::INTERNAL_SERVER_ERROR,
             json!({"error": "internal_server_error", "error_description": "x"}),
         )
@@ -124,13 +124,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn fails_with_internal_error_when_the_identity_server_is_unreachable() {
+    async fn fails_with_internal_error_when_the_identity_provider_is_unreachable() {
         // Nothing listens on port 1.
         let result = find_user_by_id_at("http://127.0.0.1:1", Uuid::new_v4()).await;
 
         assert!(matches!(
             result,
-            Err(InternalError::IdentityServerRequest(_))
+            Err(InternalError::IdentityProviderRequest(_))
         ));
     }
 }

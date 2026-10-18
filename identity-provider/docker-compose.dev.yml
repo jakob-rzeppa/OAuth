@@ -5,28 +5,28 @@
 # and restarts the server, and streams the server log (plain `watch` does not).
 # Changing a migration re-runs the migrator.
 services:
-  identity-server-db:
+  identity-provider-db:
     # Also attach a non-internal network so the port can be published, and
     # `cargo sqlx prepare` can reach the database via LOCAL_POSTGRES_URL.
     networks:
-      - identity-server
+      - identity-provider
     ports:
       - "127.0.0.1:${DB_HOST_PORT:-5432}:5432"
 
-  identity-server-migrate:
+  identity-provider-migrate:
     develop:
       watch:
         - path: ./migrations
           action: rebuild
 
-  identity-server:
+  identity-provider:
     build:
       target: dev
     volumes:
       # Keep build artifacts and downloaded crates across container restarts,
       # so only the first start compiles everything.
-      - identity-server-dev-target:/app/target
-      - identity-server-dev-cargo-registry:/usr/local/cargo/registry
+      - identity-provider-dev-target:/app/target
+      - identity-provider-dev-cargo-registry:/usr/local/cargo/registry
     healthcheck:
       # The first compile inside the container takes a while.
       start_period: 5m
@@ -49,5 +49,5 @@ services:
           action: sync
 
 volumes:
-  identity-server-dev-target:
-  identity-server-dev-cargo-registry:
+  identity-provider-dev-target:
+  identity-provider-dev-cargo-registry:

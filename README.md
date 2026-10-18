@@ -8,7 +8,7 @@ A from-scratch implementation of **OAuth 2.1** (and the surrounding RFCs) in Rus
 
 A OAuth server without some system to use it is not very useful. That's why this repo contains multiple projects.
 
-- [`identity-server`](identity-server/README.md): a user management service that the auth-server uses to check credentials.
+- [`identity-provider`](identity-provider/README.md): a user management service that the auth-server uses to check credentials.
 - [`auth-server`](auth-server/README.md): the OAuth authorization server.
 
 A [rfc-editor](https://www.rfc-editor.org/) like specification manager, split into three parts:

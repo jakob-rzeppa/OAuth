@@ -1,5 +1,5 @@
 services:
-  identity-server-db:
+  identity-provider-db:
     image: postgres:17-alpine
     env_file:
       - path: .env
@@ -7,9 +7,9 @@ services:
       - path: .env.local
         required: false
     networks:
-      - identity-server-internal
+      - identity-provider-internal
     volumes:
-      - identity-server-db-data:/var/lib/postgresql/data
+      - identity-provider-db-data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
@@ -18,8 +18,8 @@ services:
 
   # One-shot: applies migrations and exits. The server only starts once this
   # has completed successfully. Re-run on its own with:
-  #   docker compose run --rm identity-server-migrate
-  identity-server-migrate:
+  #   docker compose run --rm identity-provider-migrate
+  identity-provider-migrate:
     build:
       context: .
       target: migrator
@@ -30,12 +30,12 @@ services:
         required: false
     restart: "no"
     networks:
-      - identity-server-internal
+      - identity-provider-internal
     depends_on:
-      identity-server-db:
+      identity-provider-db:
         condition: service_healthy
 
-  identity-server:
+  identity-provider:
     build:
       context: .
       target: runtime
@@ -45,8 +45,8 @@ services:
       - path: .env.local
         required: false
     networks:
-      - identity-server-internal
-      - identity-server
+      - identity-provider-internal
+      - identity-provider
     ports:
       - "${APP_HOST_PORT:-8080}:${APP_PORT:-8080}"
     healthcheck:
@@ -56,17 +56,17 @@ services:
       retries: 10
       start_period: 5s
     depends_on:
-      identity-server-migrate:
+      identity-provider-migrate:
         condition: service_completed_successfully
 
 networks:
   # No route off this network: the database is reachable only from containers
   # attached to it, and has no outbound access itself.
-  identity-server-internal:
+  identity-provider-internal:
     internal: true
 
   # Carries the server's published port.
-  identity-server:
+  identity-provider:
 
 volumes:
-  identity-server-db-data:
+  identity-provider-db-data:

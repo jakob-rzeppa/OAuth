@@ -35,7 +35,7 @@ flowchart LR
     end
 
     AuthServer[["auth-server\n(OAuth AS / OIDC OP)"]]
-    IdentityServer[["identity-server\n(users & roles)"]]
+    IdentityProvider[["identity-provider\n(users & roles)"]]
     DataServer[("data-server\n(resource server / API)")]
 
     Viewer -->|"GET, no token"| DataServer
@@ -45,7 +45,7 @@ flowchart LR
     Dashboard -->|"Bearer token"| DataServer
     DataServer -->|"RFC 7662 introspect"| AuthServer
     DataServer -->|"OIDC /userinfo (roles claim)"| AuthServer
-    AuthServer -->|"role/user lookup"| IdentityServer
+    AuthServer -->|"role/user lookup"| IdentityProvider
 ```
 
 ## Auth mechanics (per request to data-server)

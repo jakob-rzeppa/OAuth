@@ -807,7 +807,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "identity-server"
+name = "identity-provider"
 version = "0.1.0"
 dependencies = [
  "api-macros",

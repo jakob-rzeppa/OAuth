@@ -4,7 +4,7 @@ Black-box end-to-end tests that call the running services over the network.
 
 The services are **not** started by the tests. Start them first:
 
-- `identity-server`: see [`../identity-server/DEV.md`](../identity-server/DEV.md)
+- `identity-provider`: see [`../identity-provider/DEV.md`](../identity-provider/DEV.md)
 - `auth-server`: see [`../auth-server/DEV.md`](../auth-server/DEV.md)
 - `spec-provider`: gRPC
 

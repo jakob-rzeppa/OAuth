@@ -134,7 +134,7 @@ mod tests {
     #[test]
     fn enables_this_crate_and_the_request_layer_at_the_level_and_caps_other_dependencies_at_warn() {
         let debug_filter = filter(LevelFilter::DEBUG);
-        assert!(debug_filter.would_enable("identity_server::application", &tracing::Level::DEBUG));
+        assert!(debug_filter.would_enable("identity_provider::application", &tracing::Level::DEBUG));
         assert!(debug_filter.would_enable("tower_http::trace::on_request", &tracing::Level::DEBUG));
         assert!(
             !debug_filter.would_enable("hyper_util::client::legacy::pool", &tracing::Level::DEBUG)
@@ -143,8 +143,8 @@ mod tests {
 
         let error_filter = filter(LevelFilter::ERROR);
         assert!(!error_filter.would_enable("sqlx::query", &tracing::Level::WARN));
-        assert!(!error_filter.would_enable("identity_server::application", &tracing::Level::WARN));
-        assert!(error_filter.would_enable("identity_server::application", &tracing::Level::ERROR));
+        assert!(!error_filter.would_enable("identity_provider::application", &tracing::Level::WARN));
+        assert!(error_filter.would_enable("identity_provider::application", &tracing::Level::ERROR));
     }
 
     #[test]

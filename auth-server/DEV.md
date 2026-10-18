@@ -1,8 +1,8 @@
 # Development
 
-> **identity-server must be running for auth-server to work.** Start its stack first
-> (see `../identity-server/DEV.md`). auth-server reaches it via the port it publishes on
-> the host, at `IDENTITY_SERVER_URL` (`http://host.docker.internal:8080`; `127.0.0.1` would be the container itself).
+> **identity-provider must be running for auth-server to work.** Start its stack first
+> (see `../identity-provider/DEV.md`). auth-server reaches it via the port it publishes on
+> the host, at `IDENTITY_PROVIDER_URL` (`http://host.docker.internal:8080`; `127.0.0.1` would be the container itself).
 
 ## Local production stack
 
@@ -60,10 +60,10 @@ It applies to auth-server's own events; libraries (hyper, sqlx, reqwest, redis) 
 
 | Level | Shows |
 |---|---|
-| `debug` | every request (method, path, status, latency), calls to the identity-server |
+| `debug` | every request (method, path, status, latency), calls to the identity-provider |
 | `info` | startup, user logged in, authorization code issued, access token issued, consent denied, failed login |
 | `warn` | unexpected behaviour: unknown client, unregistered `redirect_uri`, disallowed scope, unknown or reused `request_uri` / authorization code, invalid CSRF token or PKCE verifier, unsupported `grant_type` |
-| `error` | database, redis and identity-server failures, and unrecoverable startup failures (the server exits) |
+| `error` | database, redis and identity-provider failures, and unrecoverable startup failures (the server exits) |
 
 Logs never contain tokens, codes, `request_uri`, cookies, passwords, user names or query
 strings. Read them with `docker compose ... logs -f auth-server` (see above).

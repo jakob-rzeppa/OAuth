@@ -41,7 +41,7 @@ COPY src ./src
 CMD ["sh", "-c", "find src -name '*.rs' -exec touch {} + && exec cargo watch -x run"]
 
 # ---------------------------------------------------------------------------
-# builder: compiles the identity-server binary.
+# builder: compiles the identity-provider binary.
 #
 # The sqlx query macros are checked offline against the metadata in .sqlx, since no database is reachable during the build.
 # Regenerate it with `cargo sqlx prepare` after changing a query or migration,
@@ -66,7 +66,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     --mount=type=cache,target=/app/target \
     cargo build --release --locked \
-    && cp target/release/identity-server /usr/local/bin/identity-server
+    && cp target/release/identity-provider /usr/local/bin/identity-provider
 
 # ---------------------------------------------------------------------------
 # runtime: the server itself. Does not run migrations.
@@ -78,12 +78,12 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-RUN useradd --system --no-create-home identity-server
+RUN useradd --system --no-create-home identity-provider
 
 WORKDIR /app
-COPY --from=builder /usr/local/bin/identity-server ./identity-server
+COPY --from=builder /usr/local/bin/identity-provider ./identity-provider
 # Read at runtime via the relative path seed/roles.yaml.
 COPY seed ./seed
 
-USER identity-server
-ENTRYPOINT ["./identity-server"]
+USER identity-provider
+ENTRYPOINT ["./identity-provider"]

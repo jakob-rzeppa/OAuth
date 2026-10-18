@@ -19,7 +19,7 @@ pub struct ErrorBody {
 
 #[derive(OpenApi)]
 #[openapi(
-    info(title = "Identity Server", version = env!("CARGO_PKG_VERSION")),
+    info(title = "Identity Provider", version = env!("CARGO_PKG_VERSION")),
     paths(
         health::health_endpoint,
         users::create::create_user_endpoint,

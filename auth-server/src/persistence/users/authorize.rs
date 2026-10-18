@@ -3,7 +3,7 @@ use uuid::Uuid;
 
 use crate::{config::Config, error::InternalError};
 
-/// The user an identity-server `authenticate` call vouched for.
+/// The user an identity-provider `authenticate` call vouched for.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct AuthorizedUser {
     pub id: Uuid,
@@ -12,7 +12,7 @@ pub struct AuthorizedUser {
 
 #[derive(Debug)]
 pub enum AuthorizeUserError {
-    /// The user name is unknown or the password is wrong. The identity-server tells these apart
+    /// The user name is unknown or the password is wrong. The identity-provider tells these apart
     /// (404 / 401), but they are reported alike so callers can't leak which user names exist.
     InvalidCredentials,
     Internal(InternalError),
@@ -41,19 +41,19 @@ struct AuthenticateResponse {
     data: AuthorizedUser,
 }
 
-/// The `{"error": ..., "error_description": ...}` body of an identity-server error response.
+/// The `{"error": ..., "error_description": ...}` body of an identity-provider error response.
 #[derive(Deserialize)]
 struct ErrorResponse {
     error: String,
 }
 
-/// Check a user name and password against the identity-server (`POST /v1/users/authenticate`).
+/// Check a user name and password against the identity-provider (`POST /v1/users/authenticate`).
 #[fnmock::mockable]
 pub async fn authorize_user(
     user_name: &str,
     password: &str,
 ) -> Result<AuthorizedUser, AuthorizeUserError> {
-    authorize_user_at(Config::identity_server_url(), user_name, password).await
+    authorize_user_at(Config::identity_provider_url(), user_name, password).await
 }
 
 async fn authorize_user_at(
@@ -62,7 +62,7 @@ async fn authorize_user_at(
     password: &str,
 ) -> Result<AuthorizedUser, AuthorizeUserError> {
     let url = format!("{}/v1/users/authenticate", base_url.trim_end_matches('/'));
-    tracing::debug!(%url, "calling identity-server authenticate");
+    tracing::debug!(%url, "calling identity-provider authenticate");
 
     let response = reqwest::Client::new()
         .post(url)
@@ -73,7 +73,7 @@ async fn authorize_user_at(
         .send()
         .await?;
     let status = response.status();
-    tracing::debug!(%status, "identity-server authenticate responded");
+    tracing::debug!(%status, "identity-provider authenticate responded");
 
     if status.is_success() {
         return Ok(response.json::<AuthenticateResponse>().await?.data);
@@ -82,10 +82,10 @@ async fn authorize_user_at(
     let error = response.json::<ErrorResponse>().await?.error;
     match error.as_str() {
         "unauthorized" | "user_not_found" => {
-            tracing::debug!(%status, %error, "identity-server authenticate failed with invalid credentials");
+            tracing::debug!(%status, %error, "identity-provider authenticate failed with invalid credentials");
             Err(AuthorizeUserError::InvalidCredentials)
         }
-        _ => Err(InternalError::IdentityServerResponse(format!(
+        _ => Err(InternalError::IdentityProviderResponse(format!(
             "authenticate failed with {status} {error}"
         ))
         .into()),
@@ -102,7 +102,7 @@ mod tests {
     use crate::logging::testing::LogCapture;
 
     /// Serves `POST /v1/users/authenticate` with a fixed response and returns the base url.
-    async fn identity_server(status: StatusCode, body: Value) -> String {
+    async fn identity_provider(status: StatusCode, body: Value) -> String {
         let app = Router::new().route(
             "/v1/users/authenticate",
             post(move |Json(request): Json<Value>| async move {
@@ -122,7 +122,7 @@ mod tests {
     #[tokio::test]
     async fn returns_the_user_when_the_credentials_are_valid() {
         let id = Uuid::new_v4();
-        let base_url = identity_server(
+        let base_url = identity_provider(
             StatusCode::OK,
             json!({"data": {
                 "id": id, "user_name": "alice", "display_name": "Alice",
@@ -144,7 +144,7 @@ mod tests {
 
     #[tokio::test]
     async fn fails_with_invalid_credentials_when_the_password_is_wrong() {
-        let base_url = identity_server(
+        let base_url = identity_provider(
             StatusCode::UNAUTHORIZED,
             json!({"error": "unauthorized", "error_description": "x"}),
         )
@@ -160,7 +160,7 @@ mod tests {
 
     #[tokio::test]
     async fn fails_with_invalid_credentials_when_the_user_does_not_exist() {
-        let base_url = identity_server(
+        let base_url = identity_provider(
             StatusCode::NOT_FOUND,
             json!({"error": "user_not_found", "error_description": "x"}),
         )
@@ -176,7 +176,7 @@ mod tests {
 
     #[tokio::test]
     async fn fails_with_internal_error_when_a_credentials_status_has_another_error_code() {
-        let base_url = identity_server(
+        let base_url = identity_provider(
             StatusCode::UNAUTHORIZED,
             json!({"error": "invalid_request", "error_description": "x"}),
         )
@@ -192,21 +192,21 @@ mod tests {
 
     #[tokio::test]
     async fn fails_with_internal_error_when_the_error_response_is_malformed() {
-        let base_url = identity_server(StatusCode::UNAUTHORIZED, json!({"message": "nope"})).await;
+        let base_url = identity_provider(StatusCode::UNAUTHORIZED, json!({"message": "nope"})).await;
 
         let result = authorize_user_at(&base_url, "alice", "secret").await;
 
         assert!(matches!(
             result,
             Err(AuthorizeUserError::Internal(
-                InternalError::IdentityServerRequest(_)
+                InternalError::IdentityProviderRequest(_)
             ))
         ));
     }
 
     #[tokio::test]
-    async fn fails_with_internal_error_when_the_identity_server_fails() {
-        let base_url = identity_server(
+    async fn fails_with_internal_error_when_the_identity_provider_fails() {
+        let base_url = identity_provider(
             StatusCode::INTERNAL_SERVER_ERROR,
             json!({"error": "internal_server_error", "error_description": "x"}),
         )
@@ -223,23 +223,23 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn fails_with_internal_error_when_the_identity_server_is_unreachable() {
+    async fn fails_with_internal_error_when_the_identity_provider_is_unreachable() {
         // Nothing listens on port 1.
         let result = authorize_user_at("http://127.0.0.1:1", "alice", "secret").await;
 
         assert!(matches!(
             result,
             Err(AuthorizeUserError::Internal(
-                InternalError::IdentityServerRequest(_)
+                InternalError::IdentityProviderRequest(_)
             ))
         ));
     }
 
     #[tokio::test]
-    async fn logs_the_call_to_the_identity_server_without_the_credentials() {
+    async fn logs_the_call_to_the_identity_provider_without_the_credentials() {
         let capture = LogCapture::default();
         let _guard = capture.install();
-        let base_url = identity_server(
+        let base_url = identity_provider(
             StatusCode::OK,
             json!({"data": {
                 "id": Uuid::new_v4(), "user_name": "alice", "display_name": "Alice",
@@ -254,12 +254,12 @@ mod tests {
 
         let log = capture.contents();
         assert!(
-            log.contains("calling identity-server authenticate"),
+            log.contains("calling identity-provider authenticate"),
             "{log}"
         );
         assert!(log.contains("/v1/users/authenticate"), "{log}");
         assert!(
-            log.contains("identity-server authenticate responded"),
+            log.contains("identity-provider authenticate responded"),
             "{log}"
         );
         assert!(!log.contains("secret"), "{log}");

@@ -46,11 +46,11 @@ pub enum InternalError {
     #[error("signing a JWT failed: {0}")]
     Jwt(#[from] jsonwebtoken::errors::Error),
 
-    #[error("identity-server request failed: {0}")]
-    IdentityServerRequest(#[from] reqwest::Error),
+    #[error("identity-provider request failed: {0}")]
+    IdentityProviderRequest(#[from] reqwest::Error),
 
-    #[error("unexpected identity-server response: {0}")]
-    IdentityServerResponse(String),
+    #[error("unexpected identity-provider response: {0}")]
+    IdentityProviderResponse(String),
 
     /// Something the code relies on did not hold, e.g. a value that is always a valid
     /// header turned out not to be.

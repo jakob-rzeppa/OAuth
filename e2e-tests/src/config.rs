@@ -3,7 +3,7 @@
 /// Loaded from the process environment, `.env.local` and `.env`, in that order of precedence.
 #[derive(Debug, Clone)]
 pub struct Config {
-    identity_server_url: String,
+    identity_provider_url: String,
     auth_server_url: String,
     spec_provider_url: String,
 
@@ -27,7 +27,7 @@ impl Config {
         dotenv::dotenv().unwrap();
 
         Self {
-            identity_server_url: std::env::var("IDENTITY_SERVER_URL").unwrap(),
+            identity_provider_url: std::env::var("IDENTITY_PROVIDER_URL").unwrap(),
             auth_server_url: std::env::var("AUTH_SERVER_URL").unwrap(),
             spec_provider_url: std::env::var("SPEC_PROVIDER_URL").unwrap(),
             client_id: std::env::var("CLIENT_ID").unwrap(),
@@ -38,7 +38,7 @@ impl Config {
     }
 
     pub fn identity_url(&self, path: &str) -> String {
-        join(&self.identity_server_url, path)
+        join(&self.identity_provider_url, path)
     }
 
     pub fn auth_url(&self, path: &str) -> String {

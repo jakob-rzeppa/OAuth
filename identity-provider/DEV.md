@@ -24,7 +24,7 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up --watch
 
 This streams the server log, including cargo build errors, to the terminal. Plain
 `watch` also live-reloads but does not show any log; from another terminal use
-`docker compose -f docker-compose.yml -f docker-compose.dev.yml logs -f identity-server`.
+`docker compose -f docker-compose.yml -f docker-compose.dev.yml logs -f identity-provider`.
 Ctrl+C stops the containers.
 
 Changes to `src/`, `seed/`, `.sqlx/`, `Cargo.toml` and `Cargo.lock` are synced into the
@@ -37,7 +37,7 @@ The database is reachable from the host.
 ## Logging
 
 `LOG_LEVEL` in `.env` sets the minimum level: `debug`, `info`, `warn` or `error` (any case).
-It applies to identity-server's own events; libraries (hyper, sqlx) are capped at `warn`. A
+It applies to identity-provider's own events; libraries (hyper, sqlx) are capped at `warn`. A
 level includes every level below it in this table.
 
 | Level | Shows |
@@ -48,7 +48,7 @@ level includes every level below it in this table.
 | `error` | database failures, invalid user rows, password hashing failures, and unrecoverable startup failures (the server exits) |
 
 Logs never contain passwords, password hashes, user names, query strings or request bodies;
-users are identified by their id. Read them with `docker compose ... logs -f identity-server`
+users are identified by their id. Read them with `docker compose ... logs -f identity-provider`
 (see above).
 
 ## Query metadata (`.sqlx`)
@@ -65,8 +65,8 @@ Regenerate against the dev database (published on `127.0.0.1:5432`, URL taken fr
 `LOCAL_POSTGRES_URL` in `.env`):
 
 ```sh
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d identity-server-db
-docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm identity-server-migrate
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d identity-provider-db
+docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm identity-provider-migrate
 cargo sqlx prepare
 ```
 
@@ -89,5 +89,5 @@ After adding or changing a migration, regenerate `.sqlx/` (see above).
 Apply pending migrations (also happens automatically on `up` / `watch`):
 
 ```sh
-docker compose run --rm identity-server-migrate
+docker compose run --rm identity-provider-migrate
 ```

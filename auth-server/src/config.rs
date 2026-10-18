@@ -14,8 +14,8 @@ impl Config {
         &CONFIG.redis_url
     }
 
-    pub fn identity_server_url() -> &'static str {
-        &CONFIG.identity_server_url
+    pub fn identity_provider_url() -> &'static str {
+        &CONFIG.identity_provider_url
     }
 
     pub fn database_url() -> &'static str {
@@ -64,7 +64,7 @@ impl Config {
 
 struct ConfigValues {
     redis_url: String,
-    identity_server_url: String,
+    identity_provider_url: String,
     database_url: String,
     app_port: u16,
     access_token_ttl: u32,
@@ -92,8 +92,8 @@ fn parse_iss(value: &str) -> Result<String, String> {
 static CONFIG: LazyLock<ConfigValues> = LazyLock::new(|| {
     let redis_url = std::env::var("REDIS_URL").expect("REDIS_URL must be set");
 
-    let identity_server_url =
-        std::env::var("IDENTITY_SERVER_URL").expect("IDENTITY_SERVER_URL must be set");
+    let identity_provider_url =
+        std::env::var("IDENTITY_PROVIDER_URL").expect("IDENTITY_PROVIDER_URL must be set");
 
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
 
@@ -140,7 +140,7 @@ static CONFIG: LazyLock<ConfigValues> = LazyLock::new(|| {
 
     ConfigValues {
         redis_url,
-        identity_server_url,
+        identity_provider_url,
         database_url,
         app_port,
         access_token_ttl,
