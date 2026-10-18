@@ -15,7 +15,7 @@ use serde::Serialize;
 use crate::config::Config;
 
 /// The algorithm the ID tokens are signed with.
-const SIGNING_ALGORITHM: Algorithm = Algorithm::RS256;
+pub const SIGNING_ALGORITHM: Algorithm = Algorithm::RS256;
 
 /// How long clients may cache the key set. Clients refetch on an unknown `kid` regardless.
 const CACHE_CONTROL: &str = "public, max-age=3600";

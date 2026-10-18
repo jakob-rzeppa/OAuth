@@ -22,6 +22,7 @@ mod session;
 mod util;
 
 mod authorize;
+mod discovery;
 mod introspection;
 mod jwks;
 mod login;
@@ -61,6 +62,7 @@ fn app() -> Router {
         .merge(par::router())
         .merge(token::router())
         .merge(introspection::router())
+        .merge(discovery::router())
         .merge(jwks::router())
         .merge(userinfo::router())
         .merge(authorize::router())

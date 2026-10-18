@@ -4,10 +4,13 @@ The auth server implements OAuth 2.1 (draft). In some cases it deviates from the
 
 ## Endpoints
 
+- `GET /.well-known/openid-configuration` - OpenID Connect Discovery document
 - `POST /par` - Pushed Authorization Request
 - `GET /authorize` - Authorization Endpoint Page
 - `POST /authorize` - Authorization Endpoint Form Submission
 - `POST /token` - Token Endpoint
+- `POST /introspect` - Token Introspection Endpoint
+- `GET/POST /userinfo` - UserInfo Endpoint
 
 ## Pushed Authorization Requests (PAR)
 
