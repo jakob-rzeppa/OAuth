@@ -47,10 +47,15 @@ services:
     networks:
       - identity-provider-internal
       - identity-provider
+    volumes:
+      # The server's own certificate and key, and the host's mkcert CA (public part only,
+      # the CA key stays out of the containers) for the https calls it makes.
+      - ./certs:/certs:ro
+      - ${MKCERT_CAROOT}/rootCA.pem:/ca/rootCA.pem:ro
     ports:
       - "${APP_HOST_PORT:-8080}:${APP_PORT:-8080}"
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:$$APP_PORT/v1/health"]
+      test: ["CMD-SHELL", "curl -fsS --cacert $$SSL_CERT_FILE https://localhost:$$APP_PORT/v1/health"]
       interval: 5s
       timeout: 3s
       retries: 10

@@ -5,7 +5,7 @@ use spec_api::{
     GetSpecRequest, ListSpecsRequest, ListSpecsResponse, get_spec_response::Kind,
     spec_provider_client::SpecProviderClient,
 };
-use tonic::transport::{Channel, Endpoint};
+use tonic::transport::{Channel, ClientTlsConfig, Endpoint};
 
 use crate::application::contract::spec_gateway::{SpecGateway, SpecGatewayError};
 
@@ -35,8 +35,15 @@ impl GrpcSpecGateway {
         endpoint: &str,
         request_timeout: Duration,
     ) -> Result<Self, InvalidSpecProviderUrl> {
-        let channel = Endpoint::from_shared(endpoint.to_string())
-            .map_err(InvalidSpecProviderUrl)?
+        let mut endpoint =
+            Endpoint::from_shared(endpoint.to_string()).map_err(InvalidSpecProviderUrl)?;
+        if endpoint.uri().scheme_str() == Some("https") {
+            // Trusts the system roots, or the file `SSL_CERT_FILE` names.
+            endpoint = endpoint
+                .tls_config(ClientTlsConfig::new().with_native_roots())
+                .map_err(InvalidSpecProviderUrl)?;
+        }
+        let channel = endpoint
             .connect_timeout(CONNECT_TIMEOUT)
             .timeout(request_timeout)
             .connect_lazy();

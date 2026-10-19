@@ -6,15 +6,18 @@ edition = "2024"
 [dependencies]
 askama = "0.16.0"
 axum = "0.8.9"
+axum-server = { version = "0.8.0", features = ["tls-rustls-no-provider"] }
+# The crypto provider of the https server and the gRPC client.
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
 tokio = { version = "1.53.1", features = ["full"] }
 prost-types = "0.14"
-tonic = "0.14"
+tonic = { version = "0.14", features = ["tls-ring", "tls-native-roots"] }
 thiserror = "2.0.19"
 async-trait = "0.1"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_urlencoded = "0.7.1"
 chrono = { version = "0.4.45", default-features = false, features = ["std"] }
-# No TLS yet: the mock content server is plain http.
+# No TLS: the mock content server is plain http.
 reqwest = { version = "0.13.5", default-features = false }
 pulldown-cmark = { version = "0.13.4", default-features = false, features = ["html"] }
 ammonia = "4.2.3"
@@ -26,6 +29,9 @@ tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 tower-http = { version = "0.7.1", features = ["trace"] }
 
 [dev-dependencies]
+# A throwaway certificate and a TLS client that trusts it, to test the https server.
+rcgen = { version = "0.14", default-features = false, features = ["crypto", "ring", "pem"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring"] }
 mockall = "0.15.0"
 spec-api = { git = "https://github.com/jakob-rzeppa/auth.git", features = ["server"] }
 tokio-stream = { version = "0.1", features = ["net"] }

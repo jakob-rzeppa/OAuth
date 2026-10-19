@@ -24,10 +24,10 @@ The services are tested together by [`e2e-tests`](e2e-tests), black-box tests ag
 - **Authorization Code flow with PKCE** is the only flow, as in OAuth 2.1 (no implicit or password grants).
 - **Pushed authorization requests** are stored in Redis and consumed once.
 - **Token introspection**, so resource servers can check if a token is valid.
+- All endpoints are protected with **TLS** (HTTPS).
 
 ### Roadmap
 
-- **HTTPS**
 - **Introspection access control**: [RFC 7662](https://www.rfc-editor.org/rfc/rfc7662#section-2.1) requires callers of `/introspect` to authenticate, as clients or with a bearer token
 - **Client registration and management**
   - Dynamic client registration ([RFC 7591](https://www.rfc-editor.org/info/rfc7591))

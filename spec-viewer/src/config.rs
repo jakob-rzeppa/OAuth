@@ -12,9 +12,13 @@ pub enum ConfigError {
     Missing(&'static str),
     #[error("APP_PORT must be a valid port number, got {0:?}")]
     InvalidPort(String),
-    /// Neither the spec-provider client nor the content client is built with TLS yet.
-    #[error("{name} must be an http:// url, got {url:?}: https is not supported yet")]
-    UnsupportedScheme { name: &'static str, url: String },
+    /// The spec-provider is only reachable over https. The content client has no TLS yet.
+    #[error("{name} must be an {scheme}:// url, got {url:?}")]
+    UnsupportedScheme {
+        name: &'static str,
+        scheme: &'static str,
+        url: String,
+    },
 }
 
 impl Config {
@@ -24,12 +28,15 @@ impl Config {
 
     fn from_lookup(lookup: impl Fn(&str) -> Option<String>) -> Result<Self, ConfigError> {
         let require = |name: &'static str| lookup(name).ok_or(ConfigError::Missing(name));
-        let require_http_url = |name: &'static str| {
+        let require_url = |name: &'static str, scheme: &'static str| {
             let url = require(name)?;
-            if url.to_ascii_lowercase().starts_with("http://") {
+            if url
+                .to_ascii_lowercase()
+                .starts_with(&format!("{scheme}://"))
+            {
                 Ok(url)
             } else {
-                Err(ConfigError::UnsupportedScheme { name, url })
+                Err(ConfigError::UnsupportedScheme { name, scheme, url })
             }
         };
 
@@ -38,8 +45,8 @@ impl Config {
             app_port: app_port
                 .parse()
                 .map_err(|_| ConfigError::InvalidPort(app_port))?,
-            spec_provider_url: require_http_url("SPEC_PROVIDER_URL")?,
-            content_storage_url: require_http_url("CONTENT_STORAGE_URL")?,
+            spec_provider_url: require_url("SPEC_PROVIDER_URL", "https")?,
+            content_storage_url: require_url("CONTENT_STORAGE_URL", "http")?,
         })
     }
 }
@@ -58,7 +65,7 @@ mod tests {
 
     const ALL: [(&str, &str); 3] = [
         ("APP_PORT", "8080"),
-        ("SPEC_PROVIDER_URL", "http://provider:50051"),
+        ("SPEC_PROVIDER_URL", "https://provider:50051"),
         ("CONTENT_STORAGE_URL", "http://content:50052"),
     ];
 
@@ -68,7 +75,7 @@ mod tests {
             Config::from_lookup(lookup(&ALL)),
             Ok(Config {
                 app_port: 8080,
-                spec_provider_url: "http://provider:50051".into(),
+                spec_provider_url: "https://provider:50051".into(),
                 content_storage_url: "http://content:50052".into(),
             })
         );
@@ -87,11 +94,13 @@ mod tests {
     }
 
     #[test]
-    fn rejects_urls_that_are_not_http() {
-        for (name, url) in [
-            ("SPEC_PROVIDER_URL", "https://provider:50051"),
-            ("CONTENT_STORAGE_URL", "content:50052"),
-            ("CONTENT_STORAGE_URL", "ftp://content"),
+    fn rejects_urls_with_the_wrong_scheme() {
+        for (name, scheme, url) in [
+            ("SPEC_PROVIDER_URL", "https", "http://provider:50051"),
+            ("SPEC_PROVIDER_URL", "https", "provider:50051"),
+            ("CONTENT_STORAGE_URL", "http", "https://content"),
+            ("CONTENT_STORAGE_URL", "http", "content:50052"),
+            ("CONTENT_STORAGE_URL", "http", "ftp://content"),
         ] {
             let vars: Vec<_> = ALL
                 .into_iter()
@@ -102,6 +111,7 @@ mod tests {
                 Config::from_lookup(lookup(&vars)),
                 Err(ConfigError::UnsupportedScheme {
                     name,
+                    scheme,
                     url: url.into()
                 })
             );
@@ -109,8 +119,8 @@ mod tests {
     }
 
     #[test]
-    fn accepts_an_http_scheme_in_any_case() {
-        let vars = [ALL[0], ("SPEC_PROVIDER_URL", "HTTP://provider"), ALL[2]];
+    fn accepts_the_scheme_in_any_case() {
+        let vars = [ALL[0], ("SPEC_PROVIDER_URL", "HTTPS://provider"), ALL[2]];
 
         assert!(Config::from_lookup(lookup(&vars)).is_ok());
     }

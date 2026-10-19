@@ -1,0 +1,3 @@
+# Placeholder for the DEV_* variables in docker-compose.yml: merged when a server is not
+# switched to its dev stack, and changes nothing.
+services: {}

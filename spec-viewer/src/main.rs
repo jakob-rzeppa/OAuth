@@ -1,7 +1,7 @@
-use std::{future::Future, net::SocketAddr, sync::Arc};
+use std::{future::Future, net::SocketAddr, sync::Arc, time::Duration};
 
 use axum::{Router, routing::get};
-use tokio::net::TcpListener;
+use axum_server::{Handle, tls_rustls::RustlsConfig};
 use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
 use tracing::Level;
 use tracing_subscriber::EnvFilter;
@@ -31,12 +31,12 @@ async fn main() {
     let state = AppState::new(spec_gateway, content_gateway);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], config.app_port));
-    let listener = TcpListener::bind(addr)
-        .await
+    let listener = std::net::TcpListener::bind(addr)
         .unwrap_or_else(|error| exit_with(format_args!("failed to bind {addr}: {error}")));
+    let tls = load_tls().await;
 
-    tracing::info!(%addr, "spec-viewer listening");
-    if let Err(error) = serve(listener, app(state), shutdown_signal()).await {
+    tracing::info!(%addr, "spec-viewer listening (https)");
+    if let Err(error) = serve(listener, tls, app(state), shutdown_signal()).await {
         exit_with(format_args!("server stopped unexpectedly: {error}"));
     }
     tracing::info!("spec-viewer stopped");
@@ -64,15 +64,48 @@ fn app(state: AppState) -> Router {
         .with_state(state)
 }
 
-/// Serves until `shutdown` resolves, then stops accepting connections and waits for the
-/// requests in flight.
+/// Loads the PEM certificate chain and private key at `TLS_CERT_PATH` and `TLS_KEY_PATH`.
+///
+/// The server only answers over https, so it exits when they are not set or can't be read.
+async fn load_tls() -> RustlsConfig {
+    let require = |name: &str| {
+        std::env::var(name).unwrap_or_else(|_| exit_with(format_args!("{name} must be set")))
+    };
+    let (cert_path, key_path) = (require("TLS_CERT_PATH"), require("TLS_KEY_PATH"));
+
+    RustlsConfig::from_pem_file(&cert_path, &key_path)
+        .await
+        .unwrap_or_else(|error| {
+            exit_with(format_args!(
+                "failed to load the TLS certificate {cert_path} and key {key_path}: {error}"
+            ))
+        })
+}
+
+/// How long requests in flight get to finish once `shutdown` resolved.
+const SHUTDOWN_GRACE: Duration = Duration::from_secs(10);
+
+/// Serves over https until `shutdown` resolves, then stops accepting connections and waits for
+/// the requests in flight.
 async fn serve(
-    listener: TcpListener,
+    listener: std::net::TcpListener,
+    tls: RustlsConfig,
     app: Router,
     shutdown: impl Future<Output = ()> + Send + 'static,
 ) -> std::io::Result<()> {
-    axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown)
+    listener.set_nonblocking(true)?;
+    let handle = Handle::new();
+    tokio::spawn({
+        let handle = handle.clone();
+        async move {
+            shutdown.await;
+            handle.graceful_shutdown(Some(SHUTDOWN_GRACE));
+        }
+    });
+
+    axum_server::from_tcp_rustls(listener, tls)?
+        .handle(handle)
+        .serve(app.into_make_service())
         .await
 }
 
@@ -123,39 +156,88 @@ mod tests {
         )
     }
 
+    /// A server with a throwaway certificate for 127.0.0.1.
     async fn start() -> (
-        String,
+        SocketAddr,
+        rustls::pki_types::CertificateDer<'static>,
         tokio::sync::oneshot::Sender<()>,
         tokio::task::JoinHandle<std::io::Result<()>>,
     ) {
-        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let url = format!("http://{}", listener.local_addr().unwrap());
+        let certified = rcgen::generate_simple_self_signed(vec!["127.0.0.1".to_string()]).unwrap();
+        let tls = RustlsConfig::from_pem(
+            certified.cert.pem().into_bytes(),
+            certified.signing_key.serialize_pem().into_bytes(),
+        )
+        .await
+        .unwrap();
+
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
         let (stop, stopped) = tokio::sync::oneshot::channel();
-        let server = tokio::spawn(serve(listener, app(state()), async {
+        let server = tokio::spawn(serve(listener, tls, app(state()), async {
             let _ = stopped.await;
         }));
-        (url, stop, server)
+        (addr, certified.cert.der().clone(), stop, server)
+    }
+
+    const HEALTH_REQUEST: &[u8] =
+        b"GET /health HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n";
+
+    /// Sends `HEALTH_REQUEST` over TLS, trusting only `cert`, and returns the raw response.
+    async fn get_health_over_tls(
+        addr: SocketAddr,
+        cert: &rustls::pki_types::CertificateDer<'static>,
+    ) -> std::io::Result<String> {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let mut roots = rustls::RootCertStore::empty();
+        roots.add(cert.clone()).unwrap();
+        let config = rustls::ClientConfig::builder()
+            .with_root_certificates(roots)
+            .with_no_client_auth();
+        let connector = tokio_rustls::TlsConnector::from(Arc::new(config));
+
+        let tcp = tokio::net::TcpStream::connect(addr).await?;
+        let server_name = rustls::pki_types::ServerName::try_from("127.0.0.1").unwrap();
+        let mut stream = connector.connect(server_name, tcp).await?;
+        stream.write_all(HEALTH_REQUEST).await?;
+        let mut response = String::new();
+        stream.read_to_string(&mut response).await?;
+        Ok(response)
     }
 
     #[tokio::test]
-    async fn answers_the_health_check() {
-        let (url, _stop, _server) = start().await;
+    async fn answers_the_health_check_over_https() {
+        let (addr, cert, _stop, _server) = start().await;
 
-        let response = reqwest::get(format!("{url}/health")).await.unwrap();
+        let response = get_health_over_tls(addr, &cert).await.unwrap();
 
-        assert!(response.status().is_success());
-        assert_eq!(response.text().await.unwrap(), "ok");
+        assert!(response.starts_with("HTTP/1.1 200"), "{response}");
+        assert!(response.ends_with("ok"), "{response}");
+    }
+
+    #[tokio::test]
+    async fn does_not_answer_plain_http() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let (addr, _cert, _stop, _server) = start().await;
+
+        let mut stream = tokio::net::TcpStream::connect(addr).await.unwrap();
+        stream.write_all(HEALTH_REQUEST).await.unwrap();
+        let mut response = Vec::new();
+        let _ = stream.read_to_end(&mut response).await;
+
+        assert!(!String::from_utf8_lossy(&response).contains("200 OK"));
     }
 
     #[tokio::test]
     async fn stops_serving_when_the_shutdown_signal_resolves() {
-        let (url, stop, server) = start().await;
-        assert!(reqwest::get(format!("{url}/health")).await.is_ok());
+        let (addr, cert, stop, server) = start().await;
+        assert!(get_health_over_tls(addr, &cert).await.is_ok());
 
         stop.send(()).unwrap();
 
         let result = tokio::time::timeout(Duration::from_secs(5), server).await;
         assert!(matches!(result, Ok(Ok(Ok(())))), "{result:?}");
-        assert!(reqwest::get(format!("{url}/health")).await.is_err());
+        assert!(get_health_over_tls(addr, &cert).await.is_err());
     }
 }

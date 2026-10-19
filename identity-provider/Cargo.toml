@@ -6,6 +6,9 @@ edition = "2024"
 [dependencies]
 tokio = { version = "1.53.1", features = ["full"] }
 axum = { version="0.8.9", features=["macros"] }
+axum-server = { version = "0.8.0", features = ["tls-rustls-no-provider"] }
+# The crypto provider of the https server.
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
 
 uuid = { version="1.26.0", features=["v4", "serde"] }
 utoipa = { version = "5.5.0", features = ["axum_extras", "uuid"] }

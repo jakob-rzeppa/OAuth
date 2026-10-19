@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 askama = "0.16.0"
 axum = { version = "0.8.9", features = ["macros"] }
+axum-server = { version = "0.8.0", features = ["tls-rustls-no-provider"] }
 base64 = "0.22.1"
 fnmock = "0.3.0"
 
@@ -23,7 +24,9 @@ api-macros = { version = "0.1.2", git = "https://github.com/jakob-rzeppa/Auth.gi
 chrono = { version = "0.4.45", features = ["serde"] }
 redis = { version = "1.7.0", features = ["tokio-comp"] }
 rand = "0.10.3"
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+# The ring crypto provider, shared by the https server and the reqwest client.
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls-native-roots"] }
 sha2 = "0.11.0"
 sqlx = { version = "0.9.0", features = ["postgres", "runtime-tokio", "macros", "uuid", "chrono", "sqlx-toml"] }
 tracing = "0.1.44"

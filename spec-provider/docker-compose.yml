@@ -8,6 +8,17 @@ services:
         required: true
       - path: .env.local
         required: false
+    networks:
+      - spec-provider
+    volumes:
+      # The server's own certificate and key, and the host's mkcert CA (public part only,
+      # the CA key stays out of the containers) for the https calls it makes.
+      - ./certs:/certs:ro
+      - ${MKCERT_CAROOT}/rootCA.pem:/ca/rootCA.pem:ro
+    extra_hosts:
+      # The *.test names resolve to the host, where the other servers publish their ports.
+      - "identity-provider.test:host-gateway"
+      - "auth-server.test:host-gateway"
     ports:
       - "${APP_HOST_PORT}:${APP_PORT}"
     healthcheck:
@@ -17,3 +28,7 @@ services:
       timeout: 3s
       retries: 10
       start_period: 5s
+
+networks:
+  # Carries the server's published port, and lets the proxy in ../local-dev reach it.
+  spec-provider:

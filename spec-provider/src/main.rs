@@ -1,7 +1,7 @@
 use std::{net::SocketAddr, sync::Arc};
 
 use spec_api::spec_provider_server::SpecProviderServer;
-use tonic::transport::Server;
+use tonic::transport::{Identity, Server, ServerTlsConfig};
 
 use crate::{
     api::SpecProviderService,
@@ -34,14 +34,31 @@ async fn main() {
         .unwrap_or(DEFAULT_PORT);
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
 
-    println!("[STARTUP] Server running at {}", addr);
+    println!("[STARTUP] Server running at {} (https)", addr);
     Server::builder()
+        .tls_config(tls_config())
+        .expect("[STARTUP] Invalid TLS configuration")
         .add_service(SpecProviderServer::new(spec_provider_service))
         .serve_with_shutdown(addr, shutdown_signal())
         .await
         .expect("[STARTUP] Failed to launch server");
 
     println!("[SHUTDOWN] Server stopped");
+}
+
+/// Loads the PEM certificate chain and private key at `TLS_CERT_PATH` and `TLS_KEY_PATH`.
+///
+/// The server only answers over TLS, so it exits when they are not set or can't be read.
+fn tls_config() -> ServerTlsConfig {
+    let read = |name: &str| {
+        let path = std::env::var(name).unwrap_or_else(|_| panic!("[STARTUP] {name} must be set"));
+        std::fs::read(&path)
+            .unwrap_or_else(|error| panic!("[STARTUP] Failed to read {path}: {error}"))
+    };
+    ServerTlsConfig::new().identity(Identity::from_pem(
+        read("TLS_CERT_PATH"),
+        read("TLS_KEY_PATH"),
+    ))
 }
 
 /// Resolves on Ctrl+C or SIGTERM (sent by `docker stop`).

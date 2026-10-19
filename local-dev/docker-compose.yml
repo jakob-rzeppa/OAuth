@@ -1,0 +1,35 @@
+# Every server in one Compose project, behind a proxy that routes by domain name.
+# Local production stack:
+#   docker compose up -d --build
+# A server runs its dev stack (live reload) when its DEV_* variable points at its dev
+# compose file; the ones that are unset stay on the production stack:
+#   DEV_AUTH_SERVER=../auth-server/docker-compose.dev.yml docker compose up --watch
+include:
+  - path:
+    - ../identity-provider/docker-compose.yml
+    - ${DEV_IDENTITY_PROVIDER:-no-override.yml}
+  - path:
+    - ../auth-server/docker-compose.yml
+    - ${DEV_AUTH_SERVER:-no-override.yml}
+  - path:
+    - ../spec-provider/docker-compose.yml
+    - ${DEV_SPEC_PROVIDER:-no-override.yml}
+  - path:
+    - ../spec-viewer/docker-compose.yml
+    - ${DEV_SPEC_VIEWER:-no-override.yml}
+
+services:
+  # Gives every server its domain on the standard https port. It passes the TLS connections
+  # through, see nginx.conf.
+  proxy:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    networks:
+      - identity-provider
+      - auth-server
+      - spec-provider
+      - spec-viewer
