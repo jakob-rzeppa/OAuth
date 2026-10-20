@@ -38,6 +38,10 @@ impl Client {
         self.redirect_uris.contains(&redirect_uri.to_string())
     }
 
+    pub fn scope(&self) -> String {
+        self.allowed_scopes.join(" ")
+    }
+
     pub fn has_scope(&self, scopes: &str) -> bool {
         let requested_scopes: Vec<&str> = scopes.split_whitespace().collect();
         requested_scopes.iter().all(|requested| {

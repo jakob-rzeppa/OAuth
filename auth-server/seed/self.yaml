@@ -1,0 +1,7 @@
+client:
+  id: 1305381d-6e6a-43dd-9a6a-691f7b8c51f4
+  client_name: Auth Server
+  redirect_uris:
+  scopes:
+    - identity:users:authenticate
+    - identity:users:get

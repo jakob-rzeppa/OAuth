@@ -127,12 +127,10 @@ static CONFIG: LazyLock<ConfigValues> = LazyLock::new(|| {
         .parse()
         .expect("ID_TOKEN_TTL must be a valid duration");
 
-    let iss =
-        parse_iss(&std::env::var("ISSUER_ORIGIN").expect("ISSUER_ORIGIN must be set"))
-            .expect("ISSUER_ORIGIN must be an origin like https://auth.example.com");
+    let iss = parse_iss(&std::env::var("ISSUER_ORIGIN").expect("ISSUER_ORIGIN must be set"))
+        .expect("ISSUER_ORIGIN must be an origin like https://auth.example.com");
 
-    let signing_key_path =
-        std::env::var("SIGNING_KEY_PATH").expect("SIGNING_KEY_PATH must be set");
+    let signing_key_path = std::env::var("SIGNING_KEY_PATH").expect("SIGNING_KEY_PATH must be set");
 
     let log_level =
         crate::logging::parse_level(&std::env::var("LOG_LEVEL").expect("LOG_LEVEL must be set"))

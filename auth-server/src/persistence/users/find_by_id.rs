@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use uuid::Uuid;
 
-use crate::{config::Config, error::InternalError};
+use crate::{config::Config, error::InternalError, security::issue_self_token::issue_self_token};
 
 /// The profile data of a user, as far as the auth-server needs it.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -33,7 +33,13 @@ async fn find_user_by_id_at(base_url: &str, user_id: Uuid) -> Result<Option<User
     let url = format!("{}/v1/users/{user_id}", base_url.trim_end_matches('/'));
     tracing::debug!(%url, "calling identity-provider get user");
 
-    let response = reqwest::Client::new().get(url).send().await?;
+    let self_token = issue_self_token().await?;
+
+    let response = reqwest::Client::new()
+        .get(url)
+        .bearer_auth(self_token)
+        .send()
+        .await?;
     let status = response.status();
     tracing::debug!(%status, "identity-provider get user responded");
 
@@ -41,11 +47,16 @@ async fn find_user_by_id_at(base_url: &str, user_id: Uuid) -> Result<Option<User
         return Ok(Some(response.json::<GetUserResponse>().await?.data));
     }
 
-    let error = response.json::<ErrorResponse>().await?.error;
-    match error.as_str() {
+    let Ok(error) = response.json::<ErrorResponse>().await else {
+        return Err(InternalError::IdentityProviderResponse(format!(
+            "get user failed with {status}"
+        )));
+    };
+    match error.error.as_str() {
         "user_not_found" => Ok(None),
         _ => Err(InternalError::IdentityProviderResponse(format!(
-            "get user failed with {status} {error}"
+            "get user failed with {} {}",
+            status, error.error
         ))),
     }
 }

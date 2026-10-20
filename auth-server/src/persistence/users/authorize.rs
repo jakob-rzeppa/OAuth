@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{config::Config, error::InternalError};
+use crate::{config::Config, error::InternalError, security::issue_self_token::issue_self_token};
 
 /// The user an identity-provider `authenticate` call vouched for.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -64,8 +64,11 @@ async fn authorize_user_at(
     let url = format!("{}/v1/users/authenticate", base_url.trim_end_matches('/'));
     tracing::debug!(%url, "calling identity-provider authenticate");
 
+    let self_token = issue_self_token().await?;
+
     let response = reqwest::Client::new()
         .post(url)
+        .bearer_auth(self_token)
         .json(&AuthenticateRequest {
             user_name,
             password,
@@ -192,7 +195,8 @@ mod tests {
 
     #[tokio::test]
     async fn fails_with_internal_error_when_the_error_response_is_malformed() {
-        let base_url = identity_provider(StatusCode::UNAUTHORIZED, json!({"message": "nope"})).await;
+        let base_url =
+            identity_provider(StatusCode::UNAUTHORIZED, json!({"message": "nope"})).await;
 
         let result = authorize_user_at(&base_url, "alice", "secret").await;
 
