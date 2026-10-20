@@ -5,6 +5,7 @@ use tracing::level_filters::LevelFilter;
 pub struct Config {
     database_url: String,
     database_pepper: String,
+    auth_server_url: String,
     temporary_password_length: usize,
     app_port: u16,
     log_level: LevelFilter,
@@ -14,6 +15,8 @@ pub static CONFIG: LazyLock<Config> = LazyLock::new(|| {
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
 
     let database_pepper = std::env::var("DATABASE_PEPPER").expect("DATABASE_PEPPER must be set");
+
+    let auth_server_url = std::env::var("AUTH_SERVER_URL").expect("AUTH_SERVER_URL must be set");
 
     let temporary_password_length = std::env::var("TEMPORARY_PASSWORD_LENGTH")
         .expect("TEMPORARY_PASSWORD_LENGTH must be set")
@@ -32,6 +35,7 @@ pub static CONFIG: LazyLock<Config> = LazyLock::new(|| {
     Config {
         database_url,
         database_pepper,
+        auth_server_url,
         temporary_password_length,
         app_port,
         log_level,
@@ -45,6 +49,10 @@ impl Config {
 
     pub fn database_pepper(&self) -> &str {
         &self.database_pepper
+    }
+
+    pub fn auth_server_url(&self) -> &str {
+        &self.auth_server_url
     }
 
     pub fn temporary_password_length(&self) -> usize {

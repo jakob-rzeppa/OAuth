@@ -8,6 +8,7 @@ mod config;
 mod domain;
 mod logging;
 mod persistence;
+mod security;
 mod tls;
 
 #[tokio::main]

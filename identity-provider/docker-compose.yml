@@ -52,6 +52,9 @@ services:
       # the CA key stays out of the containers) for the https calls it makes.
       - ./certs:/certs:ro
       - ${MKCERT_CAROOT}/rootCA.pem:/ca/rootCA.pem:ro
+    extra_hosts:
+      # The *.test names resolve to the host, where the other servers publish their ports.
+      - "auth-server.test:host-gateway"
     ports:
       - "${APP_HOST_PORT:-8080}:${APP_PORT:-8080}"
     healthcheck:
