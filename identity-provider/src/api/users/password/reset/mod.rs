@@ -17,6 +17,7 @@ pub mod response;
     delete,
     path = "/v1/users/{user_id}/password",
     tag = "users::password",
+    security(("bearer_auth" = ["identity:users:password:reset"])),
     responses(
         (status = 200, description = "Password reset successfully", body = ResetPasswordResponse),
         (status = 400, description = "Invalid user ID", body = ErrorBody,

@@ -1,10 +1,17 @@
 clients:
   - id: 75937f94-eaa9-485c-997e-f93f339f5f59
-    client_name: My Client
+    client_name: Test client
     redirect_uris:
       - http://example.com
     scopes:
-      - read
-      - write
       - openid
       - profile
+      - identity:roles:query
+      - identity:users:authenticate
+      - identity:users:create
+      - identity:users:delete
+      - identity:users:get
+      - identity:users:password:reset
+      - identity:users:password:set
+      - identity:users:query
+      - identity:users:update

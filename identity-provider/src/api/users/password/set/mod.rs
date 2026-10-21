@@ -17,6 +17,7 @@ pub mod request;
     put,
     path = "/v1/users/{user_id}/password",
     tag = "users::password",
+    security(("bearer_auth" = ["identity:users:password:set"])),
     request_body = SetPasswordRequest,
     responses(
         (status = 204, description = "Password updated successfully"),

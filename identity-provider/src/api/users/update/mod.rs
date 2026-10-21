@@ -15,6 +15,7 @@ pub mod request;
     patch,
     path = "/v1/users/{user_id}",
     tag = "users",
+    security(("bearer_auth" = ["identity:users:update"])),
     params(("user_id" = String, Path, description = "The user's ID.")),
     request_body = UpdateUserRequest,
     responses(

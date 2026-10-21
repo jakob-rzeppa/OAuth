@@ -1,6 +1,9 @@
 //! OpenAPI document assembly, served alongside the API by [`super::router`].
 
-use utoipa::OpenApi;
+use utoipa::{
+    Modify, OpenApi,
+    openapi::security::{HttpAuthScheme, HttpBuilder, SecurityScheme},
+};
 
 use crate::api::{health, roles, users};
 
@@ -15,6 +18,27 @@ pub struct ErrorBody {
     pub error: String,
     /// Human-readable description of the error.
     pub error_description: String,
+}
+
+/// Registers the `bearer_auth` security scheme referenced by the protected endpoints.
+///
+/// The access token is issued by the auth-server and checked by
+/// [`crate::security::middleware::auth_middleware`].
+struct BearerAuth;
+
+impl Modify for BearerAuth {
+    fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+        let components = openapi.components.get_or_insert_with(Default::default);
+        components.add_security_scheme(
+            "bearer_auth",
+            SecurityScheme::Http(
+                HttpBuilder::new()
+                    .scheme(HttpAuthScheme::Bearer)
+                    .description(Some("Access token issued by the auth-server."))
+                    .build(),
+            ),
+        );
+    }
 }
 
 #[derive(OpenApi)]
@@ -32,6 +56,31 @@ pub struct ErrorBody {
         users::password::reset::reset_password_endpoint,
         roles::query::query_roles_endpoint
     ),
-    components(schemas(ErrorBody))
+    components(schemas(ErrorBody)),
+    modifiers(&BearerAuth)
 )]
 pub struct ApiDoc;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn documents_bearer_auth_on_protected_endpoints_only() {
+        let spec = serde_json::to_value(ApiDoc::openapi()).unwrap();
+
+        assert_eq!(
+            spec["components"]["securitySchemes"]["bearer_auth"],
+            serde_json::json!({
+                "type": "http",
+                "scheme": "bearer",
+                "description": "Access token issued by the auth-server."
+            })
+        );
+        assert_eq!(
+            spec["paths"]["/v1/users"]["post"]["security"],
+            serde_json::json!([{ "bearer_auth": ["identity:users:create"] }])
+        );
+        assert!(spec["paths"]["/health"]["get"].get("security").is_none());
+    }
+}

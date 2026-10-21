@@ -15,6 +15,7 @@ pub mod response;
     get,
     path = "/v1/users/{user_id}",
     tag = "users",
+    security(("bearer_auth" = ["identity:users:get"])),
     params(("user_id" = String, Path, description = "The user's ID.")),
     responses(
         (status = OK, description = "The user was found.", body = GetUserResponse),

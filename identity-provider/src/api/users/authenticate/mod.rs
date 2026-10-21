@@ -17,6 +17,7 @@ pub mod response;
     post,
     path = "/v1/users/authenticate",
     tag = "users::authenticate",
+    security(("bearer_auth" = ["identity:users:authenticate"])),
     request_body = AuthenticateUserRequest,
     responses(
         (status = OK, description = "The user was authenticated.", body = AuthenticateUserResponse),

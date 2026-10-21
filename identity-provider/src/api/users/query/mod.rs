@@ -13,6 +13,7 @@ pub mod response;
     get,
     path = "/v1/users",
     tag = "users",
+    security(("bearer_auth" = ["identity:users:query"])),
     responses(
         (status = 200, description = "Query users", body = QueryUsersResponse),
         (status = 500, description = "Internal server error", body = ErrorBody, example = json!({"error": "internal_server_error", "error_description": "An internal server error occurred."})),

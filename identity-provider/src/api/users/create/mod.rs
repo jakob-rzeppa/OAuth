@@ -17,6 +17,7 @@ pub mod response;
     post,
     path = "/v1/users",
     tag = "users",
+    security(("bearer_auth" = ["identity:users:create"])),
     request_body = CreateUserRequest,
     responses(
         (status = CREATED, description = "The user was created.", body = CreateUserResponse),

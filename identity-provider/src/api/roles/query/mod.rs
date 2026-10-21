@@ -8,6 +8,7 @@ pub mod response;
     get,
     path = "/v1/roles",
     tag = "roles",
+    security(("bearer_auth" = ["identity:roles:query"])),
     responses(
         (status = 200, description = "Query roles", body = QueryRolesResponse),
     )

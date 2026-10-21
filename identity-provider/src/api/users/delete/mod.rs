@@ -11,6 +11,7 @@ pub mod error_response;
     delete,
     path = "/v1/users/{user_id}",
     tag = "users",
+    security(("bearer_auth" = ["identity:users:delete"])),
     params(("user_id" = String, Path, description = "The user's ID.")),
     responses(
         (status = NO_CONTENT, description = "The user was deleted."),
