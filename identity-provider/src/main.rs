@@ -8,12 +8,12 @@ mod config;
 mod domain;
 mod logging;
 mod persistence;
-mod security;
 mod tls;
 
 #[tokio::main]
 async fn main() {
     logging::init(CONFIG.log_level());
+    auth_client::init();
 
     tracing::info!("application starting");
     let app = api::router();

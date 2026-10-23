@@ -1,7 +1,21 @@
+use std::{sync::LazyLock, time::Duration};
+
 use serde::Deserialize;
 use uuid::Uuid;
 
-use crate::config::CONFIG;
+use crate::config;
+
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(2);
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Shared by all introspection calls, so connections to the auth-server are pooled and reused.
+static CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
+    reqwest::Client::builder()
+        .connect_timeout(CONNECT_TIMEOUT)
+        .timeout(REQUEST_TIMEOUT)
+        .build()
+        .expect("failed to build the auth-server HTTP client")
+});
 
 #[derive(Debug, thiserror::Error)]
 pub enum IntrospectionError {
@@ -36,7 +50,7 @@ struct IntrospectionResponse {
 
 /// Asks the auth-server (RFC 7662) whether `token` is an active access token.
 pub async fn introspect_token(token: &str) -> Result<Introspection, IntrospectionError> {
-    introspect_token_at(CONFIG.auth_server_url(), token).await
+    introspect_token_at(config::auth_server_url(), token).await
 }
 
 async fn introspect_token_at(
@@ -46,7 +60,7 @@ async fn introspect_token_at(
     let url = format!("{}/introspect", base_url.trim_end_matches('/'));
     tracing::debug!(%url, "calling auth-server introspect");
 
-    let response = reqwest::Client::new()
+    let response = CLIENT
         .post(url)
         .form(&[("token", token)])
         .send()

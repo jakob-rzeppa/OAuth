@@ -23,7 +23,7 @@ pub struct ErrorBody {
 /// Registers the `bearer_auth` security scheme referenced by the protected endpoints.
 ///
 /// The access token is issued by the auth-server and checked by
-/// [`crate::security::middleware::auth_middleware`].
+/// [`auth::middleware::auth_middleware`].
 struct BearerAuth;
 
 impl Modify for BearerAuth {

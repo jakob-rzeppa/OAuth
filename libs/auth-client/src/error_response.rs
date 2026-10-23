@@ -5,7 +5,7 @@ use axum::{
 };
 use serde_json::json;
 
-use crate::security::introspect::IntrospectionError;
+use crate::introspect::IntrospectionError;
 
 /// The ways the auth middleware can reject a request.
 #[derive(Debug)]

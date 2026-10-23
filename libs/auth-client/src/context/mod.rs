@@ -1,4 +1,4 @@
-use crate::security::context::{client::AuthenticatedClient, user::AuthenticatedUser};
+use crate::context::{client::AuthenticatedClient, user::AuthenticatedUser};
 
 pub mod client;
 pub mod user;

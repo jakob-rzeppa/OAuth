@@ -1,6 +1,6 @@
 use axum::{middleware, routing};
 
-use crate::security::middleware::auth_middleware;
+use auth_client::middleware::auth_middleware;
 
 pub mod authenticate;
 pub mod create;

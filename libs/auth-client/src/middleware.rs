@@ -7,7 +7,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 
-use crate::security::{
+use crate::{
     context::{AuthContext, client::AuthenticatedClient, user::AuthenticatedUser},
     error_response::AuthErrorResponse,
     introspect::{Introspection, introspect_token},
