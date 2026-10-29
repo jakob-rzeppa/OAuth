@@ -15,12 +15,12 @@ Every server terminates TLS itself and only answers over https. It exits at star
 
 Servers reach each other by domain name, so every URL is the same inside and outside the containers:
 
-| Server | URL |
-| ------ | --- |
-| identity-provider | `https://identity-provider.test` |
-| auth-server | `https://auth-server.test` |
-| spec-provider (gRPC) | `https://spec-provider.test` |
-| spec-viewer | `https://spec-viewer.test` |
+| Server               | URL                              |
+| -------------------- | -------------------------------- |
+| identity-provider    | `https://identity-provider.test` |
+| auth-server          | `https://auth-server.test`       |
+| spec-provider (gRPC) | `https://spec-provider.test`     |
+| spec-viewer          | `https://spec-viewer.test`       |
 
 All names resolve to the host, where the nginx proxy in `local-dev/` listens on 443. It routes by the server name in the TLS handshake (SNI) and passes the encrypted connection through, so it never sees the traffic and the servers keep their own certificates. See `local-dev/nginx.conf`. The servers also publish their own ports (8080, 8081, 50051, 8090) for direct access, e.g. `https://localhost:8081`.
 
@@ -68,7 +68,7 @@ docker compose --env-file dev.env up --watch                   # all in dev
 docker compose down                                            # same DEV_* variables as `up`
 ```
 
-A server runs in dev when its variable (`DEV_IDENTITY_PROVIDER`, `DEV_AUTH_SERVER`, `DEV_SPEC_PROVIDER`, `DEV_SPEC_VIEWER`) points at its `docker-compose.dev.yml`. `dev.env` sets all four.
+A server runs in dev when its variable (`DEV_IDENTITY_PROVIDER`, `DEV_AUTH_SERVER`) points at its `docker-compose.dev.yml`. `dev.env` sets all.
 
 ## TLS certificates
 
@@ -79,7 +79,7 @@ brew install mkcert
 brew install nss     # only for Firefox
 mkcert -install      # creates and trusts the local CA, once per machine
 
-for s in auth-server identity-provider spec-provider spec-viewer; do
+for s in auth-server identity-provider; do
   mkdir -p $s/certs
   mkcert -cert-file $s/certs/$s.pem -key-file $s/certs/$s-key.pem $s.test localhost 127.0.0.1 ::1
 done
@@ -92,7 +92,7 @@ done
 ### Removing them
 
 ```sh
-rm -rf {auth-server,identity-provider,spec-provider,spec-viewer}/certs   # the certificates and their keys
+rm -rf {auth-server,identity-provider}/certs   # the certificates and their keys
 sudo sed -i '' '/^127.0.0.1 auth-server.test /d' /etc/hosts               # the domains (macOS; the line added in the setup above)
 mkcert -uninstall                                                        # remove the CA from the trust stores
 rm -rf "$(mkcert -CAROOT)"                                               # delete the CA and its key
