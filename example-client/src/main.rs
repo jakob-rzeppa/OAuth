@@ -9,6 +9,9 @@ use axum::{
 };
 use axum_server::tls_rustls::RustlsConfig;
 
+mod security;
+mod config;
+
 #[derive(Template)]
 #[template(path = "hello.html")]
 struct HelloTemplate<'a> {
@@ -26,16 +29,10 @@ async fn hello() -> Response {
     }
 }
 
-/// Reads a required environment variable, or exits.
-fn require(name: &str) -> String {
-    std::env::var(name).unwrap_or_else(|_| {
-        eprintln!("{name} must be set");
-        std::process::exit(1)
-    })
-}
-
 #[tokio::main]
 async fn main() {
+    config::init();
+
     let app = Router::new()
         .route("/", get(hello))
         // Used by the compose healthcheck.
@@ -48,12 +45,11 @@ async fn main() {
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
 
     // The server only answers over https, like the other servers (see DEVELOPMENT.md).
-    let (cert_path, key_path) = (require("TLS_CERT_PATH"), require("TLS_KEY_PATH"));
+    let (cert_path, key_path) = (config::tls_cert_path(), config::tls_key_path());
     let tls = RustlsConfig::from_pem_file(&cert_path, &key_path)
         .await
         .unwrap_or_else(|error| {
-            eprintln!("failed to load the TLS certificate ({cert_path}, {key_path}): {error}");
-            std::process::exit(1)
+            panic!("failed to load the TLS certificate ({cert_path}, {key_path}): {error}");
         });
 
     println!("Listening on https://{addr}");
@@ -61,7 +57,6 @@ async fn main() {
         .serve(app.into_make_service())
         .await
     {
-        eprintln!("server stopped unexpectedly: {error}");
-        std::process::exit(1);
+        panic!("server stopped unexpectedly: {error}");
     }
 }
