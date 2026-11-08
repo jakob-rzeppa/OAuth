@@ -11,6 +11,9 @@ include:
   - path:
     - ../auth-server/docker-compose.yml
     - ${DEV_AUTH_SERVER:-no-override.yml}
+  - path:
+    - ../example-client/docker-compose.yml
+    - ${DEV_EXAMPLE_CLIENT:-no-override.yml}
 
 services:
   # Gives every server its domain on the standard https port. It passes the TLS connections
@@ -25,3 +28,4 @@ services:
     networks:
       - identity-provider
       - auth-server
+      - example-client

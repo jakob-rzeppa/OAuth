@@ -6,8 +6,7 @@ Each server is its own Docker Compose project in its own directory, with a `.env
 | -------------------- | -------------------- | --------- |
 | identity-provider    | `identity-provider/` | 8080      |
 | auth-server          | `auth-server/`       | 8081      |
-| spec-provider (gRPC) | `spec-provider/`     | 50051     |
-| spec-viewer          | `spec-viewer/`       | 8090      |
+| example-client       | `example-client/`    | 8082      |
 
 ## HTTPS
 
@@ -19,10 +18,9 @@ Servers reach each other by domain name, so every URL is the same inside and out
 | -------------------- | -------------------------------- |
 | identity-provider    | `https://identity-provider.test` |
 | auth-server          | `https://auth-server.test`       |
-| spec-provider (gRPC) | `https://spec-provider.test`     |
-| spec-viewer          | `https://spec-viewer.test`       |
+| example-client       | `https://example-client.test`    |
 
-All names resolve to the host, where the nginx proxy in `local-dev/` listens on 443. It routes by the server name in the TLS handshake (SNI) and passes the encrypted connection through, so it never sees the traffic and the servers keep their own certificates. See `local-dev/nginx.conf`. The servers also publish their own ports (8080, 8081, 50051, 8090) for direct access, e.g. `https://localhost:8081`.
+All names resolve to the host, where the nginx proxy in `local-dev/` listens on 443. It routes by the server name in the TLS handshake (SNI) and passes the encrypted connection through, so it never sees the traffic and the servers keep their own certificates. See `local-dev/nginx.conf`. The servers also publish their own ports (8080, 8081, 8082, 50051, 8090) for direct access, e.g. `https://localhost:8081`.
 
 In a container, `extra_hosts: host-gateway` maps the `.test` names of the servers it calls to the host, where the proxy listens. Its `.env` sets `SSL_CERT_FILE=/ca/rootCA.pem`, and the compose file mounts the host's mkcert CA (public part only) there. Clients must read the system roots: reqwest needs `rustls-tls-native-roots`, not `rustls-tls`, which bundles its own and ignores `SSL_CERT_FILE`. `MKCERT_CAROOT` defaults to the macOS location in each `.env`. On Linux, export `MKCERT_CAROOT="$(mkcert -CAROOT)"` in your shell, which takes precedence (`local-dev/dev.sh` does it for you).
 
@@ -39,7 +37,7 @@ In a container, `extra_hosts: host-gateway` maps the `.test` names of the server
 3. Map the names to the local machine:
 
    ```sh
-   echo "127.0.0.1 auth-server.test identity-provider.test spec-provider.test spec-viewer.test" | sudo tee -a /etc/hosts
+   echo "127.0.0.1 auth-server.test identity-provider.test example-client.test" | sudo tee -a /etc/hosts
    ```
 
    On macOS, flush the DNS cache if that isn't picked up: `sudo dscacheutil -flushcache && sudo killall -HUP mDNSResponder`.
@@ -68,7 +66,7 @@ docker compose --env-file dev.env up --watch                   # all in dev
 docker compose down                                            # same DEV_* variables as `up`
 ```
 
-A server runs in dev when its variable (`DEV_IDENTITY_PROVIDER`, `DEV_AUTH_SERVER`) points at its `docker-compose.dev.yml`. `dev.env` sets all.
+A server runs in dev when its variable (`DEV_IDENTITY_PROVIDER`, `DEV_AUTH_SERVER`, `DEV_EXAMPLE_CLIENT`) points at its `docker-compose.dev.yml`. `dev.env` sets all.
 
 ## TLS certificates
 
@@ -79,7 +77,7 @@ brew install mkcert
 brew install nss     # only for Firefox
 mkcert -install      # creates and trusts the local CA, once per machine
 
-for s in auth-server identity-provider; do
+for s in auth-server identity-provider example-client; do
   mkdir -p $s/certs
   mkcert -cert-file $s/certs/$s.pem -key-file $s/certs/$s-key.pem $s.test localhost 127.0.0.1 ::1
 done
@@ -92,7 +90,7 @@ done
 ### Removing them
 
 ```sh
-rm -rf {auth-server,identity-provider}/certs   # the certificates and their keys
+rm -rf {auth-server,identity-provider,example-client}/certs   # the certificates and their keys
 sudo sed -i '' '/^127.0.0.1 auth-server.test /d' /etc/hosts               # the domains (macOS; the line added in the setup above)
 mkcert -uninstall                                                        # remove the CA from the trust stores
 rm -rf "$(mkcert -CAROOT)"                                               # delete the CA and its key

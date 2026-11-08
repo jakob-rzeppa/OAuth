@@ -15,7 +15,7 @@ if [ -z "${MKCERT_CAROOT:-}" ] && command -v mkcert >/dev/null; then
   export MKCERT_CAROOT="$(mkcert -CAROOT)"   # the servers mount its rootCA.pem
 fi
 
-SERVERS=(identity-provider auth-server)
+SERVERS=(identity-provider auth-server example-client)
 
 chosen=()
 while [ $# -gt 0 ] && [ "$1" != "--" ]; do
