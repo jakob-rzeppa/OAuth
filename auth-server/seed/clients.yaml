@@ -15,3 +15,11 @@ clients:
       - identity:users:password:set
       - identity:users:query
       - identity:users:update
+  - id: 247ad614-c181-4126-9830-b96428518a55
+    client_name: example-client
+    redirect_uris:
+      - https://example-client.test
+    scopes:
+      - openid
+      - profile
+      - identity:roles:query
