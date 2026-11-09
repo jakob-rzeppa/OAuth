@@ -11,6 +11,7 @@ use axum_server::tls_rustls::RustlsConfig;
 
 mod security;
 mod config;
+mod app_state;
 
 #[derive(Template)]
 #[template(path = "hello.html")]

@@ -1,7 +1,9 @@
 use crate::security::auth::error::AuthError;
 
 mod auth;
+pub mod session;
 
+#[derive(Default)]
 struct AuthProgress {
     state: Option<auth::state::State>,
     code_verifier: Option<auth::code_verifier::CodeVerifier>,
