@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>OAuth Flow</title>
+    <script src="https://unpkg.com/htmx.org@2.0.4/dist/htmx.min.js" integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+" crossorigin="anonymous" defer></script>
+    <script src="https://unpkg.com/alpinejs@3.14.8/dist/cdn.min.js" integrity="sha384-X9kJyAubVxnP0hcA+AMMs21U445qsnqhnUF8EBlEpP3a42Kh/JwWjlv2ZcvGfphb" crossorigin="anonymous" defer></script>
+    <style>
+        :root {
+            --bg: #f6f7f9;
+            --surface: #ffffff;
+            --text: #1b1f24;
+            --muted: #6b7280;
+            --line: #d4d8de;
+            --code-bg: #f0f2f5;
+            --accent: #2f6fed;
+            --done: #1f9d55;
+            --failed: #d93636;
+            --pending: #a3a9b3;
+            --shadow: 0 1px 2px rgba(16, 24, 40, .06), 0 1px 3px rgba(16, 24, 40, .08);
+            color-scheme: light;
+        }
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg: #0f1216;
+                --surface: #171b21;
+                --text: #e6e8eb;
+                --muted: #9aa1ab;
+                --line: #2c323b;
+                --code-bg: #0c0f13;
+                --accent: #5b8cff;
+                --done: #3cc47c;
+                --failed: #ff6b6b;
+                --pending: #59606b;
+                --shadow: none;
+                color-scheme: dark;
+            }
+        }
+
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            background: var(--bg);
+            color: var(--text);
+            font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+        }
+        main { max-width: 980px; margin: 0 auto; padding: 32px 16px 64px; }
+        code, pre { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 13px; }
+
+        .flow-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
+        .flow-header h1 { margin: 0 0 4px; font-size: 24px; }
+        .flow-header p { margin: 0; color: var(--muted); }
+
+        button, .button {
+            display: inline-flex; align-items: center; gap: 6px;
+            border: 1px solid transparent; border-radius: 8px;
+            padding: 7px 14px; font: inherit; font-weight: 600; font-size: 14px;
+            cursor: pointer; text-decoration: none; white-space: nowrap;
+        }
+        .button-primary { background: var(--accent); color: #fff; }
+        .button-primary:hover { filter: brightness(1.08); }
+        .button-ghost { background: transparent; color: var(--text); border-color: var(--line); }
+        .button-ghost:hover { background: var(--surface); }
+        .htmx-request { opacity: .6; pointer-events: none; }
+
+        /* Sequence diagram: three lifeline columns. */
+        .grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        .actors { position: sticky; top: 0; z-index: 3; background: var(--bg); padding: 8px 0; }
+        .actor {
+            justify-self: center; text-align: center;
+            background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
+            padding: 6px 12px; font-weight: 600; font-size: 14px; box-shadow: var(--shadow);
+        }
+        .diagram { position: relative; padding-bottom: 16px; }
+        .lifeline { position: absolute; top: 0; bottom: 0; border-left: 2px dashed var(--line); z-index: 0; }
+        .lifeline:nth-child(1) { left: calc(100% / 6); }
+        .lifeline:nth-child(2) { left: 50%; }
+        .lifeline:nth-child(3) { left: calc(500% / 6); }
+
+        .step { position: relative; z-index: 1; margin-top: 20px; }
+        .step-head {
+            display: flex; gap: 12px; align-items: flex-start;
+            background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+            padding: 12px 14px; box-shadow: var(--shadow);
+        }
+        .step--pending .step-head { opacity: .65; }
+        .step--current .step-head { border-color: var(--accent); }
+        .step--failed .step-head { border-color: var(--failed); }
+        .step-number {
+            flex: none; width: 28px; height: 28px; border-radius: 50%;
+            display: grid; place-items: center; font-weight: 700; font-size: 13px;
+            color: #fff; background: var(--pending);
+        }
+        .step--done .step-number { background: var(--done); }
+        .step--failed .step-number { background: var(--failed); }
+        .step--current .step-number { background: var(--accent); animation: pulse 1.8s infinite; }
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent); }
+            70% { box-shadow: 0 0 0 9px transparent; }
+            100% { box-shadow: 0 0 0 0 transparent; }
+        }
+        .step-text { flex: 1; min-width: 0; }
+        .step-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-weight: 600; }
+        .step-description { margin: 2px 0 0; color: var(--muted); font-size: 13.5px; }
+        .badge {
+            font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+            padding: 1px 7px; border-radius: 999px; border: 1px solid currentColor;
+        }
+        .badge--done { color: var(--done); }
+        .badge--current { color: var(--accent); }
+        .badge--failed { color: var(--failed); }
+        .badge--pending { color: var(--pending); }
+        .step-action { flex: none; align-self: center; }
+
+        /* Messages: an arrow from the centre of one lifeline to the centre of another. */
+        .msg-row { position: relative; margin-top: 10px; }
+        .msg { --c: var(--pending); position: relative; padding: 0 calc(100% / (2 * var(--span))); }
+        .msg--done { --c: var(--done); }
+        .msg--current { --c: var(--accent); }
+        .msg--failed { --c: var(--failed); }
+        .msg-label {
+            display: flex; margin: 0 auto 4px; padding: 2px 8px; gap: 6px;
+            background: var(--bg); color: var(--text); border: none; border-radius: 6px;
+            font: 600 12.5px/1.4 ui-monospace, "SF Mono", Menlo, monospace; white-space: normal; text-align: center;
+        }
+        .msg-label:hover:not(:disabled) { background: var(--surface); }
+        .msg-label:disabled { cursor: default; color: var(--muted); }
+        .msg-label .chevron { transition: transform .15s; color: var(--muted); }
+        .msg-label[aria-expanded="true"] .chevron { transform: rotate(90deg); }
+        .arrow { position: relative; height: 0; border-top: 2px solid var(--c); }
+        .msg--pending .arrow { border-top-style: dashed; }
+        .arrow::after {
+            content: ""; position: absolute; top: -7px;
+            border: 6px solid transparent;
+        }
+        .msg--ltr .arrow::after { right: -2px; border-left: 9px solid var(--c); border-right: 0; }
+        .msg--rtl .arrow::after { left: -2px; border-right: 9px solid var(--c); border-left: 0; }
+
+        /* A message to itself: a loop out of the lifeline and back. */
+        .msg--self { padding: 0 0 0 50%; display: flex; align-items: center; gap: 4px; }
+        .msg--self .arrow {
+            flex: none; width: 34px; height: 26px; margin-left: 1px;
+            border: 2px solid var(--c); border-left: none; border-radius: 0 10px 10px 0;
+        }
+        .msg--self.msg--pending .arrow { border-style: dashed; border-left: none; }
+        .msg--self .arrow::after { left: -2px; right: auto; top: auto; bottom: -7px; border-right: 9px solid var(--c); border-left: 0; }
+        .msg--self .msg-label { margin: 0; white-space: nowrap; }
+
+        .msg-body {
+            grid-column: 1 / -1; position: relative; z-index: 2;
+            margin: 8px 0 0; padding: 12px 14px; overflow-x: auto;
+            background: var(--code-bg); color: var(--text);
+            border: 1px solid var(--line); border-left: 3px solid var(--c, var(--line)); border-radius: 8px;
+            white-space: pre-wrap; word-break: break-all;
+        }
+
+        .token {
+            position: relative; z-index: 1; margin-top: 24px; padding: 14px 16px;
+            background: var(--surface); border: 1px solid var(--done); border-radius: 10px;
+        }
+        .token h2 { margin: 0 0 6px; font-size: 16px; color: var(--done); }
+        .token code { display: block; word-break: break-all; background: var(--code-bg); padding: 8px 10px; border-radius: 6px; }
+
+        [x-cloak] { display: none !important; }
+
+        @media (max-width: 640px) {
+            .flow-header { flex-direction: column; }
+            .step-head { flex-wrap: wrap; }
+            .step-action { width: 100%; }
+            .actor { padding: 4px 6px; font-size: 12px; }
+            .msg-label { font-size: 11px; }
+        }
+    </style>
+</head>
+<body>
+<main>
+    {% include "flow_diagram.html" %}
+</main>
+</body>
+</html>

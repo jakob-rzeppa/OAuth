@@ -1,43 +1,25 @@
 use std::net::SocketAddr;
 
-use askama::Template;
-use axum::{
-    Router,
-    http::StatusCode,
-    response::{Html, IntoResponse, Response},
-    routing::get,
-};
+use axum::{Router, http::StatusCode, routing::get};
 use axum_server::tls_rustls::RustlsConfig;
 
-mod security;
-mod config;
+use crate::{app_state::AppState};
+
 mod app_state;
-
-#[derive(Template)]
-#[template(path = "hello.html")]
-struct HelloTemplate<'a> {
-    name: &'a str,
-}
-
-async fn hello() -> Response {
-    match (HelloTemplate { name: "World" }).render() {
-        Ok(html) => Html(html).into_response(),
-        Err(err) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Failed to render template: {err}"),
-        )
-            .into_response(),
-    }
-}
+mod config;
+mod security;
+mod web;
 
 #[tokio::main]
 async fn main() {
     config::init();
 
     let app = Router::new()
-        .route("/", get(hello))
+        .route("/", get(web::index))
+        .nest("/flow", web::router())
         // Used by the compose healthcheck.
-        .route("/health", get(|| async { StatusCode::OK }));
+        .route("/health", get(|| async { StatusCode::OK }))
+        .with_state(AppState::default());
 
     let port: u16 = std::env::var("APP_PORT")
         .ok()

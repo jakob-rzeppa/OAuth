@@ -12,10 +12,6 @@ pub struct CodeVerifier {
 }
 
 impl CodeVerifier {
-    pub fn new(value: String) -> Self {
-        Self { value }
-    }
-
     /// Generates a new verifier: 32 random octets from the OS's cryptographically secure
     /// generator, base64url encoded without padding (RFC 7636 section 4.1). The result is 43
     /// characters, all from the unreserved set `[A-Z] [a-z] [0-9] - _`.

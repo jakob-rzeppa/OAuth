@@ -1,0 +1,74 @@
+<section id="flow">
+    <header class="flow-header">
+        <div>
+            <h1>OAuth 2.0 authorization code flow</h1>
+            <p>With pushed authorization requests (PAR) and PKCE. Run each step and click an arrow to see what was sent.</p>
+        </div>
+        <button class="button-ghost" hx-post="/flow/reset" hx-target="#flow" hx-swap="outerHTML">Reset</button>
+    </header>
+
+    <div class="actors grid3">
+        {% for actor in actors %}
+        <div class="actor">{{ actor }}</div>
+        {% endfor %}
+    </div>
+
+    <div class="diagram">
+        <div class="lifeline"></div>
+        <div class="lifeline"></div>
+        <div class="lifeline"></div>
+
+        {% for step in flow.steps %}
+        <div class="step step--{{ step.status.class() }}">
+            <div class="step-head">
+                <div class="step-number">{{ step.number }}</div>
+                <div class="step-text">
+                    <div class="step-title">
+                        {{ step.title }}
+                        <span class="badge badge--{{ step.status.class() }}">{{ step.status.label() }}</span>
+                    </div>
+                    <p class="step-description">{{ step.description }}</p>
+                </div>
+                {% if let Some(action) = step.action %}
+                <div class="step-action">
+                    {% if let Some(href) = action.href %}
+                    <a class="button button-primary" href="{{ href }}">{{ action.label }} →</a>
+                    {% else if let Some(post_to) = action.post_to %}
+                    <button class="button-primary" hx-post="{{ post_to }}" hx-target="#flow" hx-swap="outerHTML"
+                            hx-disabled-elt="this">{{ action.label }}</button>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+
+            {% for message in step.messages %}
+            <div class="msg-row grid3" x-data="{ open: false }">
+                <div class="msg msg--{{ message.direction() }} msg--{{ message.status.class() }}"
+                     style="grid-column: {{ message.column_start() }} / span {{ message.span() }}; --span: {{ message.span() }}">
+                    {% if message.is_self() %}<div class="arrow"></div>{% endif %}
+                    {% if message.body.is_some() %}
+                    <button class="msg-label" type="button" @click="open = !open" :aria-expanded="open.toString()" aria-expanded="false">
+                        <span class="chevron">▸</span>{{ message.label }}
+                    </button>
+                    {% else %}
+                    <button class="msg-label" type="button" disabled>{{ message.label }}</button>
+                    {% endif %}
+                    {% if !message.is_self() %}<div class="arrow"></div>{% endif %}
+                </div>
+                {% if let Some(body) = message.body %}
+                <pre class="msg-body msg--{{ message.status.class() }}" x-show="open" x-cloak x-transition.opacity>{{ body }}</pre>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% endfor %}
+
+        {% if let Some(token) = flow.token %}
+        <div class="token">
+            <h2>Signed in</h2>
+            <p class="step-description">The client holds an access token for this session:</p>
+            <code>{{ token }}</code>
+        </div>
+        {% endif %}
+    </div>
+</section>

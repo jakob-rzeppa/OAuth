@@ -8,7 +8,7 @@ struct Config {
     home_url: String,
 }
 
-const CONFIG: LazyLock<Config> = LazyLock::new(|| Config {
+static CONFIG: LazyLock<Config> = LazyLock::new(|| Config {
     auth_server_url: std::env::var("AUTH_SERVER_URL").unwrap_or_else(|_| {
         panic!("AUTH_SERVER_URL must be set");
     }),

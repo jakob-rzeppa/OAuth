@@ -19,6 +19,62 @@ pub enum AuthError {
     UnexpectedResponse { status_code: u16 },
     /// The request couldn't be sent or its response couldn't be read.
     RequestError(reqwest::Error),
+    /// The auth-server redirected back with an error instead of a code (RFC 6749 section 4.1.2.1),
+    /// e.g. `access_denied` when the user declined.
+    AuthorizationDenied {
+        error: String,
+        error_description: Option<String>,
+    },
+    /// The callback's `state` doesn't match the one sent, so it doesn't answer this request.
+    StateMismatch,
+    /// The callback's `iss` isn't the auth-server the request went to (RFC 9207).
+    IssuerMismatch {
+        expected: String,
+        actual: Option<String>,
+    },
+    /// The callback carries neither a code nor an error.
+    MissingCode,
+}
+
+impl std::fmt::Display for AuthError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AuthError::Rejected {
+                status_code,
+                error,
+                error_description,
+            } => {
+                write!(f, "HTTP {status_code}: {error}")?;
+                if let Some(description) = error_description {
+                    write!(f, " ({description})")?;
+                }
+                Ok(())
+            }
+            AuthError::UnexpectedResponse { status_code } => {
+                write!(f, "HTTP {status_code} without an OAuth error body")
+            }
+            AuthError::RequestError(error) => write!(f, "request failed: {error}"),
+            AuthError::AuthorizationDenied {
+                error,
+                error_description,
+            } => {
+                write!(f, "authorization failed: {error}")?;
+                if let Some(description) = error_description {
+                    write!(f, " ({description})")?;
+                }
+                Ok(())
+            }
+            AuthError::StateMismatch => {
+                write!(f, "the returned state does not match the one that was sent")
+            }
+            AuthError::IssuerMismatch { expected, actual } => write!(
+                f,
+                "the returned iss {} is not the expected issuer {expected}",
+                actual.as_deref().unwrap_or("(missing)")
+            ),
+            AuthError::MissingCode => write!(f, "the callback carries no authorization code"),
+        }
+    }
 }
 
 impl From<reqwest::Error> for AuthError {

@@ -15,10 +15,6 @@ impl PartialEq<&str> for State {
 const STATE_BYTES: usize = 32;
 
 impl State {
-    pub fn new(value: String) -> Self {
-        Self { value }
-    }
-
     pub fn generate() -> Self {
         let mut bytes = [0u8; STATE_BYTES];
         // Only fails when the OS has no random source, then the client can't run securely.
