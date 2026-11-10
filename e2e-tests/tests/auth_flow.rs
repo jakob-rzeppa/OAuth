@@ -10,7 +10,6 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 
 const PAR_TTL_SECONDS: u64 = 180;
-const CODE_TTL_SECONDS: u64 = 300;
 
 /// Asserts that the JSON object has exactly the given fields, so a new or removed field is noticed.
 fn assert_fields(body: &Value, expected: &[&str]) {
@@ -101,10 +100,6 @@ async fn auth_flow() {
     let code = params.remove("code").expect("no code in the redirect");
     assert!(!code.is_empty());
     assert_eq!(params.remove("state").as_deref(), Some(state));
-    assert_eq!(
-        params.remove("expires_in").as_deref(),
-        Some(CODE_TTL_SECONDS.to_string().as_str())
-    );
     assert_eq!(params.remove("iss").as_deref(), Some(cfg.issuer()));
     assert!(params.is_empty(), "unexpected redirect params {params:?}");
 

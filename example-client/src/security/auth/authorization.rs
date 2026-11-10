@@ -11,8 +11,6 @@ pub struct CallbackQuery {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub iss: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub expires_in: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error_description: Option<String>,
@@ -31,8 +29,6 @@ pub struct AuthorizationResponse {
     pub code: String,
     pub state: String,
     pub iss: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub expires_in: Option<String>,
 }
 
 /// Where the browser is sent to authorize the pushed request (RFC 9126 section 4).

@@ -102,7 +102,6 @@ pub async fn authorize_submit_endpoint(
         code,
         redirect_uri,
         state,
-        expires_in: ttl_seconds,
         iss: Config::iss().to_string(),
     })
 }
@@ -230,7 +229,6 @@ mod tests {
         assert_eq!(response.code, "test-code");
         assert_eq!(response.redirect_uri, "https://example.com/callback");
         assert_eq!(response.state, "some-state");
-        assert_eq!(response.expires_in, CODE_TTL_SECONDS);
         assert_eq!(response.iss, "test-issuer");
 
         take_mock.assert();

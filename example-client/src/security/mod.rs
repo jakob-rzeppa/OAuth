@@ -164,7 +164,6 @@ fn verify_callback(
         code,
         state: state.expected.clone(),
         iss: iss.expected.clone(),
-        expires_in: query.expires_in.clone(),
     })
 }
 
