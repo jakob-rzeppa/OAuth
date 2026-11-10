@@ -11,7 +11,7 @@ use crate::{
         error::LoginError,
         return_to::{ReturnToQuery, is_local_path},
         submit::request::LoginFormSubmitRequest,
-        template::render_login_page,
+        template::{ChangePasswordPageResponse, render_login_page},
     },
     identity_provider::users::authorize::{AuthorizeUserError, authorize_user},
     session::{self, user_session::UserSession},
@@ -52,7 +52,15 @@ pub async fn login_submit_endpoint(
         }
     };
 
-    // Allow temporary passwords for now.
+    if user.has_temporary_password {
+        tracing::info!(user_id = %user.id, "login requires a password change");
+        return Ok(ChangePasswordPageResponse {
+            return_to,
+            user_name,
+            error_message: None,
+        }
+        .into_response());
+    }
 
     let session_cookie = session::issue(&UserSession::new(user.id, Utc::now())).await?;
 
@@ -170,6 +178,43 @@ mod tests {
         assert!(log.contains(&user_id.to_string()), "{log}");
         assert!(!log.contains(token), "{log}");
         assert!(!log.contains("alice"), "{log}");
+        assert!(!log.contains("secret"), "{log}");
+    }
+
+    #[tokio::test]
+    async fn shows_the_change_password_page_without_a_session_for_a_temporary_password() {
+        let capture = LogCapture::default();
+        let _guard = capture.install();
+        let user_id = Uuid::new_v4();
+        authorize_user_mock().setup(move |_, _| {
+            Ok(AuthorizedUser {
+                id: user_id,
+                has_temporary_password: true,
+            })
+        });
+        save_session_mock().setup(|_, _, _| panic!("no session may be issued"));
+
+        let response = login_submit_endpoint(return_to("/authorize?client_id=1"), form())
+            .await
+            .ok()
+            .expect("expected a successful result");
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert!(response.headers().get(header::SET_COOKIE).is_none());
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body = String::from_utf8(body.to_vec()).unwrap();
+        assert!(
+            body.contains("action=\"/login/password?return_to=%2Fauthorize%3Fclient_id%3D1\""),
+            "{body}"
+        );
+        assert!(body.contains("value=\"alice\""), "{body}");
+
+        let log = capture.contents();
+        assert!(log.contains("login requires a password change"), "{log}");
+        assert!(log.contains(&user_id.to_string()), "{log}");
+        assert!(!log.contains("user logged in"), "{log}");
         assert!(!log.contains("secret"), "{log}");
     }
 

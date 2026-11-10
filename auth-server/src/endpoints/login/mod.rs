@@ -1,17 +1,21 @@
 use axum::{
     Router,
     middleware::{from_fn, map_response},
-    routing::get,
+    routing::{get, post},
 };
 
 use crate::{
-    endpoints::login::{page::login_page_endpoint, submit::login_submit_endpoint},
+    endpoints::login::{
+        page::login_page_endpoint, password::change_password_submit_endpoint,
+        submit::login_submit_endpoint,
+    },
     security::{cache_control::no_store, fetch_metadata::reject_cross_site},
     util::headers::{prevent_framing, set_referrer_policy},
 };
 
 mod error;
 mod page;
+mod password;
 mod return_to;
 mod submit;
 mod template;
@@ -22,6 +26,7 @@ pub fn router() -> Router {
             "/login",
             get(login_page_endpoint).post(login_submit_endpoint),
         )
+        .route("/login/password", post(change_password_submit_endpoint))
         .layer(from_fn(reject_cross_site))
         .layer(map_response(no_store))
         .layer(map_response(set_referrer_policy))

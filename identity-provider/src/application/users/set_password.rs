@@ -76,7 +76,7 @@ mod tests {
             "alice".to_string(),
             "Alice".to_string(),
             "old-hash".to_string(),
-            false,
+            true,
             vec![],
         )
         .unwrap()
@@ -90,7 +90,10 @@ mod tests {
         find_user_by_id_fake().setup(move |_| Ok(Some(user(id))));
         verify_password_fake().setup(|_, _| Ok(()));
         hash_password_fake().setup(|_| Ok("new-hash".to_string()));
-        save_user_fake().setup(|_| Ok(()));
+        save_user_fake().setup(|user| {
+            assert!(!user.has_temporary_password());
+            Ok(())
+        });
 
         let result = set_user_password(id, "old-password", "new-password").await;
 

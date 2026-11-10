@@ -60,9 +60,79 @@ impl IntoResponse for LoginPageResponse {
     }
 }
 
+/// The form forcing a user who logged in with a temporary password to choose a new one.
+pub struct ChangePasswordPageResponse {
+    pub return_to: String,
+    pub user_name: String,
+
+    // On error
+    pub error_message: Option<String>,
+}
+
+#[derive(Template)]
+#[template(path = "change_password.html")]
+struct ChangePasswordPage {
+    return_to: String,
+    user_name: String,
+    error_message: Option<String>,
+}
+
+impl IntoResponse for ChangePasswordPageResponse {
+    fn into_response(self) -> Response {
+        let Self {
+            return_to,
+            user_name,
+            error_message,
+        } = self;
+
+        let page = ChangePasswordPage {
+            return_to,
+            user_name,
+            error_message,
+        };
+
+        render_html(&page, StatusCode::OK).into_response()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    async fn render_change_password(user_name: &str, return_to: &str) -> String {
+        let response = ChangePasswordPageResponse {
+            return_to: return_to.to_string(),
+            user_name: user_name.to_string(),
+            error_message: None,
+        }
+        .into_response();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        String::from_utf8(body.to_vec()).unwrap()
+    }
+
+    #[tokio::test]
+    async fn change_password_posts_to_the_password_url_carrying_return_to() {
+        let body = render_change_password("alice", "/authorize?client_id=1").await;
+
+        assert!(
+            body.contains("action=\"/login/password?return_to=%2Fauthorize%3Fclient_id%3D1\""),
+            "{body}"
+        );
+    }
+
+    #[tokio::test]
+    async fn change_password_carries_the_user_name_escaped() {
+        let body = render_change_password("\"><script>", "/authorize").await;
+
+        assert!(
+            body.contains(
+                "name=\"user_name\" autocomplete=\"username\" value=\"&#34;&#62;&#60;script&#62;\""
+            ),
+            "{body}"
+        );
+    }
 
     async fn render(user_name: Option<&str>) -> String {
         render_with_return_to(user_name, "/authorize").await

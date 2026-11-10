@@ -5,3 +5,4 @@ client:
   scopes:
     - identity:users:authenticate
     - identity:users:get
+    - identity:users:password:set

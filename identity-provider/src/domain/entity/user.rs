@@ -76,8 +76,16 @@ impl User {
         &self.password_hash
     }
 
+    /// Sets a password chosen by the user, which is no longer temporary.
     pub fn set_password_hash(&mut self, password_hash: String) {
         self.password_hash = password_hash;
+        self.has_temporary_password = false;
+    }
+
+    /// Sets a generated password, which the user has to change on the next login.
+    pub fn set_temporary_password_hash(&mut self, password_hash: String) {
+        self.password_hash = password_hash;
+        self.has_temporary_password = true;
     }
 
     pub fn has_temporary_password(&self) -> bool {
@@ -224,6 +232,42 @@ mod tests {
 
         assert!(matches!(result, Err(UserError::InvalidUserName)));
         assert_eq!(user.user_name(), "old.name");
+    }
+
+    #[test]
+    fn set_password_hash_clears_the_temporary_password_flag() {
+        let mut user = User::new(
+            Uuid::new_v4(),
+            "john.doe".to_string(),
+            "John Doe".to_string(),
+            "old_hash".to_string(),
+            true,
+            vec![],
+        )
+        .unwrap();
+
+        user.set_password_hash("new_hash".to_string());
+
+        assert_eq!(user.password_hash(), "new_hash");
+        assert!(!user.has_temporary_password());
+    }
+
+    #[test]
+    fn set_temporary_password_hash_sets_the_temporary_password_flag() {
+        let mut user = User::new(
+            Uuid::new_v4(),
+            "john.doe".to_string(),
+            "John Doe".to_string(),
+            "old_hash".to_string(),
+            false,
+            vec![],
+        )
+        .unwrap();
+
+        user.set_temporary_password_hash("new_hash".to_string());
+
+        assert_eq!(user.password_hash(), "new_hash");
+        assert!(user.has_temporary_password());
     }
 
     #[test]

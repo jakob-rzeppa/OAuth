@@ -38,7 +38,7 @@ pub async fn reset_user_password(user_id: Uuid) -> Result<String, ResetUserPassw
     let hashed_password = hash_password(&new_password).map_err(|e| match e {
         HashPasswordError::HashingError => ResetUserPasswordError::HashingError,
     })?;
-    user.set_password_hash(hashed_password);
+    user.set_temporary_password_hash(hashed_password);
 
     save_user(&user).await.map_err(|e| match e {
         SaveUserError::DatabaseError => ResetUserPasswordError::DatabaseError,
@@ -88,7 +88,10 @@ mod tests {
         let id = Uuid::new_v4();
         setup_password();
         find_user_by_id_fake().setup(move |_| Ok(Some(user(id))));
-        save_user_fake().setup(|_| Ok(()));
+        save_user_fake().setup(|user| {
+            assert!(user.has_temporary_password());
+            Ok(())
+        });
 
         let result = reset_user_password(id).await;
 
