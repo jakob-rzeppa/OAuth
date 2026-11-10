@@ -97,20 +97,35 @@ async fn authorize_user_at(
 
 #[cfg(test)]
 mod tests {
-    use axum::{Json, Router, http::StatusCode, routing::post};
+    use axum::{
+        Json, Router,
+        http::{HeaderMap, StatusCode, header},
+        routing::post,
+    };
     use serde_json::{Value, json};
     use tokio::net::TcpListener;
 
     use super::*;
-    use crate::logging::testing::LogCapture;
+    use crate::{logging::testing::LogCapture, security::issue_self_token::issue_self_token_fake};
+
+    const SELF_TOKEN: &str = "the-self-token";
+
+    /// The auth-server's own access token, without touching redis or postgres.
+    fn fake_self_token() {
+        issue_self_token_fake().setup(|| Ok(SELF_TOKEN.to_string()));
+    }
 
     /// Serves `POST /v1/users/authenticate` with a fixed response and returns the base url.
     async fn identity_provider(status: StatusCode, body: Value) -> String {
         let app = Router::new().route(
             "/v1/users/authenticate",
-            post(move |Json(request): Json<Value>| async move {
-                // Echo the credentials back so tests can check what was sent.
+            post(move |headers: HeaderMap, Json(request): Json<Value>| async move {
+                // Check what was sent: the self token and the credentials.
                 if status.is_success() {
+                    assert_eq!(
+                        headers.get(header::AUTHORIZATION).unwrap(),
+                        &format!("Bearer {SELF_TOKEN}")
+                    );
                     assert_eq!(request, json!({"user_name": "alice", "password": "secret"}));
                 }
                 (status, Json(body))
@@ -124,6 +139,7 @@ mod tests {
 
     #[tokio::test]
     async fn returns_the_user_when_the_credentials_are_valid() {
+        fake_self_token();
         let id = Uuid::new_v4();
         let base_url = identity_provider(
             StatusCode::OK,
@@ -147,6 +163,7 @@ mod tests {
 
     #[tokio::test]
     async fn fails_with_invalid_credentials_when_the_password_is_wrong() {
+        fake_self_token();
         let base_url = identity_provider(
             StatusCode::UNAUTHORIZED,
             json!({"error": "unauthorized", "error_description": "x"}),
@@ -163,6 +180,7 @@ mod tests {
 
     #[tokio::test]
     async fn fails_with_invalid_credentials_when_the_user_does_not_exist() {
+        fake_self_token();
         let base_url = identity_provider(
             StatusCode::NOT_FOUND,
             json!({"error": "user_not_found", "error_description": "x"}),
@@ -179,6 +197,7 @@ mod tests {
 
     #[tokio::test]
     async fn fails_with_internal_error_when_a_credentials_status_has_another_error_code() {
+        fake_self_token();
         let base_url = identity_provider(
             StatusCode::UNAUTHORIZED,
             json!({"error": "invalid_request", "error_description": "x"}),
@@ -195,6 +214,7 @@ mod tests {
 
     #[tokio::test]
     async fn fails_with_internal_error_when_the_error_response_is_malformed() {
+        fake_self_token();
         let base_url =
             identity_provider(StatusCode::UNAUTHORIZED, json!({"message": "nope"})).await;
 
@@ -210,6 +230,7 @@ mod tests {
 
     #[tokio::test]
     async fn fails_with_internal_error_when_the_identity_provider_fails() {
+        fake_self_token();
         let base_url = identity_provider(
             StatusCode::INTERNAL_SERVER_ERROR,
             json!({"error": "internal_server_error", "error_description": "x"}),
@@ -228,6 +249,7 @@ mod tests {
 
     #[tokio::test]
     async fn fails_with_internal_error_when_the_identity_provider_is_unreachable() {
+        fake_self_token();
         // Nothing listens on port 1.
         let result = authorize_user_at("http://127.0.0.1:1", "alice", "secret").await;
 
@@ -241,6 +263,7 @@ mod tests {
 
     #[tokio::test]
     async fn logs_the_call_to_the_identity_provider_without_the_credentials() {
+        fake_self_token();
         let capture = LogCapture::default();
         let _guard = capture.install();
         let base_url = identity_provider(

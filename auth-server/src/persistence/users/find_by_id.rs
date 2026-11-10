@@ -63,17 +63,39 @@ async fn find_user_by_id_at(base_url: &str, user_id: Uuid) -> Result<Option<User
 
 #[cfg(test)]
 mod tests {
-    use axum::{Json, Router, extract::Path, http::StatusCode, routing::get};
+    use axum::{
+        Json, Router,
+        extract::Path,
+        http::{HeaderMap, StatusCode, header},
+        routing::get,
+    };
     use serde_json::{Value, json};
     use tokio::net::TcpListener;
 
     use super::*;
+    use crate::security::issue_self_token::issue_self_token_fake;
+
+    const SELF_TOKEN: &str = "the-self-token";
+
+    /// The auth-server's own access token, without touching redis or postgres.
+    fn fake_self_token() {
+        issue_self_token_fake().setup(|| Ok(SELF_TOKEN.to_string()));
+    }
 
     /// Serves `GET /v1/users/{user_id}` with a fixed response and returns the base url.
     async fn identity_provider(status: StatusCode, body: Value) -> String {
         let app = Router::new().route(
             "/v1/users/{user_id}",
-            get(move |Path(_): Path<String>| async move { (status, Json(body)) }),
+            get(move |headers: HeaderMap, Path(_): Path<String>| async move {
+                // Check that the self token was sent.
+                if status.is_success() {
+                    assert_eq!(
+                        headers.get(header::AUTHORIZATION).unwrap(),
+                        &format!("Bearer {SELF_TOKEN}")
+                    );
+                }
+                (status, Json(body))
+            }),
         );
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -83,6 +105,7 @@ mod tests {
 
     #[tokio::test]
     async fn returns_the_user() {
+        fake_self_token();
         let id = Uuid::new_v4();
         let base_url = identity_provider(
             StatusCode::OK,
@@ -107,6 +130,7 @@ mod tests {
 
     #[tokio::test]
     async fn returns_none_for_an_unknown_user() {
+        fake_self_token();
         let base_url = identity_provider(
             StatusCode::NOT_FOUND,
             json!({"error": "user_not_found", "error_description": "x"}),
@@ -120,6 +144,7 @@ mod tests {
 
     #[tokio::test]
     async fn fails_with_internal_error_when_the_identity_provider_fails() {
+        fake_self_token();
         let base_url = identity_provider(
             StatusCode::INTERNAL_SERVER_ERROR,
             json!({"error": "internal_server_error", "error_description": "x"}),
@@ -136,6 +161,7 @@ mod tests {
 
     #[tokio::test]
     async fn fails_with_internal_error_when_the_identity_provider_is_unreachable() {
+        fake_self_token();
         // Nothing listens on port 1.
         let result = find_user_by_id_at("http://127.0.0.1:1", Uuid::new_v4()).await;
 

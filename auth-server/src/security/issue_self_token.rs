@@ -12,6 +12,7 @@ use crate::{
     util::token::{hash_token, random_token},
 };
 
+#[fnmock::fakeable]
 pub async fn issue_self_token() -> Result<String, InternalError> {
     // Use the existing self token if it exists and is still valid
     if let Some(token) = peek_self_token().await? {
