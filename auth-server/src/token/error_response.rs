@@ -39,11 +39,11 @@ impl From<TokenErrorResponse> for ApiError {
                 "Unsupported grant type.",
             ),
             MissingAuthorizationCode => ApiError::new(
-                OAuthErrorCode::InvalidGrant,
+                OAuthErrorCode::InvalidRequest,
                 "Missing authorization code.",
             ),
             MissingCodeVerifier => ApiError::new(
-                OAuthErrorCode::InvalidGrant,
+                OAuthErrorCode::InvalidRequest,
                 "Missing code verifier.",
             ),
             InvalidAuthorizationCode => ApiError::new(

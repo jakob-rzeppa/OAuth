@@ -297,6 +297,49 @@ mod tests {
         assert_eq!(error.into_response().status(), StatusCode::BAD_REQUEST);
     }
 
+    /// The `error` of the JSON body the error is answered with.
+    async fn error_code(error: TokenErrorResponse) -> String {
+        let body = axum::body::to_bytes(error.into_response().into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        body["error"].as_str().unwrap().to_string()
+    }
+
+    #[tokio::test]
+    async fn rejects_a_missing_code_as_invalid_request() {
+        fake_registered_client();
+        take_authorization_code_fake().setup(|_| panic!("no code must be consumed"));
+        let request = TokenRequest {
+            code: None,
+            ..token_request(Uuid::new_v4())
+        };
+
+        let Err(error) = token_endpoint(request).await else {
+            panic!("expected an error");
+        };
+
+        assert!(matches!(error, TokenErrorResponse::MissingAuthorizationCode));
+        assert_eq!(error_code(error).await, "invalid_request");
+    }
+
+    #[tokio::test]
+    async fn rejects_a_missing_code_verifier_as_invalid_request() {
+        fake_registered_client();
+        take_authorization_code_fake().setup(|_| panic!("no code must be consumed"));
+        let request = TokenRequest {
+            code_verifier: None,
+            ..token_request(Uuid::new_v4())
+        };
+
+        let Err(error) = token_endpoint(request).await else {
+            panic!("expected an error");
+        };
+
+        assert!(matches!(error, TokenErrorResponse::MissingCodeVerifier));
+        assert_eq!(error_code(error).await, "invalid_request");
+    }
+
     #[tokio::test]
     async fn rejects_a_code_issued_to_another_client_as_invalid_grant() {
         setup_valid_grant(Uuid::new_v4(), None);
