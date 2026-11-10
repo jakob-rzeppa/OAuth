@@ -1,0 +1,13 @@
+<tr id="user-{{ user.id }}">
+    <td>{{ user.user_name }}</td>
+    <td>{{ user.display_name }}</td>
+    <td>{% for role in user.roles %}<span class="badge">{{ role.name }}</span>{% else %}<span class="muted">none</span>{% endfor %}</td>
+    <td>{% if user.has_temporary_password %}<span class="badge warn">temporary</span>{% else %}<span class="muted">set</span>{% endif %}</td>
+    <td class="actions">
+        <button class="secondary" hx-get="/admin/users/{{ user.id }}/edit" hx-target="closest tr" hx-swap="outerHTML">Edit</button>
+        <button class="secondary" hx-post="/admin/users/{{ user.id }}/password/reset" hx-target="closest tr" hx-swap="outerHTML"
+                hx-confirm="Reset the password of {{ user.user_name }}?">Reset password</button>
+        <button class="danger" hx-delete="/admin/users/{{ user.id }}" hx-target="closest tr" hx-swap="outerHTML"
+                hx-confirm="Delete {{ user.user_name }}?">Delete</button>
+    </td>
+</tr>

@@ -13,6 +13,7 @@ pub fn router() -> axum::Router {
         .route("/v1/health", axum::routing::get(health::health_endpoint))
         .nest("/v1/users", users::router())
         .nest("/v1/roles", roles::router())
+        .nest("/admin", crate::admin::router())
         .merge(
             utoipa_swagger_ui::SwaggerUi::new("/swagger-ui")
                 .url("/api-docs/openapi.json", openapi::ApiDoc::openapi()),

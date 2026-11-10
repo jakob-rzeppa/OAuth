@@ -38,6 +38,15 @@ services:
         - path: ./seed
           target: /app/seed
           action: sync
+        - path: ./templates
+          target: /app/templates
+          action: sync
+        - path: ./static
+          target: /app/static
+          action: sync
+        - path: ./askama.toml
+          target: /app/askama.toml
+          action: sync
         - path: ./.sqlx
           target: /app/.sqlx
           action: sync

@@ -1,0 +1,14 @@
+<tr id="user-{{ user.id }}">
+    <td><input type="text" aria-label="User name" name="user_name" value="{{ user.user_name }}" required></td>
+    <td><input type="text" aria-label="Display name" name="display_name" value="{{ user.display_name }}"></td>
+    <td>
+        {% for role in roles %}
+            <label class="check"><input type="checkbox" name="role_ids" value="{{ role.id }}"{% if role.checked %} checked{% endif %}> {{ role.name }}</label>
+        {% endfor %}
+    </td>
+    <td></td>
+    <td class="actions">
+        <button hx-put="/admin/users/{{ user.id }}" hx-include="closest tr" hx-target="closest tr" hx-swap="outerHTML">Save</button>
+        <button class="secondary" hx-get="/admin/users/{{ user.id }}" hx-target="closest tr" hx-swap="outerHTML">Cancel</button>
+    </td>
+</tr>

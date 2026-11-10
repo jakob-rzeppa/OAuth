@@ -1,0 +1,1 @@
+<div id="notice" role="status"{% if is_error %} class="error"{% endif %}{% if oob %} hx-swap-oob="true"{% endif %}>{{ message }}{% if let Some(temporary_password) = temporary_password %} <code>{{ temporary_password }}</code>{% endif %}</div>

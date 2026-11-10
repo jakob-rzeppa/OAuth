@@ -29,10 +29,12 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 WORKDIR /app
 
 COPY .cargo ./.cargo
-COPY Cargo.toml Cargo.lock sqlx.toml ./
+COPY Cargo.toml Cargo.lock sqlx.toml askama.toml ./
 COPY .sqlx ./.sqlx
 COPY migrations ./migrations
 COPY seed ./seed
+COPY templates ./templates
+COPY static ./static
 COPY src ./src
 
 # The target volume outlives the image, and COPY and `watch` sync keep the host
@@ -58,8 +60,11 @@ RUN apt-get update \
 WORKDIR /app
 
 COPY .cargo ./.cargo
-COPY Cargo.toml Cargo.lock sqlx.toml ./
+COPY Cargo.toml Cargo.lock sqlx.toml askama.toml ./
 COPY .sqlx ./.sqlx
+# The askama templates and htmx are compiled into the binary.
+COPY templates ./templates
+COPY static ./static
 COPY src ./src
 
 RUN --mount=type=cache,target=/usr/local/cargo/registry \

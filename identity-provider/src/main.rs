@@ -2,6 +2,7 @@ use std::net::SocketAddr;
 
 use crate::config::CONFIG;
 
+mod admin;
 mod api;
 mod application;
 mod config;
