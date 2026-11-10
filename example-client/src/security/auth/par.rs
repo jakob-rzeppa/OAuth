@@ -1,6 +1,6 @@
 use crate::{
     config,
-    security::auth::{code_verifier::CodeVerifier, error::AuthError, state::State},
+    security::auth::{code_verifier::CodeVerifier, error::AuthError, nonce::Nonce, state::State},
 };
 
 /// The scopes the example-client asks for.
@@ -16,10 +16,11 @@ pub struct ParRequest {
     state: String,
     code_challenge: String,
     code_challenge_method: String,
+    nonce: String,
 }
 
 impl ParRequest {
-    pub fn new(state: &State, code_verifier: &CodeVerifier) -> Self {
+    pub fn new(state: &State, nonce: &Nonce, code_verifier: &CodeVerifier) -> Self {
         Self {
             client_id: config::client_id(),
             redirect_uri: config::home_url(),
@@ -28,6 +29,7 @@ impl ParRequest {
             state: state.value().to_string(),
             code_challenge: code_verifier.code_challenge(),
             code_challenge_method: code_verifier.code_challenge_method().to_string(),
+            nonce: nonce.value().to_string(),
         }
     }
 }

@@ -329,9 +329,10 @@ fn result_status<T>(result: &Option<Result<T, AuthError>>) -> Status {
 }
 
 fn prepare_step(progress: &AuthProgress) -> StepView {
-    let body = match (&progress.state, &progress.code_verifier) {
-        (Some(state), Some(verifier)) => Some(pretty_json(&serde_json::json!({
+    let body = match (&progress.state, &progress.nonce, &progress.code_verifier) {
+        (Some(state), Some(nonce), Some(verifier)) => Some(pretty_json(&serde_json::json!({
             "state": state.value(),
+            "nonce": nonce.value(),
             "code_verifier": verifier.value(),
             "code_challenge": verifier.code_challenge(),
             "code_challenge_method": verifier.code_challenge_method(),
@@ -342,10 +343,10 @@ fn prepare_step(progress: &AuthProgress) -> StepView {
 
     StepView {
         number: 1,
-        title: "Generate state and PKCE verifier",
-        description: "A random state ties the callback to this request; the verifier's SHA-256 challenge goes out now, the verifier itself only with the token request (RFC 7636).",
+        title: "Generate state, nonce and PKCE verifier",
+        description: "A random state ties the callback to this request, a random nonce ties the ID token to it (OpenID Connect); the verifier's SHA-256 challenge goes out now, the verifier itself only with the token request (RFC 7636).",
         status,
-        messages: vec![MessageView::new(CLIENT, CLIENT, "state + code_verifier", body, status)],
+        messages: vec![MessageView::new(CLIENT, CLIENT, "state + nonce + code_verifier", body, status)],
         checks: Vec::new(),
         action: Some(Action::post("prepare", "Generate")),
     }
@@ -457,9 +458,9 @@ fn token_step(progress: &AuthProgress) -> StepView {
     let (check_label, check) = match &progress.token_response {
         Some(_) if !checks.is_empty() => {
             let label = if checks.iter().all(|check| check.passed) {
-                "id_token iss ok"
+                "id_token iss + nonce ok"
             } else {
-                "id_token iss mismatch"
+                "id_token iss / nonce mismatch"
             };
             let mut body = checks_body(&checks);
             if let Some(Err(error)) = &progress.token_response {
@@ -467,14 +468,14 @@ fn token_step(progress: &AuthProgress) -> StepView {
             }
             (label, Some(body))
         }
-        _ => ("check id_token iss", None),
+        _ => ("check id_token iss + nonce", None),
     };
     let response_status = if checks.is_empty() { status } else { Status::Done };
 
     StepView {
         number: 5,
         title: "Exchange the code for tokens",
-        description: "The client sends the code with the PKCE verifier; the auth-server hashes the verifier, compares it to the challenge from step 2 and issues the tokens. The client checks the ID token's iss is the auth-server it asked.",
+        description: "The client sends the code with the PKCE verifier; the auth-server hashes the verifier, compares it to the challenge from step 2 and issues the tokens. The client checks the ID token's iss is the auth-server it asked and its nonce is the one from step 1.",
         status,
         messages: vec![
             MessageView::new(CLIENT, AUTH_SERVER, "POST /token", request, status),

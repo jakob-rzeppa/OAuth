@@ -46,14 +46,15 @@ impl TokenResponse {
         self.id_token.as_deref()
     }
 
-    /// The `iss` claim of the ID token, `None` if there is no ID token or it carries no `iss`.
+    /// A string claim of the ID token, e.g. `iss` or `nonce`. `None` if there is no ID token or it
+    /// doesn't carry the claim as a string.
     ///
     /// The signature isn't verified: the token came straight from the auth-server over TLS, which
-    /// OpenID Connect Core 1.0 section 3.1.3.7 allows in place of the signature check. The `iss`
-    /// still has to be compared.
-    pub fn id_token_issuer(&self) -> Option<String> {
+    /// OpenID Connect Core 1.0 section 3.1.3.7 allows in place of the signature check. The claims
+    /// still have to be compared.
+    pub fn id_token_claim(&self, name: &str) -> Option<String> {
         let claims = jwt_claims(self.id_token.as_deref()?)?;
-        claims.get("iss")?.as_str().map(str::to_string)
+        claims.get(name)?.as_str().map(str::to_string)
     }
 }
 
@@ -107,13 +108,13 @@ mod tests {
     #[test]
     fn reads_the_iss_claim_of_the_id_token() {
         let response = response_with(Some(jwt(r#"{"iss":"https://auth.example"}"#)));
-        assert_eq!(response.id_token_issuer().as_deref(), Some("https://auth.example"));
+        assert_eq!(response.id_token_claim("iss").as_deref(), Some("https://auth.example"));
     }
 
     #[test]
-    fn has_no_issuer_without_an_id_token_or_an_iss_claim() {
-        assert_eq!(response_with(None).id_token_issuer(), None);
-        assert_eq!(response_with(Some(jwt(r#"{"sub":"x"}"#))).id_token_issuer(), None);
-        assert_eq!(response_with(Some("not-a-jwt".to_string())).id_token_issuer(), None);
+    fn has_no_claim_without_an_id_token_or_the_claim() {
+        assert_eq!(response_with(None).id_token_claim("iss"), None);
+        assert_eq!(response_with(Some(jwt(r#"{"sub":"x"}"#))).id_token_claim("iss"), None);
+        assert_eq!(response_with(Some("not-a-jwt".to_string())).id_token_claim("iss"), None);
     }
 }

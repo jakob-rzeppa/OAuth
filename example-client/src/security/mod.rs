@@ -5,6 +5,7 @@ use crate::{
         check::Check,
         code_verifier::CodeVerifier,
         error::AuthError,
+        nonce::Nonce,
         par::{ParRequest, ParResponse, register_par},
         state::State,
         token::{TokenRequest, TokenResponse, request_token},
@@ -19,6 +20,7 @@ pub mod session;
 #[derive(Default)]
 pub struct AuthProgress {
     pub state: Option<State>,
+    pub nonce: Option<Nonce>,
     pub code_verifier: Option<CodeVerifier>,
 
     pub par_request: Option<ParRequest>,
@@ -32,7 +34,7 @@ pub struct AuthProgress {
 
     pub token_request: Option<TokenRequest>,
     pub token_response: Option<Result<TokenResponse, AuthError>>,
-    /// The ID token's `iss` against the expected issuer.
+    /// The ID token's `iss` and `nonce` against the expected values.
     pub token_checks: Vec<Check>,
 
     pub token: Option<String>,
@@ -41,26 +43,29 @@ pub struct AuthProgress {
 }
 
 impl AuthProgress {
-    /// Step 1: generates the state and the PKCE verifier, locally.
+    /// Step 1: generates the state, the nonce and the PKCE verifier, locally.
     pub fn prepare(&mut self) {
         if self.state.is_some() {
             return;
         }
         self.state = Some(State::generate());
+        self.nonce = Some(Nonce::generate());
         self.code_verifier = Some(CodeVerifier::generate());
     }
 
     /// Step 2: pushes the authorization request to the auth-server, and with its `request_uri`
     /// builds the URL the browser is sent to.
     pub async fn push_par(&mut self) {
-        let (Some(state), Some(code_verifier)) = (&self.state, &self.code_verifier) else {
+        let (Some(state), Some(nonce), Some(code_verifier)) =
+            (&self.state, &self.nonce, &self.code_verifier)
+        else {
             return;
         };
         if matches!(self.par_response, Some(Ok(_))) {
             return;
         }
 
-        let request = ParRequest::new(state, code_verifier);
+        let request = ParRequest::new(state, nonce, code_verifier);
         let response = register_par(&request).await;
         self.auth_redirect_uri = response
             .as_ref()
@@ -85,10 +90,10 @@ impl AuthProgress {
         self.callback_query = Some(query);
     }
 
-    /// Step 4: exchanges the code for tokens and checks the ID token's issuer.
+    /// Step 4: exchanges the code for tokens and checks the ID token's issuer and nonce.
     pub async fn exchange_code(&mut self) {
-        let (Some(Ok(authorization)), Some(code_verifier)) =
-            (&self.auth_response, &self.code_verifier)
+        let (Some(Ok(authorization)), Some(nonce), Some(code_verifier)) =
+            (&self.auth_response, &self.nonce, &self.code_verifier)
         else {
             return;
         };
@@ -98,7 +103,7 @@ impl AuthProgress {
 
         let request = TokenRequest::new(&authorization.code, code_verifier);
         let (checks, response) = match request_token(&request).await {
-            Ok(response) => check_token_response(response),
+            Ok(response) => check_token_response(response, nonce),
             Err(error) => (Vec::new(), Err(error)),
         };
         self.token_checks = checks;
@@ -164,18 +169,23 @@ fn verify_callback(
 }
 
 /// The `openid` scope is always requested, so the response must carry an ID token issued by the
-/// auth-server the request went to.
+/// auth-server the request went to, for this request's nonce. Both are always compared, so both
+/// can be shown.
 fn check_token_response(
     response: TokenResponse,
+    expected_nonce: &Nonce,
 ) -> (Vec<Check>, Result<TokenResponse, AuthError>) {
-    let iss = Check::new("id_token iss", config::auth_server_url(), response.id_token_issuer());
-    let result = if iss.passed() {
-        Ok(response)
-    } else {
-        Err(AuthError::IdTokenIssuerMismatch {
-            expected: iss.expected.clone(),
-            actual: iss.actual.clone(),
-        })
+    let checks = vec![
+        ("iss", Check::new("id_token iss", config::auth_server_url(), response.id_token_claim("iss"))),
+        ("nonce", Check::new("id_token nonce", expected_nonce.value(), response.id_token_claim("nonce"))),
+    ];
+    let result = match checks.iter().find(|(_, check)| !check.passed()) {
+        None => Ok(response),
+        Some((claim, check)) => Err(AuthError::IdTokenClaimMismatch {
+            claim,
+            expected: check.expected.clone(),
+            actual: check.actual.clone(),
+        }),
     };
-    (vec![iss], result)
+    (checks.into_iter().map(|(_, check)| check).collect(), result)
 }
