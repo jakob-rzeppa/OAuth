@@ -1,9 +1,6 @@
 use axum::extract::rejection::FormRejection;
 
-use crate::{
-    error::{InternalError, into_response_via, page::PageError},
-    util::oauth_error::OAuthErrorCode,
-};
+use crate::error::{InternalError, into_response_via, oauth_code::OAuthErrorCode, page::PageError};
 
 #[derive(Debug)]
 pub enum LoginErrorResponse {

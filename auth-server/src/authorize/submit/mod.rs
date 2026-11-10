@@ -10,14 +10,14 @@ use crate::{
     domain::authorization_code::{
         code::AuthorizationCode, request::validate::ValidatedAuthorizationRequest,
     },
-    error::redirect::RedirectError,
+    error::{oauth_code::OAuthErrorCode, redirect::RedirectError},
     persistence::{
         authorization_codes::save::save_authorization_code, clients::find_by_id::find_client_by_id,
         pars::take::take_par,
     },
     session::require_login::require_login,
     session::SessionToken,
-    util::{oauth_error::OAuthErrorCode, token::random_token},
+    util::token::random_token,
 };
 
 mod error_response;

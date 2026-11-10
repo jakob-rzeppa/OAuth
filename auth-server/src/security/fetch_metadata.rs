@@ -5,7 +5,10 @@ use axum::{
     response::{IntoResponse, Response},
 };
 
-use crate::{config::Config, error::page::PageError, util::oauth_error::OAuthErrorCode};
+use crate::{
+    config::Config,
+    error::{oauth_code::OAuthErrorCode, page::PageError},
+};
 
 const SEC_FETCH_SITE: &str = "sec-fetch-site";
 

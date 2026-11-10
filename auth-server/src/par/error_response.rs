@@ -2,8 +2,7 @@ use axum::extract::rejection::FormRejection;
 
 use crate::{
     domain::authorization_code::request::validate::{FatalValidationError, ValidationError},
-    error::{InternalError, api::ApiError, into_response_via},
-    util::oauth_error::OAuthErrorCode,
+    error::{InternalError, api::ApiError, into_response_via, oauth_code::OAuthErrorCode},
 };
 
 #[derive(Debug)]

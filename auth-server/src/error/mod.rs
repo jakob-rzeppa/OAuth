@@ -9,6 +9,7 @@
 //! - [`redirect::RedirectError`]: a redirect to the client's `redirect_uri`.
 
 pub mod api;
+pub mod oauth_code;
 pub mod page;
 pub mod redirect;
 

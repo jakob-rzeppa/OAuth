@@ -4,9 +4,8 @@ use axum::{
 };
 
 use crate::{
-    error::{InternalError, page::PageError},
+    error::{InternalError, oauth_code::OAuthErrorCode, page::PageError},
     session::require_login::{LoginRedirect, RequireLoginError},
-    util::oauth_error::OAuthErrorCode,
 };
 
 /// Errors of the consent page and its submit that are not redirected back to the client:

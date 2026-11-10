@@ -4,8 +4,8 @@ use axum::{
 };
 
 use crate::{
-    error::{InternalError, SERVER_ERROR_DESCRIPTION},
-    util::{html::render_error_page, oauth_error::OAuthErrorCode},
+    error::{InternalError, SERVER_ERROR_DESCRIPTION, oauth_code::OAuthErrorCode},
+    util::html::render_error_page,
 };
 
 /// An error answered with the HTML error page, for the endpoints the user's browser visits.

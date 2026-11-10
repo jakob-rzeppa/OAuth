@@ -1,6 +1,9 @@
 use uuid::Uuid;
 
-use crate::domain::{authorization_code::request::AuthorizationRequest, client::Client};
+use crate::{
+    domain::{authorization_code::request::AuthorizationRequest, client::Client},
+    error::oauth_code::OAuthErrorCode,
+};
 
 pub struct ValidatedAuthorizationRequest {
     pub client_id: Uuid,
@@ -161,6 +164,52 @@ impl ValidationError {
             error,
             redirect_uri,
             state,
+        }
+    }
+
+    /// The OAuth error code a client is told for this validation error.
+    pub fn oauth_code(&self) -> OAuthErrorCode {
+        match self {
+            ValidationError::Fatal { .. } => OAuthErrorCode::InvalidRequest,
+            ValidationError::Redirectable { error, .. } => match error {
+                RedirectableValidationError::InvalidResponseType => {
+                    OAuthErrorCode::UnsupportedResponseType
+                }
+                RedirectableValidationError::InvalidScope => OAuthErrorCode::InvalidScope,
+                RedirectableValidationError::InvalidCodeChallengeMethod
+                | RedirectableValidationError::InvalidCodeChallenge => {
+                    OAuthErrorCode::InvalidRequest
+                }
+            },
+        }
+    }
+
+    /// The error description a client is told for this validation error.
+    pub fn description(&self) -> &'static str {
+        match self {
+            ValidationError::Fatal { error } => match error {
+                FatalValidationError::ClientIdMismatch => {
+                    "The client_id parameter does not match the client_id of the authorization request."
+                }
+                FatalValidationError::InvalidRedirectUri => {
+                    "The redirect_uri parameter is not registered for the client."
+                }
+                FatalValidationError::InvalidState => "The state parameter is missing or invalid.",
+            },
+            ValidationError::Redirectable { error, .. } => match error {
+                RedirectableValidationError::InvalidResponseType => {
+                    "The response_type parameter is missing or invalid."
+                }
+                RedirectableValidationError::InvalidScope => {
+                    "The scope parameter is missing or invalid."
+                }
+                RedirectableValidationError::InvalidCodeChallengeMethod => {
+                    "The code_challenge_method parameter is missing or invalid."
+                }
+                RedirectableValidationError::InvalidCodeChallenge => {
+                    "The code_challenge parameter is missing or invalid."
+                }
+            },
         }
     }
 }
@@ -478,5 +527,24 @@ mod tests {
                 "code_challenge: {code_challenge}"
             );
         }
+    }
+
+    #[test]
+    fn redirectable_validation_errors_map_to_their_rfc_6749_codes() {
+        let redirectable =
+            |error| ValidationError::redirectable(error, String::new(), String::new());
+
+        assert_eq!(
+            redirectable(RedirectableValidationError::InvalidResponseType).oauth_code(),
+            OAuthErrorCode::UnsupportedResponseType
+        );
+        assert_eq!(
+            redirectable(RedirectableValidationError::InvalidScope).oauth_code(),
+            OAuthErrorCode::InvalidScope
+        );
+        assert_eq!(
+            redirectable(RedirectableValidationError::InvalidCodeChallenge).oauth_code(),
+            OAuthErrorCode::InvalidRequest
+        );
     }
 }

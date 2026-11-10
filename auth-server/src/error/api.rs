@@ -5,10 +5,7 @@ use axum::{
 };
 use serde_json::json;
 
-use crate::{
-    error::{InternalError, SERVER_ERROR_DESCRIPTION},
-    util::oauth_error::OAuthErrorCode,
-};
+use crate::error::{InternalError, SERVER_ERROR_DESCRIPTION, oauth_code::OAuthErrorCode};
 
 /// An error answered with a JSON body, for the endpoints called by clients.
 #[derive(Debug)]

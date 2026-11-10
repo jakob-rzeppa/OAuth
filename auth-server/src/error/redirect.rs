@@ -3,8 +3,7 @@ use url::Url;
 
 use crate::{
     config::Config,
-    error::{InternalError, SERVER_ERROR_DESCRIPTION, page::PageError},
-    util::oauth_error::OAuthErrorCode,
+    error::{InternalError, SERVER_ERROR_DESCRIPTION, oauth_code::OAuthErrorCode, page::PageError},
 };
 
 /// An error reported back to the client by redirecting to its `redirect_uri`

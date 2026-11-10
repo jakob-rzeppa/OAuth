@@ -3,8 +3,8 @@ use crate::{
         InternalError,
         api::{ApiError, Challenge, Scheme},
         into_response_via,
+        oauth_code::OAuthErrorCode,
     },
-    util::oauth_error::OAuthErrorCode,
 };
 
 /// The errors of a protected resource (RFC 6750, section 3). Unlike the OAuth endpoints, they are

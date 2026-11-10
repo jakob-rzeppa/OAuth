@@ -81,9 +81,8 @@ mod tests {
     use super::*;
     use crate::{
         domain::client::Client,
-        error::InternalError,
+        error::{InternalError, oauth_code::OAuthErrorCode},
         persistence::{clients::find_by_id::find_client_by_id_fake, pars::save::save_par_fake},
-        util::oauth_error::OAuthErrorCode,
     };
 
     const PAR_TTL_SECONDS: u64 = 180;
