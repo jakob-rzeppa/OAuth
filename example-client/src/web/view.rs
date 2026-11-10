@@ -7,7 +7,12 @@ use crate::{
     config,
     security::{
         AuthProgress,
-        auth::{check::Check, error::AuthError, par::par_url, token::token_url},
+        auth::{
+            check::Check,
+            error::AuthError,
+            par::par_url,
+            token::{jwt_claims, jwt_header, token_url},
+        },
     },
 };
 
@@ -20,6 +25,115 @@ const AUTH_SERVER: usize = 2;
 pub struct FlowView {
     pub steps: Vec<StepView>,
     pub token: Option<String>,
+    pub id_token: Option<IdTokenView>,
+}
+
+/// The ID token, raw and decoded. Nothing is verified here, the checks happen in step 5.
+pub struct IdTokenView {
+    /// The three base64url parts: header, claims, signature.
+    pub header_part: String,
+    pub claims_part: String,
+    pub signature_part: String,
+    /// The decoded JOSE header, pretty-printed.
+    pub header: String,
+    pub claims: Vec<ClaimView>,
+}
+
+pub struct ClaimView {
+    pub name: String,
+    pub value: String,
+    /// What the claim means (OpenID Connect Core 1.0 section 2), empty for unknown claims.
+    pub meaning: &'static str,
+    /// For timestamps, the date and how far away it is.
+    pub note: Option<String>,
+}
+
+impl IdTokenView {
+    fn new(id_token: &str) -> Self {
+        let mut parts = id_token.splitn(3, '.');
+        let mut next = || parts.next().unwrap_or_default().to_string();
+        let (header_part, claims_part, signature_part) = (next(), next(), next());
+
+        let header = jwt_header(id_token)
+            .map(|header| pretty_json(&header))
+            .unwrap_or_else(|| "<not decodable>".to_string());
+        let claims = jwt_claims(id_token)
+            .map(|claims| claims.into_iter().map(|(name, value)| ClaimView::new(name, value)).collect())
+            .unwrap_or_default();
+
+        Self { header_part, claims_part, signature_part, header, claims }
+    }
+}
+
+impl ClaimView {
+    fn new(name: String, value: serde_json::Value) -> Self {
+        let meaning = claim_meaning(&name);
+        let note = match (name.as_str(), value.as_i64()) {
+            ("exp" | "iat" | "nbf" | "auth_time", Some(seconds)) => Some(describe_timestamp(seconds)),
+            _ => None,
+        };
+        let value = match value {
+            serde_json::Value::String(value) => value,
+            other => other.to_string(),
+        };
+        Self { name, value, meaning, note }
+    }
+}
+
+fn claim_meaning(name: &str) -> &'static str {
+    match name {
+        "iss" => "Issuer: the auth-server that issued the token",
+        "sub" => "Subject: the user's id, never reassigned",
+        "aud" => "Audience: the client_id it was issued to",
+        "exp" => "Expires at",
+        "iat" => "Issued at",
+        "nbf" => "Not valid before",
+        "auth_time" => "When the user logged in",
+        "nonce" => "Echo of the authorization request's nonce",
+        "azp" => "Authorized party",
+        "acr" => "Authentication context class",
+        "amr" => "Authentication methods",
+        "at_hash" => "Hash of the access token",
+        _ => "",
+    }
+}
+
+/// `2026-11-10 14:03:12 UTC (in 4 min)` for a unix timestamp.
+fn describe_timestamp(seconds: i64) -> String {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_secs() as i64)
+        .unwrap_or(seconds);
+    let delta = seconds - now;
+    let relative = match delta.unsigned_abs() {
+        0..=59 => format!("{} s", delta.unsigned_abs()),
+        60..=3599 => format!("{} min", delta.unsigned_abs() / 60),
+        3600..=86399 => format!("{} h", delta.unsigned_abs() / 3600),
+        other => format!("{} d", other / 86400),
+    };
+    let relative = if delta >= 0 { format!("in {relative}") } else { format!("{relative} ago") };
+    format!("{} ({relative})", format_utc(seconds))
+}
+
+/// Formats a unix timestamp as a UTC date and time, without pulling in a date crate.
+fn format_utc(seconds: i64) -> String {
+    let (days, secs) = (seconds.div_euclid(86400), seconds.rem_euclid(86400));
+    // Civil date from days since 1970-01-01 (Howard Hinnant's algorithm).
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z.rem_euclid(146_097);
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = doy - (153 * mp + 2) / 5 + 1;
+    let month = if mp < 10 { mp + 3 } else { mp - 9 };
+    let year = yoe + era * 400 + i64::from(month <= 2);
+    format!(
+        "{year:04}-{month:02}-{day:02} {:02}:{:02}:{:02} UTC",
+        secs / 3600,
+        secs % 3600 / 60,
+        secs % 60
+    )
 }
 
 pub struct StepView {
@@ -198,7 +312,11 @@ impl FlowView {
             }
         }
 
-        Self { steps, token: progress.token.clone() }
+        Self {
+            steps,
+            token: progress.token.clone(),
+            id_token: progress.id_token.as_deref().map(IdTokenView::new),
+        }
     }
 }
 
@@ -390,5 +508,17 @@ fn error_label(error: &AuthError) -> String {
         AuthError::Rejected { status_code, error, .. } => format!("{status_code} {error}"),
         AuthError::UnexpectedResponse { status_code } => format!("{status_code}"),
         _ => "request failed".to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn formats_unix_timestamps_as_utc() {
+        assert_eq!(format_utc(0), "1970-01-01 00:00:00 UTC");
+        assert_eq!(format_utc(951_782_400), "2000-02-29 00:00:00 UTC");
+        assert_eq!(format_utc(1_794_323_045), "2026-11-10 15:04:05 UTC");
     }
 }

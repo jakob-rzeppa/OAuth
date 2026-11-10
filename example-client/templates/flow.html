@@ -175,7 +175,33 @@
             background: var(--surface); border: 1px solid var(--done); border-radius: 10px;
         }
         .token h2 { margin: 0 0 6px; font-size: 16px; color: var(--done); }
-        .token code { display: block; word-break: break-all; background: var(--code-bg); padding: 8px 10px; border-radius: 6px; }
+        .token h3 { margin: 16px 0 2px; font-size: 14px; }
+        .token h4 { margin: 0 0 6px; font-size: 13px; display: flex; align-items: center; gap: 6px; }
+        .token-raw {
+            display: block; margin-top: 6px; word-break: break-all; font-size: 12.5px;
+            background: var(--code-bg); padding: 8px 10px; border-radius: 6px;
+        }
+        .jwt-header { color: #d14a8b; }
+        .jwt-claims { color: #7a4fd6; }
+        .jwt-signature { color: #1595b0; }
+        .jwt-dot { width: 9px; height: 9px; border-radius: 50%; background: currentColor; }
+        @media (prefers-color-scheme: dark) {
+            .jwt-header { color: #f07aae; }
+            .jwt-claims { color: #b190ff; }
+            .jwt-signature { color: #4fc7e0; }
+        }
+        .jwt-decoded { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 16px; margin-top: 12px; }
+        .claims { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .claims th, .claims td { text-align: left; vertical-align: top; padding: 6px 8px; border-top: 1px solid var(--line); }
+        .claims tr:first-child th, .claims tr:first-child td { border-top: none; }
+        .claims th { width: 1%; white-space: nowrap; font-weight: 600; }
+        .claim-value { word-break: break-all; background: var(--code-bg); padding: 0 5px; border-radius: 4px; }
+        .claim-note { margin-top: 2px; font-size: 12.5px; }
+        .claim-meaning { margin-top: 2px; color: var(--muted); font-size: 12.5px; }
+        .jwt-json {
+            margin: 0; padding: 8px 10px; background: var(--code-bg); border-radius: 6px;
+            font-size: 12.5px; white-space: pre-wrap; word-break: break-all;
+        }
 
         [x-cloak] { display: none !important; }
 
@@ -185,6 +211,7 @@
             .step-action { width: 100%; }
             .actor { padding: 4px 6px; font-size: 12px; }
             .msg-label { font-size: 11px; }
+            .jwt-decoded { grid-template-columns: 1fr; }
         }
     </style>
 </head>

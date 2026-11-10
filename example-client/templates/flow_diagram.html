@@ -81,8 +81,42 @@
         {% if let Some(token) = flow.token %}
         <div class="token">
             <h2>Signed in</h2>
-            <p class="step-description">The client holds an access token for this session:</p>
-            <code>{{ token }}</code>
+
+            <h3>Access token</h3>
+            <p class="step-description">Sent as a bearer token to call APIs for this session.</p>
+            <code class="token-raw">{{ token }}</code>
+
+            {% if let Some(id_token) = flow.id_token %}
+            <h3>ID token</h3>
+            <p class="step-description">Who logged in, signed by the auth-server (OpenID Connect). Shown decoded below; the parts are header · claims · signature.</p>
+            <code class="token-raw jwt"><span class="jwt-header">{{ id_token.header_part }}</span>.<span class="jwt-claims">{{ id_token.claims_part }}</span>.<span class="jwt-signature">{{ id_token.signature_part }}</span></code>
+
+            <div class="jwt-decoded">
+                <div>
+                    <h4><span class="jwt-dot jwt-claims"></span>Claims</h4>
+                    {% if id_token.claims.is_empty() %}
+                    <p class="step-description">The claims could not be decoded.</p>
+                    {% else %}
+                    <table class="claims">
+                        {% for claim in id_token.claims %}
+                        <tr>
+                            <th><code>{{ claim.name }}</code></th>
+                            <td>
+                                <code class="claim-value">{{ claim.value }}</code>
+                                {% if let Some(note) = claim.note %}<div class="claim-note">{{ note }}</div>{% endif %}
+                                {% if !claim.meaning.is_empty() %}<div class="claim-meaning">{{ claim.meaning }}</div>{% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </table>
+                    {% endif %}
+                </div>
+                <div>
+                    <h4><span class="jwt-dot jwt-header"></span>Header</h4>
+                    <pre class="jwt-json">{{ id_token.header }}</pre>
+                </div>
+            </div>
+            {% endif %}
         </div>
         {% endif %}
     </div>

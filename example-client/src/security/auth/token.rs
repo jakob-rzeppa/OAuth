@@ -41,17 +41,36 @@ impl TokenResponse {
         &self.access_token
     }
 
+    /// The ID token, present when the `openid` scope was granted.
+    pub fn id_token(&self) -> Option<&str> {
+        self.id_token.as_deref()
+    }
+
     /// The `iss` claim of the ID token, `None` if there is no ID token or it carries no `iss`.
     ///
     /// The signature isn't verified: the token came straight from the auth-server over TLS, which
     /// OpenID Connect Core 1.0 section 3.1.3.7 allows in place of the signature check. The `iss`
     /// still has to be compared.
     pub fn id_token_issuer(&self) -> Option<String> {
-        let payload = self.id_token.as_deref()?.split('.').nth(1)?;
-        let payload = URL_SAFE_NO_PAD.decode(payload).ok()?;
-        let claims: serde_json::Value = serde_json::from_slice(&payload).ok()?;
+        let claims = jwt_claims(self.id_token.as_deref()?)?;
         claims.get("iss")?.as_str().map(str::to_string)
     }
+}
+
+/// The decoded JOSE header of a compact JWT, without verifying anything.
+pub fn jwt_header(jwt: &str) -> Option<serde_json::Map<String, serde_json::Value>> {
+    jwt_part(jwt, 0)
+}
+
+/// The decoded claims of a compact JWT, without verifying anything.
+pub fn jwt_claims(jwt: &str) -> Option<serde_json::Map<String, serde_json::Value>> {
+    jwt_part(jwt, 1)
+}
+
+fn jwt_part(jwt: &str, index: usize) -> Option<serde_json::Map<String, serde_json::Value>> {
+    let part = jwt.split('.').nth(index)?;
+    let bytes = URL_SAFE_NO_PAD.decode(part).ok()?;
+    serde_json::from_slice(&bytes).ok()
 }
 
 pub fn token_url() -> String {

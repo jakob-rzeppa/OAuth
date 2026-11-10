@@ -36,6 +36,8 @@ pub struct AuthProgress {
     pub token_checks: Vec<Check>,
 
     pub token: Option<String>,
+    /// The ID token, if the response carried one and it passed the checks.
+    pub id_token: Option<String>,
 }
 
 impl AuthProgress {
@@ -100,6 +102,10 @@ impl AuthProgress {
             Err(error) => (Vec::new(), Err(error)),
         };
         self.token_checks = checks;
+        self.id_token = response
+            .as_ref()
+            .ok()
+            .and_then(|response| response.id_token().map(str::to_string));
         self.token = response
             .as_ref()
             .ok()
