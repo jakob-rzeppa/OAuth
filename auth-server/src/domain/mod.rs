@@ -7,4 +7,3 @@ pub mod authorization_code {
 }
 
 pub mod access_token;
-pub mod user_session;

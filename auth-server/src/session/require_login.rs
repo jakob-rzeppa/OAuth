@@ -5,9 +5,8 @@ use axum::{
 use uuid::Uuid;
 
 use crate::{
-    domain::user_session::UserSession,
     error::InternalError,
-    session::{self, SessionToken},
+    session::{self, SessionToken, user_session::UserSession},
 };
 
 /// Redirects the user to the login and back to the authorization request afterwards.
@@ -70,7 +69,7 @@ mod tests {
     use super::*;
     use crate::{
         config::Config, logging::testing::LogCapture,
-        persistence::user_sessions::access::access_session_fake,
+        session::persistence::access::access_session_fake,
     };
 
     const REQUEST_URI: &str = "urn:authorize:request_uri:test";

@@ -5,7 +5,7 @@ use axum::{
 
 use crate::{
     error::{InternalError, page::PageError},
-    security::require_login::{LoginRedirect, RequireLoginError},
+    session::require_login::{LoginRedirect, RequireLoginError},
     util::oauth_error::OAuthErrorCode,
 };
 

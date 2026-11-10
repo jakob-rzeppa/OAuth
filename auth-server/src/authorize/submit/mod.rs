@@ -15,7 +15,7 @@ use crate::{
         authorization_codes::save::save_authorization_code, clients::find_by_id::find_client_by_id,
         pars::take::take_par,
     },
-    security::require_login::require_login,
+    session::require_login::require_login,
     session::SessionToken,
     util::{oauth_error::OAuthErrorCode, token::random_token},
 };
@@ -109,17 +109,14 @@ pub async fn authorize_submit_endpoint(
 mod tests {
     use super::*;
     use crate::{
-        domain::{
-            authorization_code::request::AuthorizationRequest, client::Client,
-            user_session::UserSession,
-        },
+        domain::{authorization_code::request::AuthorizationRequest, client::Client},
         error::{InternalError, redirect::RedirectReason},
         logging::testing::LogCapture,
         persistence::{
             authorization_codes::save::save_authorization_code_mock,
             clients::find_by_id::find_client_by_id_fake, pars::take::take_par_mock,
-            user_sessions::access::access_session_fake,
         },
+        session::{persistence::access::access_session_fake, user_session::UserSession},
     };
     use chrono::{DateTime, Utc};
     use fnmock::predicate;

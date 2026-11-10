@@ -11,7 +11,7 @@ use crate::{
         page::{request::AuthorizePageQuery, response::AuthorizePageResponse},
     },
     persistence::{clients::find_by_id::find_client_by_id, pars::peek::peek_par},
-    security::require_login::require_login,
+    session::require_login::require_login,
     session::SessionToken,
 };
 
@@ -71,8 +71,7 @@ mod tests {
     use super::*;
     use crate::{
         config::Config, error::InternalError,
-        persistence::user_sessions::access::access_session_fake,
-        security::require_login::LoginRedirect,
+        session::{persistence::access::access_session_fake, require_login::LoginRedirect},
     };
     use axum::response::IntoResponse;
 

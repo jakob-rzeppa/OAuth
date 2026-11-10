@@ -2,15 +2,20 @@
 //! under the hash of that token.
 
 pub mod cookie;
+pub mod require_login;
+pub mod persistence;
 mod token;
+pub mod user_session;
 
 use axum::http::HeaderValue;
 
 use crate::{
     config::Config,
-    domain::user_session::UserSession,
     error::InternalError,
-    persistence::user_sessions::{access::access_session, save::save_session},
+    session::{
+        persistence::{access::access_session, save::save_session},
+        user_session::UserSession,
+    },
     util::token::{hash_token, random_token},
 };
 
@@ -55,8 +60,10 @@ mod tests {
     use super::*;
     use crate::{
         config::Config,
-        domain::user_session::UserSession,
-        persistence::user_sessions::{access::access_session_fake, save::save_session_mock},
+        session::{
+            persistence::{access::access_session_fake, save::save_session_mock},
+            user_session::UserSession,
+        },
         util::token::random_token_fake,
     };
 

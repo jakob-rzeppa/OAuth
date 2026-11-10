@@ -3,7 +3,6 @@ pub mod authorization_codes;
 pub mod clients;
 pub mod pars;
 mod postgres;
-mod redis;
+pub mod redis;
 pub mod self_client;
 pub mod self_token;
-pub mod user_sessions;

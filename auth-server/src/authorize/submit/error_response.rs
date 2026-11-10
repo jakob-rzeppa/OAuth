@@ -4,7 +4,7 @@ use crate::{
     authorize::error_page::AuthorizeErrorPage,
     domain::authorization_code::request::validate::ValidationError,
     error::{InternalError, redirect::RedirectError},
-    security::require_login::RequireLoginError,
+    session::require_login::RequireLoginError,
 };
 
 pub enum AuthorizeSubmitErrorResponse {
