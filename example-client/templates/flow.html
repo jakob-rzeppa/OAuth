@@ -113,6 +113,21 @@
         .badge--pending { color: var(--pending); }
         .step-action { flex: none; align-self: center; }
 
+        /* The returned values the client compared, e.g. state and iss. */
+        .checks {
+            list-style: none; margin: 6px 0 0; padding: 8px 14px;
+            background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+            display: grid; gap: 6px; font-size: 13px;
+        }
+        .check { display: grid; grid-template-columns: auto auto 1fr; gap: 4px 10px; align-items: baseline; }
+        .check--done { --c: var(--done); }
+        .check--failed { --c: var(--failed); }
+        .check-mark { color: var(--c); font-weight: 700; }
+        .check-name { font-weight: 600; color: var(--c); }
+        .check-values { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 8px; min-width: 0; }
+        .check-key { color: var(--muted); }
+        .check-values code { word-break: break-all; background: var(--code-bg); padding: 0 5px; border-radius: 4px; }
+
         /* Messages: an arrow from the centre of one lifeline to the centre of another. */
         .msg-row { position: relative; margin-top: 10px; }
         .msg { --c: var(--pending); position: relative; padding: 0 calc(100% / (2 * var(--span))); }

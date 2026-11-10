@@ -41,6 +41,21 @@
                 {% endif %}
             </div>
 
+            {% if !step.checks.is_empty() %}
+            <ul class="checks">
+                {% for check in step.checks %}
+                <li class="check check--{{ check.class() }}">
+                    <span class="check-mark" aria-label="{% if check.passed %}passed{% else %}failed{% endif %}">{{ check.mark() }}</span>
+                    <code class="check-name">{{ check.name }}</code>
+                    <span class="check-values">
+                        <span class="check-key">expected</span><code>{{ check.expected }}</code>
+                        <span class="check-key">received</span><code>{{ check.actual }}</code>
+                    </span>
+                </li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+
             {% for message in step.messages %}
             <div class="msg-row grid3" x-data="{ open: false }">
                 <div class="msg msg--{{ message.direction() }} msg--{{ message.status.class() }}"

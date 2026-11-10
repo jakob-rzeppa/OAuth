@@ -32,6 +32,12 @@ pub enum AuthError {
         expected: String,
         actual: Option<String>,
     },
+    /// The ID token's `iss` claim isn't the auth-server the request went to
+    /// (OpenID Connect Core 1.0 section 3.1.3.7), or there is no ID token.
+    IdTokenIssuerMismatch {
+        expected: String,
+        actual: Option<String>,
+    },
     /// The callback carries neither a code nor an error.
     MissingCode,
 }
@@ -70,6 +76,11 @@ impl std::fmt::Display for AuthError {
             AuthError::IssuerMismatch { expected, actual } => write!(
                 f,
                 "the returned iss {} is not the expected issuer {expected}",
+                actual.as_deref().unwrap_or("(missing)")
+            ),
+            AuthError::IdTokenIssuerMismatch { expected, actual } => write!(
+                f,
+                "the id_token's iss {} is not the expected issuer {expected}",
                 actual.as_deref().unwrap_or("(missing)")
             ),
             AuthError::MissingCode => write!(f, "the callback carries no authorization code"),

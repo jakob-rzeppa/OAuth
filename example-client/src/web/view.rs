@@ -7,7 +7,7 @@ use crate::{
     config,
     security::{
         AuthProgress,
-        auth::{error::AuthError, par::par_url, token::token_url},
+        auth::{check::Check, error::AuthError, par::par_url, token::token_url},
     },
 };
 
@@ -28,7 +28,56 @@ pub struct StepView {
     pub description: &'static str,
     pub status: Status,
     pub messages: Vec<MessageView>,
+    /// Values the auth-server returned, compared against the expected ones.
+    pub checks: Vec<CheckView>,
     pub action: Option<Action>,
+}
+
+pub struct CheckView {
+    pub name: &'static str,
+    pub expected: String,
+    pub actual: String,
+    pub passed: bool,
+}
+
+impl CheckView {
+    fn new(check: &Check) -> Self {
+        Self {
+            name: check.name,
+            expected: check.expected.clone(),
+            actual: check.actual.clone().unwrap_or_else(|| "(missing)".to_string()),
+            passed: check.passed(),
+        }
+    }
+
+    pub fn class(&self) -> &'static str {
+        if self.passed { "done" } else { "failed" }
+    }
+
+    pub fn mark(&self) -> &'static str {
+        if self.passed { "✓" } else { "✗" }
+    }
+}
+
+fn check_views(checks: &[Check]) -> Vec<CheckView> {
+    checks.iter().map(CheckView::new).collect()
+}
+
+/// The checks as plain text, the body of the arrow the client sends to itself.
+fn checks_body(checks: &[CheckView]) -> String {
+    checks
+        .iter()
+        .map(|check| {
+            format!(
+                "{} {}\n  expected: {}\n  received: {}",
+                check.mark(),
+                check.name,
+                check.expected,
+                check.actual
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n\n")
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -179,6 +228,7 @@ fn prepare_step(progress: &AuthProgress) -> StepView {
         description: "A random state ties the callback to this request; the verifier's SHA-256 challenge goes out now, the verifier itself only with the token request (RFC 7636).",
         status,
         messages: vec![MessageView::new(CLIENT, CLIENT, "state + code_verifier", body, status)],
+        checks: Vec::new(),
         action: Some(Action::post("prepare", "Generate")),
     }
 }
@@ -204,6 +254,7 @@ fn par_step(progress: &AuthProgress) -> StepView {
             MessageView::new(CLIENT, AUTH_SERVER, "POST /par", request, status),
             MessageView::new(AUTH_SERVER, CLIENT, response_label, response, status),
         ],
+        checks: Vec::new(),
         action: Some(Action::post("par", "Push request")),
     }
 }
@@ -224,6 +275,7 @@ fn authorize_step(progress: &AuthProgress) -> StepView {
             MessageView::new(BROWSER, AUTH_SERVER, "GET /authorize", request, status),
             MessageView::new(AUTH_SERVER, BROWSER, "303 → redirect_uri", response, status),
         ],
+        checks: Vec::new(),
         action: progress
             .auth_redirect_uri
             .clone()
@@ -237,11 +289,20 @@ fn callback_step(progress: &AuthProgress) -> StepView {
         .callback_query
         .as_ref()
         .map(|query| format!("GET {}", callback_url(query)));
-    let (check_label, check) = match &progress.auth_response {
-        Some(Ok(response)) => ("state + iss ok".to_string(), Some(pretty_json(response))),
-        Some(Err(error)) => ("rejected".to_string(), Some(error.to_string())),
-        None => ("check state + iss".to_string(), None),
+    let checks = check_views(&progress.callback_checks);
+    let checks_passed = checks.iter().all(|check| check.passed);
+    let check_label = match &progress.auth_response {
+        None => "check state + iss",
+        Some(_) if checks_passed => "state + iss ok",
+        Some(_) => "state / iss mismatch",
     };
+    let check = progress.auth_response.as_ref().map(|response| {
+        let outcome = match response {
+            Ok(response) => pretty_json(response),
+            Err(error) => format!("rejected: {error}"),
+        };
+        format!("{}\n\n{outcome}", checks_body(&checks))
+    });
 
     StepView {
         number: 4,
@@ -252,6 +313,7 @@ fn callback_step(progress: &AuthProgress) -> StepView {
             MessageView::new(BROWSER, CLIENT, "GET /?code=…", request, status),
             MessageView::new(CLIENT, CLIENT, check_label, check, status),
         ],
+        checks,
         // After a rejected callback, authorizing again is the way forward.
         action: progress
             .auth_redirect_uri
@@ -266,21 +328,42 @@ fn token_step(progress: &AuthProgress) -> StepView {
         .token_request
         .as_ref()
         .map(|request| form_request(&token_url(), request));
+    let checks = check_views(&progress.token_checks);
+    // With checks, the auth-server answered 200; a failure is then the client rejecting the token.
     let (response_label, response) = match &progress.token_response {
         Some(Ok(response)) => ("200 OK".to_string(), Some(pretty_json(response))),
+        Some(Err(_)) if !checks.is_empty() => ("200 OK".to_string(), None),
         Some(Err(error)) => (error_label(error), Some(error.to_string())),
         None => ("access_token".to_string(), None),
     };
+    let (check_label, check) = match &progress.token_response {
+        Some(_) if !checks.is_empty() => {
+            let label = if checks.iter().all(|check| check.passed) {
+                "id_token iss ok"
+            } else {
+                "id_token iss mismatch"
+            };
+            let mut body = checks_body(&checks);
+            if let Some(Err(error)) = &progress.token_response {
+                body.push_str(&format!("\n\nrejected: {error}"));
+            }
+            (label, Some(body))
+        }
+        _ => ("check id_token iss", None),
+    };
+    let response_status = if checks.is_empty() { status } else { Status::Done };
 
     StepView {
         number: 5,
         title: "Exchange the code for tokens",
-        description: "The client sends the code with the PKCE verifier; the auth-server hashes the verifier, compares it to the challenge from step 2 and issues the tokens.",
+        description: "The client sends the code with the PKCE verifier; the auth-server hashes the verifier, compares it to the challenge from step 2 and issues the tokens. The client checks the ID token's iss is the auth-server it asked.",
         status,
         messages: vec![
             MessageView::new(CLIENT, AUTH_SERVER, "POST /token", request, status),
-            MessageView::new(AUTH_SERVER, CLIENT, response_label, response, status),
+            MessageView::new(AUTH_SERVER, CLIENT, response_label, response, response_status),
+            MessageView::new(CLIENT, CLIENT, check_label, check, status),
         ],
+        checks,
         action: Some(Action::post("token", "Exchange code")),
     }
 }

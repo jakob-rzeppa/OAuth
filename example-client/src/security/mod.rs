@@ -2,6 +2,7 @@ use crate::{
     config,
     security::auth::{
         authorization::{AuthorizationResponse, CallbackQuery, authorization_url},
+        check::Check,
         code_verifier::CodeVerifier,
         error::AuthError,
         par::{ParRequest, ParResponse, register_par},
@@ -25,10 +26,14 @@ pub struct AuthProgress {
 
     pub auth_redirect_uri: Option<String>,
     pub callback_query: Option<CallbackQuery>,
+    /// The `state` and `iss` of the last callback against the expected values.
+    pub callback_checks: Vec<Check>,
     pub auth_response: Option<Result<AuthorizationResponse, AuthError>>,
 
     pub token_request: Option<TokenRequest>,
     pub token_response: Option<Result<TokenResponse, AuthError>>,
+    /// The ID token's `iss` against the expected issuer.
+    pub token_checks: Vec<Check>,
 
     pub token: Option<String>,
 }
@@ -72,11 +77,13 @@ impl AuthProgress {
             return;
         }
 
-        self.auth_response = Some(check_callback(&query, expected_state));
+        let (checks, response) = check_callback(&query, expected_state);
+        self.callback_checks = checks;
+        self.auth_response = Some(response);
         self.callback_query = Some(query);
     }
 
-    /// Step 4: exchanges the code for tokens.
+    /// Step 4: exchanges the code for tokens and checks the ID token's issuer.
     pub async fn exchange_code(&mut self) {
         let (Some(Ok(authorization)), Some(code_verifier)) =
             (&self.auth_response, &self.code_verifier)
@@ -88,7 +95,11 @@ impl AuthProgress {
         }
 
         let request = TokenRequest::new(&authorization.code, code_verifier);
-        let response = request_token(&request).await;
+        let (checks, response) = match request_token(&request).await {
+            Ok(response) => check_token_response(response),
+            Err(error) => (Vec::new(), Err(error)),
+        };
+        self.token_checks = checks;
         self.token = response
             .as_ref()
             .ok()
@@ -102,21 +113,31 @@ impl AuthProgress {
     }
 }
 
+/// Compares the callback's `state` and `iss` with the expected ones, both always, so both can be
+/// shown. Only then looks at the code or the error.
 fn check_callback(
     query: &CallbackQuery,
     expected_state: &State,
+) -> (Vec<Check>, Result<AuthorizationResponse, AuthError>) {
+    let state = Check::new("state", expected_state.value(), query.state.clone());
+    let iss = Check::new("iss", config::auth_server_url(), query.iss.clone());
+    let result = verify_callback(query, &state, &iss);
+    (vec![state, iss], result)
+}
+
+fn verify_callback(
+    query: &CallbackQuery,
+    state: &Check,
+    iss: &Check,
 ) -> Result<AuthorizationResponse, AuthError> {
     // Even an error has to answer this request, otherwise anyone could inject one.
-    match &query.state {
-        Some(state) if expected_state == &state.as_str() => {}
-        _ => return Err(AuthError::StateMismatch),
+    if !state.passed() {
+        return Err(AuthError::StateMismatch);
     }
-
-    let issuer = config::auth_server_url();
-    if query.iss.as_deref() != Some(issuer.as_str()) {
+    if !iss.passed() {
         return Err(AuthError::IssuerMismatch {
-            expected: issuer,
-            actual: query.iss.clone(),
+            expected: iss.expected.clone(),
+            actual: iss.actual.clone(),
         });
     }
 
@@ -130,8 +151,25 @@ fn check_callback(
     let code = query.code.clone().ok_or(AuthError::MissingCode)?;
     Ok(AuthorizationResponse {
         code,
-        state: expected_state.value().to_string(),
-        iss: issuer,
+        state: state.expected.clone(),
+        iss: iss.expected.clone(),
         expires_in: query.expires_in.clone(),
     })
+}
+
+/// The `openid` scope is always requested, so the response must carry an ID token issued by the
+/// auth-server the request went to.
+fn check_token_response(
+    response: TokenResponse,
+) -> (Vec<Check>, Result<TokenResponse, AuthError>) {
+    let iss = Check::new("id_token iss", config::auth_server_url(), response.id_token_issuer());
+    let result = if iss.passed() {
+        Ok(response)
+    } else {
+        Err(AuthError::IdTokenIssuerMismatch {
+            expected: iss.expected.clone(),
+            actual: iss.actual.clone(),
+        })
+    };
+    (vec![iss], result)
 }
