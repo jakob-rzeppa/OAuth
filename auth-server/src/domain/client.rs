@@ -43,6 +43,10 @@ impl Client {
     }
 
     pub fn has_scope(&self, scopes: &str) -> bool {
+        if scopes.is_empty() {
+            return false;
+        }
+
         let requested_scopes: Vec<&str> = scopes.split_whitespace().collect();
         requested_scopes.iter().all(|requested| {
             self.allowed_scopes
@@ -82,5 +86,17 @@ mod tests {
         assert!(client.has_scope("read write"));
         assert!(!client.has_scope("delete"));
         assert!(!client.has_scope("read delete"));
+    }
+
+    #[test]
+    fn test_has_scopes_empty() {
+        let client = Client::new(
+            Uuid::new_v4(),
+            "Test Client".to_string(),
+            vec!["https://example.com/callback".to_string()],
+            vec!["read".to_string(), "write".to_string()],
+        );
+
+        assert!(!client.has_scope(""));
     }
 }
