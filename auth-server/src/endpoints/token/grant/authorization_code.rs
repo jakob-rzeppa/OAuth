@@ -2,9 +2,6 @@ use uuid::Uuid;
 
 use crate::{
     domain::authorization_code::openid::has_openid_scope,
-    persistence::{
-        authorization_codes::take::take_authorization_code, clients::find_by_id::find_client_by_id,
-    },
     endpoints::token::{
         access_token::generate_access_token,
         error::TokenError,
@@ -13,6 +10,7 @@ use crate::{
         pkce::{is_valid_code_verifier, verify_code_challenge},
         request::TokenRequest,
     },
+    persistence::{authorization_codes::take_authorization_code, clients::find_client},
 };
 
 pub async fn handle_authorization_code_grant(
@@ -22,7 +20,7 @@ pub async fn handle_authorization_code_grant(
         return Err(TokenError::InvalidClientId);
     };
 
-    if find_client_by_id(&client_id).is_none() {
+    if find_client(&client_id).is_none() {
         tracing::warn!(%client_id, "token request for an unknown client");
         return Err(TokenError::ClientNotFound);
     }

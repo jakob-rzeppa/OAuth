@@ -31,6 +31,12 @@ static ROLES: LazyLock<Vec<Client>> = LazyLock::new(|| {
 });
 
 #[fnmock::fakeable]
-pub(super) fn clients() -> &'static [Client] {
+fn clients() -> &'static [Client] {
     &ROLES
+}
+
+#[fnmock::fakeable]
+pub fn find_client(id: &Uuid) -> Option<Client> {
+    let clients = clients();
+    clients.iter().find(|client| client.id() == id).cloned()
 }

@@ -10,7 +10,7 @@ use crate::{
         error::AuthorizeError,
         page::{request::AuthorizePageQuery, response::AuthorizePageResponse},
     },
-    persistence::{clients::find_by_id::find_client_by_id, pars::peek::peek_par},
+    persistence::{clients::find_client, pars::find_par},
     session::SessionToken,
     session::require_login::require_login,
 };
@@ -41,7 +41,7 @@ pub async fn authorize_page_endpoint(
     // Only the user themselves may see (and later submit) the request, so log in before showing it.
     require_login(session_token, client_id, &request_uri).await?;
 
-    let par = peek_par(&request_uri).await?.ok_or_else(|| {
+    let par = find_par(&request_uri).await?.ok_or_else(|| {
             tracing::warn!(%client_id, "authorize page requested for an unknown, expired or already used request_uri");
             AuthorizeError::RequestNotFound
         })?;
@@ -51,7 +51,7 @@ pub async fn authorize_page_endpoint(
         return Err(AuthorizeError::ClientIdMismatch);
     }
 
-    let client = find_client_by_id(&client_id).ok_or_else(|| {
+    let client = find_client(&client_id).ok_or_else(|| {
         tracing::warn!(%client_id, "authorize page requested for an unknown client");
         AuthorizeError::ClientNotFound
     })?;
@@ -70,9 +70,8 @@ pub async fn authorize_page_endpoint(
 mod tests {
     use super::*;
     use crate::{
-        config::Config,
-        error::InternalError,
-        session::{persistence::access::access_session_fake, require_login::LoginRedirect},
+        config::Config, error::InternalError, persistence::user_sessions::renew_session_fake,
+        session::require_login::LoginRedirect,
     };
     use axum::response::IntoResponse;
 
@@ -107,7 +106,7 @@ mod tests {
     #[tokio::test]
     async fn redirects_to_login_when_the_session_is_expired() {
         Config::user_session_ttl_fake().setup(|| 1800);
-        access_session_fake().setup(|_, _| Ok(None));
+        renew_session_fake().setup(|_, _| Ok(None));
 
         let result = authorize_page_endpoint(session_token(), query(Uuid::new_v4())).await;
 
@@ -115,9 +114,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn fails_with_server_error_when_access_session_fails() {
+    async fn fails_with_server_error_when_renew_session_fails() {
         Config::user_session_ttl_fake().setup(|| 1800);
-        access_session_fake().setup(|_, _| Err(InternalError::Invariant("redis is down")));
+        renew_session_fake().setup(|_, _| Err(InternalError::Invariant("redis is down")));
 
         let result = authorize_page_endpoint(session_token(), query(Uuid::new_v4())).await;
 

@@ -7,10 +7,10 @@ use axum::{
 
 use crate::{
     domain::authorization_code::openid::{has_openid_scope, has_profile_scope},
-    identity_provider::users::find_by_id::find_user_by_id,
-    persistence::access_tokens::find_by_token_hash::find_access_token_by_token_hash,
-    security::cache_control::no_store,
     endpoints::userinfo::{error::UserInfoError, response::UserInfoResponse},
+    identity_provider::users::find_by_id::find_user_by_id,
+    persistence::access_tokens::find_access_token,
+    security::cache_control::no_store,
     util::token::hash_token,
 };
 
@@ -29,7 +29,7 @@ pub fn router() -> Router {
 pub async fn userinfo_endpoint(headers: HeaderMap) -> Result<UserInfoResponse, UserInfoError> {
     let token = bearer_token(&headers).ok_or(UserInfoError::MissingToken)?;
 
-    let Some(access_token) = find_access_token_by_token_hash(&hash_token(token)).await? else {
+    let Some(access_token) = find_access_token(&hash_token(token)).await? else {
         return Err(UserInfoError::InvalidToken);
     };
 
@@ -78,7 +78,7 @@ mod tests {
         domain::access_token::AccessToken,
         error::InternalError,
         identity_provider::users::find_by_id::{User, find_user_by_id_mock},
-        persistence::access_tokens::find_by_token_hash::find_access_token_by_token_hash_mock,
+        persistence::access_tokens::find_access_token_mock,
     };
     use axum::{http::HeaderValue, response::IntoResponse};
     use fnmock::predicate;
@@ -108,7 +108,7 @@ mod tests {
 
     /// Fakes the stored access token for `the-token`.
     fn fake_access_token(sub: Option<Uuid>, scope: &'static str, expires_in: i64) {
-        find_access_token_by_token_hash_mock()
+        find_access_token_mock()
             .setup(move |_| Ok(Some(make_access_token(sub, scope, expires_in))));
     }
 
@@ -165,7 +165,7 @@ mod tests {
 
     #[tokio::test]
     async fn looks_the_token_up_by_its_hash() {
-        let mock = find_access_token_by_token_hash_mock();
+        let mock = find_access_token_mock();
         mock.setup(|_| Ok(None));
         mock.expect(predicate::eq(hash_token("the-token"))).once();
 
@@ -183,7 +183,7 @@ mod tests {
 
     #[tokio::test]
     async fn rejects_an_unknown_token_as_invalid() {
-        find_access_token_by_token_hash_mock().setup(|_| Ok(None));
+        find_access_token_mock().setup(|_| Ok(None));
 
         let result = userinfo_endpoint(headers_with_token("the-token")).await;
 
@@ -229,8 +229,7 @@ mod tests {
 
     #[tokio::test]
     async fn fails_with_a_server_error_when_the_lookup_fails() {
-        find_access_token_by_token_hash_mock()
-            .setup(|_| Err(InternalError::Invariant("postgres is down")));
+        find_access_token_mock().setup(|_| Err(InternalError::Invariant("postgres is down")));
 
         let result = userinfo_endpoint(headers_with_token("the-token")).await;
 

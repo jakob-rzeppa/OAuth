@@ -5,7 +5,7 @@ use crate::{
     config::Config,
     domain::authorization_code::request::AuthorizationRequest,
     endpoints::par::{error::ParError, request::ParRequest, response::ParResponse},
-    persistence::{clients::find_by_id::find_client_by_id, pars::save::save_par},
+    persistence::{clients::find_client, pars::save_par},
     security::cache_control::no_store,
 };
 
@@ -35,7 +35,7 @@ pub async fn par_endpoint(
         return Err(ParError::InvalidClientId);
     };
 
-    let client = find_client_by_id(&client_id).ok_or_else(|| {
+    let client = find_client(&client_id).ok_or_else(|| {
         tracing::warn!(%client_id, "pushed authorization request for an unknown client");
         ParError::ClientNotFound
     })?;
@@ -82,7 +82,7 @@ mod tests {
     use crate::{
         domain::client::Client,
         error::{InternalError, oauth_code::OAuthErrorCode},
-        persistence::{clients::find_by_id::find_client_by_id_fake, pars::save::save_par_fake},
+        persistence::{clients::find_client_fake, pars::save_par_fake},
     };
 
     const PAR_TTL_SECONDS: u64 = 180;
@@ -118,7 +118,7 @@ mod tests {
         let client_id = Uuid::new_v4();
         let client = make_client(client_id);
 
-        find_client_by_id_fake().setup(move |_| Some(client.clone()));
+        find_client_fake().setup(move |_| Some(client.clone()));
         save_par_fake().setup(move |request_uri, par, ttl_seconds| {
             assert!(request_uri.starts_with(REQUEST_URI_PREFIX));
             assert_eq!(ttl_seconds, PAR_TTL_SECONDS);
@@ -145,7 +145,7 @@ mod tests {
         let client_id = Uuid::new_v4();
         let client = make_client(client_id);
 
-        find_client_by_id_fake().setup(move |_| Some(client.clone()));
+        find_client_fake().setup(move |_| Some(client.clone()));
         save_par_fake().setup(move |_, par, _| {
             assert_eq!(par.nonce(), None);
             Ok(())
@@ -172,7 +172,7 @@ mod tests {
 
     #[tokio::test]
     async fn fails_when_client_is_not_found() {
-        find_client_by_id_fake().setup(|_| None);
+        find_client_fake().setup(|_| None);
 
         let result = par_endpoint(valid_request(Uuid::new_v4())).await;
 
@@ -183,7 +183,7 @@ mod tests {
     async fn fails_when_redirect_uri_is_not_registered() {
         let client_id = Uuid::new_v4();
         let client = make_client(client_id);
-        find_client_by_id_fake().setup(move |_| Some(client.clone()));
+        find_client_fake().setup(move |_| Some(client.clone()));
 
         let mut request = valid_request(client_id);
         request.redirect_uri = "https://evil.example.com/callback".to_string();
@@ -203,7 +203,7 @@ mod tests {
         let client_id = Uuid::new_v4();
         let client = make_client(client_id);
 
-        find_client_by_id_fake().setup(move |_| Some(client.clone()));
+        find_client_fake().setup(move |_| Some(client.clone()));
         save_par_fake().setup(|_, _, _| Err(InternalError::Invariant("redis is down")));
         generate_request_uri_fake().setup(|| "urn:authorize:request_uri:test".to_string());
         Config::par_ttl_fake().setup(|| PAR_TTL_SECONDS);

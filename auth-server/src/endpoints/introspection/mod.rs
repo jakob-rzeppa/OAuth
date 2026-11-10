@@ -5,7 +5,7 @@ use crate::{
     endpoints::introspection::{
         error::IntrospectionError, request::IntrospectionRequest, response::IntrospectionResponse,
     },
-    persistence::access_tokens::find_by_token_hash::find_access_token_by_token_hash,
+    persistence::access_tokens::find_access_token,
     security::cache_control::no_store,
     util::token::hash_token,
 };
@@ -25,7 +25,7 @@ pub async fn introspection_endpoint(
     IntrospectionRequest { token }: IntrospectionRequest,
 ) -> Result<IntrospectionResponse, IntrospectionError> {
     let token_hash = hash_token(&token);
-    let access_token = find_access_token_by_token_hash(&token_hash).await?;
+    let access_token = find_access_token(&token_hash).await?;
 
     let Some(access_token) = access_token else {
         return Ok(IntrospectionResponse::Inactive);
@@ -79,10 +79,7 @@ mod body_format_tests {
     use fnmock::predicate;
     use tower::ServiceExt;
 
-    use crate::{
-        persistence::access_tokens::find_by_token_hash::find_access_token_by_token_hash_mock,
-        util::token::hash_token,
-    };
+    use crate::{persistence::access_tokens::find_access_token_mock, util::token::hash_token};
 
     async fn post(content_type: &str, body: &'static str) -> (StatusCode, serde_json::Value) {
         let request = Request::post("/introspect")
@@ -101,7 +98,7 @@ mod body_format_tests {
 
     #[tokio::test]
     async fn reads_a_form_urlencoded_body() {
-        let mock = find_access_token_by_token_hash_mock();
+        let mock = find_access_token_mock();
         mock.setup(|_| Ok(None));
         mock.expect(predicate::eq(hash_token("the-token"))).once();
 

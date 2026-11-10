@@ -3,7 +3,6 @@
 
 pub mod cookie;
 pub mod require_login;
-pub mod persistence;
 mod token;
 pub mod user_session;
 
@@ -12,10 +11,8 @@ use axum::http::HeaderValue;
 use crate::{
     config::Config,
     error::InternalError,
-    session::{
-        persistence::{access::access_session, save::save_session},
-        user_session::UserSession,
-    },
+    persistence::user_sessions::{renew_session, save_session},
+    session::user_session::UserSession,
     util::token::{hash_token, random_token},
 };
 
@@ -47,7 +44,7 @@ pub async fn issue(session: &UserSession) -> Result<HeaderValue, InternalError> 
 /// Reads a session and renews its lifetime (sliding expiration).
 /// Returns `None` if the session does not exist or has expired.
 pub async fn access(token: &SessionToken) -> Result<Option<UserSession>, InternalError> {
-    let value = access_session(&key(token.as_str()), Config::user_session_ttl()).await?;
+    let value = renew_session(&key(token.as_str()), Config::user_session_ttl()).await?;
     Ok(value
         .map(|value| serde_json::from_str(&value))
         .transpose()?)
@@ -60,10 +57,8 @@ mod tests {
     use super::*;
     use crate::{
         config::Config,
-        session::{
-            persistence::{access::access_session_fake, save::save_session_mock},
-            user_session::UserSession,
-        },
+        persistence::user_sessions::{renew_session_fake, save_session_mock},
+        session::user_session::UserSession,
         util::token::random_token_fake,
     };
 
@@ -99,7 +94,7 @@ mod tests {
     #[tokio::test]
     async fn access_renews_the_session_under_the_token_hash() {
         Config::user_session_ttl_fake().setup(|| 1800);
-        access_session_fake().setup(|key, ttl_seconds| {
+        renew_session_fake().setup(|key, ttl_seconds| {
             assert_eq!(key, format!("session:user:{}", hash_token("token-123")));
             assert_eq!(ttl_seconds, 1800);
             Ok(Some(
@@ -125,7 +120,7 @@ mod tests {
     #[tokio::test]
     async fn access_returns_none_for_an_unknown_session() {
         Config::user_session_ttl_fake().setup(|| 1800);
-        access_session_fake().setup(|_, _| Ok(None));
+        renew_session_fake().setup(|_, _| Ok(None));
 
         let session = access(&token("token-123")).await.unwrap();
 

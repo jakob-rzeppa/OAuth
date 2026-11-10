@@ -1,4 +1,8 @@
 use crate::{
+    config::Config,
+    domain::authorization_code::{
+        code::AuthorizationCode, request::validate::ValidatedAuthorizationRequest,
+    },
     endpoints::authorize::{
         error::AuthorizeError,
         submit::{
@@ -6,14 +10,9 @@ use crate::{
             response::AuthorizeSubmitResponse,
         },
     },
-    config::Config,
-    domain::authorization_code::{
-        code::AuthorizationCode, request::validate::ValidatedAuthorizationRequest,
-    },
     error::{oauth_code::OAuthErrorCode, redirect::RedirectError},
     persistence::{
-        authorization_codes::save::save_authorization_code, clients::find_by_id::find_client_by_id,
-        pars::take::take_par,
+        authorization_codes::save_authorization_code, clients::find_client, pars::take_par,
     },
     session::SessionToken,
     session::require_login::require_login,
@@ -46,7 +45,7 @@ pub async fn authorize_submit_endpoint(
         AuthorizeError::RequestNotFound
     })?;
 
-    let client = find_client_by_id(&client_id).ok_or_else(|| {
+    let client = find_client(&client_id).ok_or_else(|| {
         tracing::warn!(%client_id, "authorization submitted for an unknown client");
         AuthorizeError::ClientNotFound
     })?;
@@ -113,10 +112,10 @@ mod tests {
         error::{InternalError, redirect::RedirectReason},
         logging::testing::LogCapture,
         persistence::{
-            authorization_codes::save::save_authorization_code_mock,
-            clients::find_by_id::find_client_by_id_fake, pars::take::take_par_mock,
+            authorization_codes::save_authorization_code_mock, clients::find_client_fake,
+            pars::take_par_mock, user_sessions::renew_session_fake,
         },
-        session::{persistence::access::access_session_fake, user_session::UserSession},
+        session::user_session::UserSession,
     };
     use chrono::{DateTime, Utc};
     use fnmock::predicate;
@@ -137,7 +136,7 @@ mod tests {
     fn fake_valid_session() -> Uuid {
         let user_id = Uuid::new_v4();
         Config::user_session_ttl_fake().setup(|| 1800);
-        access_session_fake().setup(move |_, _| {
+        renew_session_fake().setup(move |_, _| {
             Ok(Some(
                 serde_json::to_string(&UserSession::new(user_id, AUTH_TIME)).unwrap(),
             ))
@@ -196,7 +195,7 @@ mod tests {
         let take_mock = take_par_mock();
         take_mock.setup(move |_| Ok(Some(request.clone())));
         take_mock.expect(predicate::eq(request_uri)).once();
-        find_client_by_id_fake().setup(move |_| Some(client.clone()));
+        find_client_fake().setup(move |_| Some(client.clone()));
         random_token_fake().setup(|| "test-code".to_string());
         Config::authorization_code_ttl_fake().setup(|| CODE_TTL_SECONDS);
         Config::iss_fake().setup(|| "test-issuer");
@@ -260,7 +259,7 @@ mod tests {
         );
 
         take_par_mock().setup(move |_| Ok(Some(request.clone())));
-        find_client_by_id_fake().setup(move |_| Some(client.clone()));
+        find_client_fake().setup(move |_| Some(client.clone()));
         random_token_fake().setup(|| "test-code".to_string());
         Config::authorization_code_ttl_fake().setup(|| CODE_TTL_SECONDS);
         Config::iss_fake().setup(|| "test-issuer");
@@ -288,7 +287,7 @@ mod tests {
         let request = make_request(client_id);
 
         take_par_mock().setup(move |_| Ok(Some(request.clone())));
-        find_client_by_id_fake().setup(move |_| Some(client.clone()));
+        find_client_fake().setup(move |_| Some(client.clone()));
         random_token_fake().setup(|| "test-code".to_string());
         Config::authorization_code_ttl_fake().setup(|| CODE_TTL_SECONDS);
         Config::iss_fake().setup(|| "test-issuer");
@@ -380,7 +379,7 @@ mod tests {
         let take_mock = take_par_mock();
         take_mock.setup(move |_| Ok(Some(request.clone())));
         take_mock.expect(predicate::eq(request_uri)).once();
-        find_client_by_id_fake().setup(|_| None);
+        find_client_fake().setup(|_| None);
         let save_mock = save_authorization_code_mock();
         save_mock.expect_never();
 
@@ -412,7 +411,7 @@ mod tests {
         let take_mock = take_par_mock();
         take_mock.setup(move |_| Ok(Some(request.clone())));
         take_mock.expect(predicate::eq(request_uri)).once();
-        find_client_by_id_fake().setup(move |_| Some(client.clone()));
+        find_client_fake().setup(move |_| Some(client.clone()));
         let save_mock = save_authorization_code_mock();
         save_mock.expect_never();
 
@@ -450,7 +449,7 @@ mod tests {
         let take_mock = take_par_mock();
         take_mock.setup(move |_| Ok(Some(request.clone())));
         take_mock.expect(predicate::eq(request_uri)).once();
-        find_client_by_id_fake().setup(move |_| Some(client.clone()));
+        find_client_fake().setup(move |_| Some(client.clone()));
         let save_mock = save_authorization_code_mock();
         save_mock.expect_never();
 
@@ -490,7 +489,7 @@ mod tests {
         let take_mock = take_par_mock();
         take_mock.setup(move |_| Ok(Some(request.clone())));
         take_mock.expect(predicate::eq(request_uri)).once();
-        find_client_by_id_fake().setup(move |_| Some(client.clone()));
+        find_client_fake().setup(move |_| Some(client.clone()));
         random_token_fake().setup(|| "test-code".to_string());
         Config::authorization_code_ttl_fake().setup(|| CODE_TTL_SECONDS);
         let save_mock = save_authorization_code_mock();
@@ -531,7 +530,7 @@ mod tests {
         let take_mock = take_par_mock();
         take_mock.setup(move |_| Ok(Some(request.clone())));
         take_mock.expect(predicate::eq(request_uri)).once();
-        find_client_by_id_fake().setup(move |_| Some(client.clone()));
+        find_client_fake().setup(move |_| Some(client.clone()));
         let save_mock = save_authorization_code_mock();
         save_mock.expect_never();
 
@@ -599,7 +598,7 @@ mod tests {
         let request_uri = "urn:authorize:request_uri:test";
 
         Config::user_session_ttl_fake().setup(|| 1800);
-        access_session_fake().setup(|_, _| Ok(None));
+        renew_session_fake().setup(|_, _| Ok(None));
         let take_mock = take_par_mock();
         take_mock.expect_never();
         let save_mock = save_authorization_code_mock();
@@ -630,9 +629,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn fails_with_server_error_when_access_session_fails() {
+    async fn fails_with_server_error_when_renew_session_fails() {
         Config::user_session_ttl_fake().setup(|| 1800);
-        access_session_fake().setup(|_, _| Err(InternalError::Invariant("redis is down")));
+        renew_session_fake().setup(|_, _| Err(InternalError::Invariant("redis is down")));
         let take_mock = take_par_mock();
         take_mock.expect_never();
         let save_mock = save_authorization_code_mock();

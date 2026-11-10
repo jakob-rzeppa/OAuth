@@ -7,13 +7,13 @@ use axum::{
 use chrono::Utc;
 
 use crate::{
-    identity_provider::users::authorize::{AuthorizeUserError, authorize_user},
     endpoints::login::{
         error::LoginError,
         return_to::{ReturnToQuery, is_local_path},
         submit::request::LoginFormSubmitRequest,
         template::render_login_page,
     },
+    identity_provider::users::authorize::{AuthorizeUserError, authorize_user},
     session::{self, user_session::UserSession},
 };
 
@@ -78,7 +78,7 @@ mod tests {
         config::Config,
         identity_provider::users::authorize::{AuthorizedUser, authorize_user_mock},
         logging::testing::LogCapture,
-        session::persistence::save::save_session_mock,
+        persistence::user_sessions::save_session_mock,
         util::token::hash_token,
     };
 

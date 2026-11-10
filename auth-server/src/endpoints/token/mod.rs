@@ -3,9 +3,9 @@ use chrono::Utc;
 
 use crate::{
     domain::access_token::BEARER,
-    persistence::access_tokens::register::register_access_token,
-    security::cache_control::no_store,
     endpoints::token::{error::TokenError, request::TokenRequest, response::TokenResponse},
+    persistence::access_tokens::save_access_token,
+    security::cache_control::no_store,
 };
 
 mod access_token;
@@ -38,7 +38,7 @@ pub async fn token_endpoint(request: TokenRequest) -> Result<TokenResponse, Toke
         }
     };
 
-    register_access_token(&access_token_entity).await?;
+    save_access_token(&access_token_entity).await?;
 
     let expires_in = access_token_entity.exp().timestamp() - Utc::now().timestamp();
     tracing::info!(
@@ -70,9 +70,8 @@ mod tests {
         error::InternalError,
         logging::testing::LogCapture,
         persistence::{
-            access_tokens::register::register_access_token_fake,
-            authorization_codes::take::take_authorization_code_fake,
-            clients::find_by_id::find_client_by_id_fake,
+            access_tokens::save_access_token_fake,
+            authorization_codes::take_authorization_code_fake, clients::find_client_fake,
         },
     };
     use axum::{http::StatusCode, response::IntoResponse};
@@ -93,7 +92,7 @@ mod tests {
 
     /// Every client_id is a registered client.
     fn fake_registered_client() {
-        find_client_by_id_fake().setup(|id| {
+        find_client_fake().setup(|id| {
             Some(Client::new(
                 *id,
                 "Test Client".to_string(),
@@ -145,7 +144,7 @@ mod tests {
         let client_id = Uuid::new_v4();
         let user_id = Some(Uuid::new_v4());
         setup_valid_grant(client_id, user_id);
-        register_access_token_fake().setup(|_| Ok(()));
+        save_access_token_fake().setup(|_| Ok(()));
 
         let result = token_endpoint(token_request(client_id)).await;
 
@@ -166,7 +165,7 @@ mod tests {
     async fn issues_an_id_token_when_the_openid_scope_was_granted() {
         let client_id = Uuid::new_v4();
         setup_valid_grant_with_scope(client_id, None, "openid read");
-        register_access_token_fake().setup(|_| Ok(()));
+        save_access_token_fake().setup(|_| Ok(()));
         let id_token_mock = generate_id_token_mock();
         id_token_mock.setup(|_| Ok("the-id-token".to_string()));
         id_token_mock
@@ -185,7 +184,7 @@ mod tests {
     async fn leaves_the_id_token_out_without_the_openid_scope() {
         let client_id = Uuid::new_v4();
         setup_valid_grant(client_id, None);
-        register_access_token_fake().setup(|_| Ok(()));
+        save_access_token_fake().setup(|_| Ok(()));
         let id_token_mock = generate_id_token_mock();
         id_token_mock.expect_never();
 
@@ -201,11 +200,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn does_not_register_an_access_token_when_signing_the_id_token_fails() {
+    async fn does_not_save_an_access_token_when_signing_the_id_token_fails() {
         let client_id = Uuid::new_v4();
         setup_valid_grant_with_scope(client_id, None, "openid");
         generate_id_token_mock().setup(|_| Err(InternalError::Invariant("signing failed")));
-        register_access_token_fake().setup(|_| panic!("no access token must be registered"));
+        save_access_token_fake().setup(|_| panic!("no access token must be registered"));
 
         let result = token_endpoint(token_request(client_id)).await;
 
@@ -219,7 +218,7 @@ mod tests {
         let client_id = Uuid::new_v4();
         let user_id = Some(Uuid::new_v4());
         setup_valid_grant(client_id, user_id);
-        register_access_token_fake().setup(|_| Err(InternalError::Invariant("postgres is down")));
+        save_access_token_fake().setup(|_| Err(InternalError::Invariant("postgres is down")));
 
         let result = token_endpoint(token_request(client_id)).await;
 
@@ -304,7 +303,7 @@ mod tests {
 
     #[tokio::test]
     async fn rejects_an_unknown_client_as_invalid_client() {
-        find_client_by_id_fake().setup(|_| None);
+        find_client_fake().setup(|_| None);
         take_authorization_code_fake().setup(|_| panic!("the code must not be consumed"));
 
         let result = token_endpoint(token_request(Uuid::new_v4())).await;
@@ -374,7 +373,7 @@ mod tests {
         let _guard = capture.install();
         let client_id = Uuid::new_v4();
         setup_valid_grant(client_id, None);
-        register_access_token_fake().setup(|_| Err(InternalError::Invariant("postgres is down")));
+        save_access_token_fake().setup(|_| Err(InternalError::Invariant("postgres is down")));
 
         let Err(error) = token_endpoint(token_request(client_id)).await else {
             panic!("expected an error");

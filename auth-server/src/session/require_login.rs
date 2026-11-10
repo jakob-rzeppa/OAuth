@@ -69,7 +69,7 @@ mod tests {
     use super::*;
     use crate::{
         config::Config, logging::testing::LogCapture,
-        session::persistence::access::access_session_fake,
+        persistence::user_sessions::renew_session_fake,
     };
 
     const REQUEST_URI: &str = "urn:authorize:request_uri:test";
@@ -87,7 +87,7 @@ mod tests {
     async fn returns_the_session_for_a_valid_token() {
         let user_id = Uuid::new_v4();
         Config::user_session_ttl_fake().setup(|| 1800);
-        access_session_fake().setup(move |_, _| {
+        renew_session_fake().setup(move |_, _| {
             Ok(Some(
                 serde_json::to_string(&UserSession::new(user_id, chrono::Utc::now())).unwrap(),
             ))
@@ -116,7 +116,7 @@ mod tests {
         let capture = LogCapture::default();
         let _guard = capture.install();
         Config::user_session_ttl_fake().setup(|| 1800);
-        access_session_fake().setup(|_, _| Ok(None));
+        renew_session_fake().setup(|_, _| Ok(None));
 
         let result = require_login(token(), Uuid::new_v4(), REQUEST_URI).await;
 
@@ -131,9 +131,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn fails_with_an_internal_error_when_access_session_fails() {
+    async fn fails_with_an_internal_error_when_renew_session_fails() {
         Config::user_session_ttl_fake().setup(|| 1800);
-        access_session_fake().setup(|_, _| Err(InternalError::Invariant("redis is down")));
+        renew_session_fake().setup(|_, _| Err(InternalError::Invariant("redis is down")));
 
         let result = require_login(token(), Uuid::new_v4(), REQUEST_URI).await;
 

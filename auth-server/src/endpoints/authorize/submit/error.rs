@@ -1,8 +1,8 @@
 use axum::response::{IntoResponse, Response};
 
 use crate::{
-    endpoints::authorize::error::AuthorizeError,
     domain::authorization_code::request::validate::ValidationError,
+    endpoints::authorize::error::AuthorizeError,
     error::{InternalError, redirect::RedirectError},
     session::require_login::RequireLoginError,
 };
