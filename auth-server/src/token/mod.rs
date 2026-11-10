@@ -406,7 +406,7 @@ mod cache_control_tests {
     use tower::ServiceExt;
 
     #[tokio::test]
-    async fn sends_no_store() {
+    async fn sends_no_store_and_pragma_no_cache() {
         // An invalid body is rejected before touching any persistence.
         let request = Request::post("/token")
             .body(Body::from("not a form"))
@@ -414,6 +414,7 @@ mod cache_control_tests {
 
         let response = super::router().oneshot(request).await.unwrap();
 
+        assert_eq!(response.headers().get(header::PRAGMA).unwrap(), "no-cache");
         assert_eq!(
             response.headers().get(header::CACHE_CONTROL).unwrap(),
             "no-store"
