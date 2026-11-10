@@ -8,7 +8,6 @@ use crate::{
     security::cache_control::no_store,
 };
 
-mod access_token;
 mod error;
 mod grant;
 mod id_token;
@@ -60,12 +59,13 @@ pub async fn token_endpoint(request: TokenRequest) -> Result<TokenResponse, Toke
 
 #[cfg(test)]
 mod tests {
-    use super::access_token::generate_access_token_mock;
     use super::id_token::generate_id_token_mock;
     use super::*;
     use crate::{
         domain::{
-            access_token::AccessToken, authorization_code::code::AuthorizationCode, client::Client,
+            access_token::{AccessToken, generate_access_token_mock},
+            authorization_code::code::AuthorizationCode,
+            client::Client,
         },
         error::InternalError,
         logging::testing::LogCapture,

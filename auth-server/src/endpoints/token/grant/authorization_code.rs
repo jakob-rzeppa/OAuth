@@ -1,9 +1,8 @@
 use uuid::Uuid;
 
 use crate::{
-    domain::authorization_code::openid::has_openid_scope,
+    domain::{access_token::generate_access_token, authorization_code::openid::has_openid_scope},
     endpoints::token::{
-        access_token::generate_access_token,
         error::TokenError,
         grant::IssuedTokens,
         id_token::generate_id_token,

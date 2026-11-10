@@ -1,6 +1,11 @@
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
+use crate::{
+    config::Config,
+    util::token::{hash_token, random_token},
+};
+
 /// The only token type this server issues.
 pub const BEARER: &str = "bearer";
 
@@ -73,4 +78,36 @@ impl AccessToken {
     pub fn scope(&self) -> &str {
         &self.scope
     }
+}
+
+/// Generates a new access token for `client_id`, on behalf of `user_id` if there is one.
+///
+/// # Returns
+///
+/// 1. A `String` representing the generated access token.
+/// 2. The AccessToken entity
+#[fnmock::mockable]
+pub fn generate_access_token(
+    client_id: Uuid,
+    user_id: Option<Uuid>,
+    scope: &str,
+) -> (String, AccessToken) {
+    let iat = Utc::now();
+    let exp = iat + chrono::Duration::seconds(Config::access_token_ttl().into());
+
+    // Generate a unique token
+    let token = random_token();
+    let token_hash = hash_token(&token);
+
+    let access_token = AccessToken::new(
+        token_hash,
+        BEARER.to_string(),
+        client_id,
+        user_id,
+        iat,
+        exp,
+        scope.to_string(),
+    );
+
+    (token, access_token)
 }
