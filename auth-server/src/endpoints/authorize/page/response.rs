@@ -8,7 +8,7 @@ use uuid::Uuid;
 use crate::util::html::render_html;
 
 #[derive(Template)]
-#[template(path = "authorize.html")]
+#[template(path = "pages/authorize.html")]
 pub struct AuthorizePageResponse {
     pub client_name: String,
     pub scope: String,

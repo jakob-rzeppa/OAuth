@@ -31,7 +31,7 @@ pub struct LoginPageResponse {
 }
 
 #[derive(Template)]
-#[template(path = "login.html")]
+#[template(path = "pages/login.html")]
 struct LoginPage {
     return_to: String,
 
@@ -70,7 +70,7 @@ pub struct ChangePasswordPageResponse {
 }
 
 #[derive(Template)]
-#[template(path = "change_password.html")]
+#[template(path = "pages/change_password.html")]
 struct ChangePasswordPage {
     return_to: String,
     user_name: String,

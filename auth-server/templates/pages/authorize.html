@@ -1,19 +1,18 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Authorization Request</title>
-</head>
-<body>
-    <h1>Authorization Request</h1>
+{% extends "base.html" %}
+
+{% block title %}Authorization Request{% endblock %}
+
+{% block content %}
+    <h1>Authorize {{ client_name }}</h1>
     <p><strong>{{ client_name }}</strong> is requesting access to: <strong>{{ scope }}</strong></p>
 
     <form method="post" action="/authorize">
         <input type="hidden" name="client_id" value="{{ client_id }}">
         <input type="hidden" name="request_uri" value="{{ request_uri }}">
 
-        <button type="submit" name="decision" value="true">Authorize</button>
-        <button type="submit" name="decision" value="false">Deny</button>
+        <div class="actions">
+            <button type="submit" name="decision" value="false" class="secondary">Deny</button>
+            <button type="submit" name="decision" value="true">Authorize</button>
+        </div>
     </form>
-</body>
-</html>
+{% endblock %}

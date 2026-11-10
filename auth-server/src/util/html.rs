@@ -6,7 +6,7 @@ use axum::{
 
 /// The shared `error.html` page.
 #[derive(Template)]
-#[template(path = "error.html")]
+#[template(path = "pages/error.html")]
 pub struct ErrorPage<'a> {
     pub error: &'a str,
     pub error_description: &'a str,
