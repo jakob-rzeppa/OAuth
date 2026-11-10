@@ -252,19 +252,38 @@ mod tests {
         let client_id = Uuid::new_v4();
         let user_id = Some(Uuid::new_v4());
         setup_valid_grant(client_id, user_id);
+        // Well-formed, so it gets as far as the comparison with the code_challenge.
+        let wrong_verifier = format!("a-wrong-verifier-{}", "x".repeat(30));
         let request = TokenRequest {
-            code_verifier: Some("a-wrong-verifier".to_string()),
+            code_verifier: Some(wrong_verifier.clone()),
             ..token_request(client_id)
         };
 
         let result = token_endpoint(request).await;
 
-        assert!(result.is_err());
+        assert!(matches!(result, Err(TokenErrorResponse::InvalidCodeVerifier)));
         let log = capture.contents();
         assert!(log.contains("WARN"), "{log}");
         assert!(log.contains("code_verifier does not match"), "{log}");
-        assert!(!log.contains("a-wrong-verifier"), "{log}");
+        assert!(!log.contains(&wrong_verifier), "{log}");
         assert!(!log.contains("access token issued"), "{log}");
+    }
+
+    #[tokio::test]
+    async fn rejects_a_malformed_code_verifier_as_invalid_request_without_consuming_the_code() {
+        fake_registered_client();
+        take_authorization_code_fake().setup(|_| panic!("no code must be consumed"));
+        let request = TokenRequest {
+            code_verifier: Some("too-short".to_string()),
+            ..token_request(Uuid::new_v4())
+        };
+
+        let Err(error) = token_endpoint(request).await else {
+            panic!("expected an error");
+        };
+
+        assert!(matches!(error, TokenErrorResponse::MalformedCodeVerifier));
+        assert_eq!(error_code(error).await, "invalid_request");
     }
 
     #[tokio::test]

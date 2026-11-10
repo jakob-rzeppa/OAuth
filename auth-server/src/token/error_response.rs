@@ -13,6 +13,7 @@ pub enum TokenErrorResponse {
     UnsupportedGrantType,
     MissingAuthorizationCode,
     MissingCodeVerifier,
+    MalformedCodeVerifier,
     InvalidAuthorizationCode,
     InvalidCodeVerifier,
     ServerError(InternalError),
@@ -45,6 +46,10 @@ impl From<TokenErrorResponse> for ApiError {
             MissingCodeVerifier => ApiError::new(
                 OAuthErrorCode::InvalidRequest,
                 "Missing code verifier.",
+            ),
+            MalformedCodeVerifier => ApiError::new(
+                OAuthErrorCode::InvalidRequest,
+                "The code_verifier parameter is malformed.",
             ),
             InvalidAuthorizationCode => ApiError::new(
                 OAuthErrorCode::InvalidGrant,

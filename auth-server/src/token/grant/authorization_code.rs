@@ -7,7 +7,7 @@ use crate::{
     },
     token::{
         access_token::generate_access_token, error_response::TokenErrorResponse,
-        grant::IssuedTokens, id_token::generate_id_token, pkce::verify_code_challenge,
+        grant::IssuedTokens, id_token::generate_id_token, pkce::{is_valid_code_verifier, verify_code_challenge},
         request::TokenRequest,
     },
 };
@@ -30,6 +30,9 @@ pub async fn handle_authorization_code_grant(
     let Some(code_verifier) = &request.code_verifier else {
         return Err(TokenErrorResponse::MissingCodeVerifier);
     };
+    if !is_valid_code_verifier(code_verifier) {
+        return Err(TokenErrorResponse::MalformedCodeVerifier);
+    }
 
     let Some(authorization_code) = take_authorization_code(code).await? else {
         tracing::warn!(%client_id, "token request with an unknown, expired or already used authorization code");
