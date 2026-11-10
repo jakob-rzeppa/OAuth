@@ -10,11 +10,11 @@ use crate::{
     util::headers::{prevent_framing, set_referrer_policy},
 };
 
-mod error_response;
-mod login_page;
+mod error;
 mod page;
 mod return_to;
 mod submit;
+mod template;
 
 pub fn router() -> Router {
     Router::new()

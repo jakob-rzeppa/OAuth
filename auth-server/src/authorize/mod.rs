@@ -1,4 +1,4 @@
-mod error_page;
+mod error;
 mod page;
 mod submit;
 

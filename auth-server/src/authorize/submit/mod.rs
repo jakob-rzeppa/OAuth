@@ -1,8 +1,8 @@
 use crate::{
     authorize::{
-        error_page::AuthorizeErrorPage,
+        error::AuthorizeError,
         submit::{
-            error_response::AuthorizeSubmitErrorResponse, request::AuthorizeSubmitRequest,
+            error::AuthorizeSubmitError, request::AuthorizeSubmitRequest,
             response::AuthorizeSubmitResponse,
         },
     },
@@ -15,12 +15,12 @@ use crate::{
         authorization_codes::save::save_authorization_code, clients::find_by_id::find_client_by_id,
         pars::take::take_par,
     },
-    session::require_login::require_login,
     session::SessionToken,
+    session::require_login::require_login,
     util::token::random_token,
 };
 
-mod error_response;
+mod error;
 mod request;
 mod response;
 
@@ -32,7 +32,7 @@ pub async fn authorize_submit_endpoint(
         client_id,
         decision,
     }: AuthorizeSubmitRequest,
-) -> Result<AuthorizeSubmitResponse, AuthorizeSubmitErrorResponse> {
+) -> Result<AuthorizeSubmitResponse, AuthorizeSubmitError> {
     // Make sure the user is logged in and has a valid session.
     // If not, return a redirect to the login page.
     let session = require_login(session_token, client_id, &request_uri).await?;
@@ -43,12 +43,12 @@ pub async fn authorize_submit_endpoint(
     // Every invalid request is treated as an attack and the request is consumed.
     let request = take_par(&request_uri).await?.ok_or_else(|| {
         tracing::warn!(%client_id, "authorization submitted for an unknown, expired or already used request_uri");
-        AuthorizeErrorPage::RequestNotFound
+        AuthorizeError::RequestNotFound
     })?;
 
     let client = find_client_by_id(&client_id).ok_or_else(|| {
         tracing::warn!(%client_id, "authorization submitted for an unknown client");
-        AuthorizeErrorPage::ClientNotFound
+        AuthorizeError::ClientNotFound
     })?;
 
     let ValidatedAuthorizationRequest {
@@ -325,8 +325,8 @@ mod tests {
 
         assert!(matches!(
             result,
-            Err(AuthorizeSubmitErrorResponse::Page {
-                error: AuthorizeErrorPage::ServerError(_)
+            Err(AuthorizeSubmitError::Page {
+                error: AuthorizeError::ServerError(_)
             })
         ));
 
@@ -353,8 +353,8 @@ mod tests {
 
         assert!(matches!(
             result,
-            Err(AuthorizeSubmitErrorResponse::Page {
-                error: AuthorizeErrorPage::RequestNotFound
+            Err(AuthorizeSubmitError::Page {
+                error: AuthorizeError::RequestNotFound
             })
         ));
 
@@ -390,8 +390,8 @@ mod tests {
 
         assert!(matches!(
             result,
-            Err(AuthorizeSubmitErrorResponse::Page {
-                error: AuthorizeErrorPage::ClientNotFound
+            Err(AuthorizeSubmitError::Page {
+                error: AuthorizeError::ClientNotFound
             })
         ));
 
@@ -422,8 +422,8 @@ mod tests {
 
         assert!(matches!(
             result,
-            Err(AuthorizeSubmitErrorResponse::Page {
-                error: AuthorizeErrorPage::InvalidAuthorizationRequest {
+            Err(AuthorizeSubmitError::Page {
+                error: AuthorizeError::InvalidAuthorizationRequest {
                     code: OAuthErrorCode::InvalidRequest,
                     ..
                 }
@@ -458,7 +458,7 @@ mod tests {
             authorize_submit_endpoint(session_token(), submit_request(client_id, request_uri))
                 .await;
 
-        let Err(AuthorizeSubmitErrorResponse::Redirect(RedirectError {
+        let Err(AuthorizeSubmitError::Redirect(RedirectError {
             reason:
                 RedirectReason::Described {
                     code: OAuthErrorCode::InvalidScope,
@@ -501,7 +501,7 @@ mod tests {
             authorize_submit_endpoint(session_token(), submit_request(client_id, request_uri))
                 .await;
 
-        let Err(AuthorizeSubmitErrorResponse::Redirect(RedirectError {
+        let Err(AuthorizeSubmitError::Redirect(RedirectError {
             reason: RedirectReason::Server(_),
             redirect_uri,
             state,
@@ -544,7 +544,7 @@ mod tests {
         )
         .await;
 
-        let Err(AuthorizeSubmitErrorResponse::Redirect(RedirectError {
+        let Err(AuthorizeSubmitError::Redirect(RedirectError {
             reason:
                 RedirectReason::Described {
                     code: OAuthErrorCode::AccessDenied,
@@ -583,8 +583,8 @@ mod tests {
 
         assert!(matches!(
             result,
-            Err(AuthorizeSubmitErrorResponse::Page {
-                error: AuthorizeErrorPage::LoginRequired(_)
+            Err(AuthorizeSubmitError::Page {
+                error: AuthorizeError::LoginRequired(_)
             })
         ));
         take_mock.assert();
@@ -609,8 +609,8 @@ mod tests {
             authorize_submit_endpoint(session_token(), submit_request(client_id, request_uri))
                 .await;
 
-        let Err(AuthorizeSubmitErrorResponse::Page {
-            error: AuthorizeErrorPage::LoginRequired(redirect),
+        let Err(AuthorizeSubmitError::Page {
+            error: AuthorizeError::LoginRequired(redirect),
         }) = result
         else {
             panic!("expected a login required error");
@@ -646,8 +646,8 @@ mod tests {
 
         assert!(matches!(
             result,
-            Err(AuthorizeSubmitErrorResponse::Page {
-                error: AuthorizeErrorPage::ServerError(_)
+            Err(AuthorizeSubmitError::Page {
+                error: AuthorizeError::ServerError(_)
             })
         ));
         take_mock.assert();

@@ -5,11 +5,11 @@ use crate::{
     domain::access_token::BEARER,
     persistence::access_tokens::register::register_access_token,
     security::cache_control::no_store,
-    token::{error_response::TokenErrorResponse, request::TokenRequest, response::TokenResponse},
+    token::{error::TokenError, request::TokenRequest, response::TokenResponse},
 };
 
 mod access_token;
-mod error_response;
+mod error;
 mod grant;
 mod id_token;
 mod pkce;
@@ -23,7 +23,7 @@ pub fn router() -> Router {
 }
 
 #[axum::debug_handler]
-pub async fn token_endpoint(request: TokenRequest) -> Result<TokenResponse, TokenErrorResponse> {
+pub async fn token_endpoint(request: TokenRequest) -> Result<TokenResponse, TokenError> {
     let grant::IssuedTokens {
         access_token,
         access_token_entity,
@@ -34,7 +34,7 @@ pub async fn token_endpoint(request: TokenRequest) -> Result<TokenResponse, Toke
         }
         _ => {
             tracing::warn!("token request with an unsupported grant_type");
-            return Err(TokenErrorResponse::UnsupportedGrantType);
+            return Err(TokenError::UnsupportedGrantType);
         }
     };
 
@@ -209,7 +209,7 @@ mod tests {
 
         let result = token_endpoint(token_request(client_id)).await;
 
-        assert!(matches!(result, Err(TokenErrorResponse::ServerError(_))));
+        assert!(matches!(result, Err(TokenError::ServerError(_))));
     }
 
     #[tokio::test]
@@ -261,10 +261,7 @@ mod tests {
 
         let result = token_endpoint(request).await;
 
-        assert!(matches!(
-            result,
-            Err(TokenErrorResponse::InvalidCodeVerifier)
-        ));
+        assert!(matches!(result, Err(TokenError::InvalidCodeVerifier)));
         let log = capture.contents();
         assert!(log.contains("WARN"), "{log}");
         assert!(log.contains("code_verifier does not match"), "{log}");
@@ -285,7 +282,7 @@ mod tests {
             panic!("expected an error");
         };
 
-        assert!(matches!(error, TokenErrorResponse::MalformedCodeVerifier));
+        assert!(matches!(error, TokenError::MalformedCodeVerifier));
         assert_eq!(error_code(error).await, "invalid_request");
     }
 
@@ -301,7 +298,7 @@ mod tests {
         let Err(error) = result else {
             panic!("expected an error");
         };
-        assert!(matches!(error, TokenErrorResponse::InvalidClientId));
+        assert!(matches!(error, TokenError::InvalidClientId));
         assert_eq!(error.into_response().status(), StatusCode::BAD_REQUEST);
     }
 
@@ -315,12 +312,12 @@ mod tests {
         let Err(error) = result else {
             panic!("expected an error");
         };
-        assert!(matches!(error, TokenErrorResponse::ClientNotFound));
+        assert!(matches!(error, TokenError::ClientNotFound));
         assert_eq!(error.into_response().status(), StatusCode::BAD_REQUEST);
     }
 
     /// The `error` of the JSON body the error is answered with.
-    async fn error_code(error: TokenErrorResponse) -> String {
+    async fn error_code(error: TokenError) -> String {
         let body = axum::body::to_bytes(error.into_response().into_body(), usize::MAX)
             .await
             .unwrap();
@@ -341,10 +338,7 @@ mod tests {
             panic!("expected an error");
         };
 
-        assert!(matches!(
-            error,
-            TokenErrorResponse::MissingAuthorizationCode
-        ));
+        assert!(matches!(error, TokenError::MissingAuthorizationCode));
         assert_eq!(error_code(error).await, "invalid_request");
     }
 
@@ -361,7 +355,7 @@ mod tests {
             panic!("expected an error");
         };
 
-        assert!(matches!(error, TokenErrorResponse::MissingCodeVerifier));
+        assert!(matches!(error, TokenError::MissingCodeVerifier));
         assert_eq!(error_code(error).await, "invalid_request");
     }
 
@@ -371,10 +365,7 @@ mod tests {
 
         let result = token_endpoint(token_request(Uuid::new_v4())).await;
 
-        assert!(matches!(
-            result,
-            Err(TokenErrorResponse::InvalidAuthorizationCode)
-        ));
+        assert!(matches!(result, Err(TokenError::InvalidAuthorizationCode)));
     }
 
     #[tokio::test]

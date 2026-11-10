@@ -10,11 +10,11 @@ use crate::{
     identity_provider::users::find_by_id::find_user_by_id,
     persistence::access_tokens::find_by_token_hash::find_access_token_by_token_hash,
     security::cache_control::no_store,
-    userinfo::{error_response::UserInfoErrorResponse, response::UserInfoResponse},
+    userinfo::{error::UserInfoError, response::UserInfoResponse},
     util::token::hash_token,
 };
 
-mod error_response;
+mod error;
 mod response;
 
 /// OpenID Connect requires both GET and POST.
@@ -26,22 +26,20 @@ pub fn router() -> Router {
 
 /// Returns the claims about the user the access token was issued for, filtered by its scope.
 #[axum::debug_handler]
-pub async fn userinfo_endpoint(
-    headers: HeaderMap,
-) -> Result<UserInfoResponse, UserInfoErrorResponse> {
-    let token = bearer_token(&headers).ok_or(UserInfoErrorResponse::MissingToken)?;
+pub async fn userinfo_endpoint(headers: HeaderMap) -> Result<UserInfoResponse, UserInfoError> {
+    let token = bearer_token(&headers).ok_or(UserInfoError::MissingToken)?;
 
     let Some(access_token) = find_access_token_by_token_hash(&hash_token(token)).await? else {
-        return Err(UserInfoErrorResponse::InvalidToken);
+        return Err(UserInfoError::InvalidToken);
     };
 
     if access_token.exp().timestamp() < chrono::Utc::now().timestamp() {
-        return Err(UserInfoErrorResponse::InvalidToken);
+        return Err(UserInfoError::InvalidToken);
     }
 
     // A token without a user (client credentials) can't carry `openid`, but it has no claims either.
     let (true, Some(sub)) = (has_openid_scope(access_token.scope()), access_token.sub()) else {
-        return Err(UserInfoErrorResponse::InsufficientScope);
+        return Err(UserInfoError::InsufficientScope);
     };
 
     let mut response = UserInfoResponse {
@@ -53,7 +51,7 @@ pub async fn userinfo_endpoint(
     if has_profile_scope(access_token.scope()) {
         let Some(user) = find_user_by_id(*sub).await? else {
             tracing::warn!(%sub, "userinfo requested for a user that no longer exists");
-            return Err(UserInfoErrorResponse::InvalidToken);
+            return Err(UserInfoError::InvalidToken);
         };
 
         response.name = Some(user.display_name);
@@ -180,7 +178,7 @@ mod tests {
     async fn rejects_a_request_without_a_token() {
         let result = userinfo_endpoint(HeaderMap::new()).await;
 
-        assert!(matches!(result, Err(UserInfoErrorResponse::MissingToken)));
+        assert!(matches!(result, Err(UserInfoError::MissingToken)));
     }
 
     #[tokio::test]
@@ -189,7 +187,7 @@ mod tests {
 
         let result = userinfo_endpoint(headers_with_token("the-token")).await;
 
-        assert!(matches!(result, Err(UserInfoErrorResponse::InvalidToken)));
+        assert!(matches!(result, Err(UserInfoError::InvalidToken)));
     }
 
     #[tokio::test]
@@ -198,7 +196,7 @@ mod tests {
 
         let result = userinfo_endpoint(headers_with_token("the-token")).await;
 
-        assert!(matches!(result, Err(UserInfoErrorResponse::InvalidToken)));
+        assert!(matches!(result, Err(UserInfoError::InvalidToken)));
     }
 
     #[tokio::test]
@@ -207,10 +205,7 @@ mod tests {
 
         let result = userinfo_endpoint(headers_with_token("the-token")).await;
 
-        assert!(matches!(
-            result,
-            Err(UserInfoErrorResponse::InsufficientScope)
-        ));
+        assert!(matches!(result, Err(UserInfoError::InsufficientScope)));
     }
 
     #[tokio::test]
@@ -219,10 +214,7 @@ mod tests {
 
         let result = userinfo_endpoint(headers_with_token("the-token")).await;
 
-        assert!(matches!(
-            result,
-            Err(UserInfoErrorResponse::InsufficientScope)
-        ));
+        assert!(matches!(result, Err(UserInfoError::InsufficientScope)));
     }
 
     #[tokio::test]
@@ -232,7 +224,7 @@ mod tests {
 
         let result = userinfo_endpoint(headers_with_token("the-token")).await;
 
-        assert!(matches!(result, Err(UserInfoErrorResponse::InvalidToken)));
+        assert!(matches!(result, Err(UserInfoError::InvalidToken)));
     }
 
     #[tokio::test]
@@ -242,7 +234,7 @@ mod tests {
 
         let result = userinfo_endpoint(headers_with_token("the-token")).await;
 
-        assert!(matches!(result, Err(UserInfoErrorResponse::ServerError(_))));
+        assert!(matches!(result, Err(UserInfoError::ServerError(_))));
     }
 
     #[test]

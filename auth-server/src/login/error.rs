@@ -3,37 +3,37 @@ use axum::extract::rejection::FormRejection;
 use crate::error::{InternalError, into_response_via, oauth_code::OAuthErrorCode, page::PageError};
 
 #[derive(Debug)]
-pub enum LoginErrorResponse {
+pub enum LoginError {
     MalformedRequest,
     InvalidReturnTo,
     ServerError(InternalError),
 }
 
-impl From<LoginErrorResponse> for PageError {
-    fn from(error: LoginErrorResponse) -> Self {
+impl From<LoginError> for PageError {
+    fn from(error: LoginError) -> Self {
         match error {
-            LoginErrorResponse::MalformedRequest => {
+            LoginError::MalformedRequest => {
                 PageError::new(OAuthErrorCode::InvalidRequest, "The request is malformed.")
             }
-            LoginErrorResponse::InvalidReturnTo => PageError::new(
+            LoginError::InvalidReturnTo => PageError::new(
                 OAuthErrorCode::InvalidRequest,
                 "The return_to parameter is missing or is not a path on this server.",
             ),
-            LoginErrorResponse::ServerError(source) => PageError::Server(source),
+            LoginError::ServerError(source) => PageError::Server(source),
         }
     }
 }
 
-into_response_via!(LoginErrorResponse => PageError);
+into_response_via!(LoginError => PageError);
 
-impl From<InternalError> for LoginErrorResponse {
+impl From<InternalError> for LoginError {
     fn from(error: InternalError) -> Self {
-        LoginErrorResponse::ServerError(error)
+        LoginError::ServerError(error)
     }
 }
 
-impl From<FormRejection> for LoginErrorResponse {
+impl From<FormRejection> for LoginError {
     fn from(_: FormRejection) -> Self {
-        LoginErrorResponse::MalformedRequest
+        LoginError::MalformedRequest
     }
 }

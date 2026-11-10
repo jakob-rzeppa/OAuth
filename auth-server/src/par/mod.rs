@@ -4,12 +4,12 @@ use uuid::Uuid;
 use crate::{
     config::Config,
     domain::authorization_code::request::AuthorizationRequest,
-    par::{error_response::ParErrorResponse, request::ParRequest, response::ParResponse},
+    par::{error::ParError, request::ParRequest, response::ParResponse},
     persistence::{clients::find_by_id::find_client_by_id, pars::save::save_par},
     security::cache_control::no_store,
 };
 
-mod error_response;
+mod error;
 mod request;
 mod response;
 
@@ -30,14 +30,14 @@ pub async fn par_endpoint(
         code_challenge_method,
         nonce,
     }: ParRequest,
-) -> Result<ParResponse, ParErrorResponse> {
+) -> Result<ParResponse, ParError> {
     let Ok(client_id) = Uuid::parse_str(&client_id) else {
-        return Err(ParErrorResponse::InvalidClientId);
+        return Err(ParError::InvalidClientId);
     };
 
     let client = find_client_by_id(&client_id).ok_or_else(|| {
         tracing::warn!(%client_id, "pushed authorization request for an unknown client");
-        ParErrorResponse::ClientNotFound
+        ParError::ClientNotFound
     })?;
 
     let request = AuthorizationRequest::new(
@@ -167,7 +167,7 @@ mod tests {
 
         let result = par_endpoint(request).await;
 
-        assert!(matches!(result, Err(ParErrorResponse::InvalidClientId)));
+        assert!(matches!(result, Err(ParError::InvalidClientId)));
     }
 
     #[tokio::test]
@@ -176,7 +176,7 @@ mod tests {
 
         let result = par_endpoint(valid_request(Uuid::new_v4())).await;
 
-        assert!(matches!(result, Err(ParErrorResponse::ClientNotFound)));
+        assert!(matches!(result, Err(ParError::ClientNotFound)));
     }
 
     #[tokio::test]
@@ -191,7 +191,7 @@ mod tests {
 
         assert!(matches!(
             result,
-            Err(ParErrorResponse::InvalidAuthorizationRequest {
+            Err(ParError::InvalidAuthorizationRequest {
                 code: OAuthErrorCode::InvalidRequest,
                 ..
             })
@@ -210,7 +210,7 @@ mod tests {
 
         let result = par_endpoint(valid_request(client_id)).await;
 
-        assert!(matches!(result, Err(ParErrorResponse::ServerError(_))));
+        assert!(matches!(result, Err(ParError::ServerError(_))));
     }
 }
 

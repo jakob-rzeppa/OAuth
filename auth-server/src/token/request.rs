@@ -1,10 +1,10 @@
 use axum::{Form, extract::FromRequest};
 use serde::Deserialize;
 
-use crate::token::error_response::TokenErrorResponse;
+use crate::token::error::TokenError;
 
 #[derive(Deserialize, FromRequest)]
-#[from_request(via(Form), rejection(TokenErrorResponse))]
+#[from_request(via(Form), rejection(TokenError))]
 pub struct TokenRequest {
     pub grant_type: String,
     pub client_id: String,

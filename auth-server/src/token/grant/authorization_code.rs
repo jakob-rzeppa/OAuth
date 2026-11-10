@@ -7,7 +7,7 @@ use crate::{
     },
     token::{
         access_token::generate_access_token,
-        error_response::TokenErrorResponse,
+        error::TokenError,
         grant::IssuedTokens,
         id_token::generate_id_token,
         pkce::{is_valid_code_verifier, verify_code_challenge},
@@ -17,34 +17,34 @@ use crate::{
 
 pub async fn handle_authorization_code_grant(
     request: TokenRequest,
-) -> Result<IssuedTokens, TokenErrorResponse> {
+) -> Result<IssuedTokens, TokenError> {
     let Some(client_id) = Uuid::parse_str(&request.client_id).ok() else {
-        return Err(TokenErrorResponse::InvalidClientId);
+        return Err(TokenError::InvalidClientId);
     };
 
     if find_client_by_id(&client_id).is_none() {
         tracing::warn!(%client_id, "token request for an unknown client");
-        return Err(TokenErrorResponse::ClientNotFound);
+        return Err(TokenError::ClientNotFound);
     }
 
     let Some(code) = &request.code else {
-        return Err(TokenErrorResponse::MissingAuthorizationCode);
+        return Err(TokenError::MissingAuthorizationCode);
     };
     let Some(code_verifier) = &request.code_verifier else {
-        return Err(TokenErrorResponse::MissingCodeVerifier);
+        return Err(TokenError::MissingCodeVerifier);
     };
     if !is_valid_code_verifier(code_verifier) {
-        return Err(TokenErrorResponse::MalformedCodeVerifier);
+        return Err(TokenError::MalformedCodeVerifier);
     }
 
     let Some(authorization_code) = take_authorization_code(code).await? else {
         tracing::warn!(%client_id, "token request with an unknown, expired or already used authorization code");
-        return Err(TokenErrorResponse::InvalidAuthorizationCode);
+        return Err(TokenError::InvalidAuthorizationCode);
     };
 
     if authorization_code.client_id() != &client_id {
         tracing::warn!(%client_id, "token request for an authorization code issued to a different client");
-        return Err(TokenErrorResponse::InvalidAuthorizationCode);
+        return Err(TokenError::InvalidAuthorizationCode);
     }
 
     if !verify_code_challenge(
@@ -53,7 +53,7 @@ pub async fn handle_authorization_code_grant(
         authorization_code.code_challenge(),
     ) {
         tracing::warn!(%client_id, "token request rejected: code_verifier does not match the code_challenge");
-        return Err(TokenErrorResponse::InvalidCodeVerifier);
+        return Err(TokenError::InvalidCodeVerifier);
     }
 
     let id_token = if has_openid_scope(authorization_code.scope()) {

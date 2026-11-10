@@ -1,11 +1,11 @@
 use axum::{Form, extract::FromRequest};
 use serde::Deserialize;
 
-use crate::login::error_response::LoginErrorResponse;
+use crate::login::error::LoginError;
 
 /// Read from the request body, so it has to be the last extractor of a handler.
 #[derive(Deserialize, FromRequest)]
-#[from_request(via(Form), rejection(LoginErrorResponse))]
+#[from_request(via(Form), rejection(LoginError))]
 pub struct LoginFormSubmitRequest {
     pub user_name: String,
     pub password: String,
@@ -44,7 +44,7 @@ mod tests {
 
         let form = LoginFormSubmitRequest::from_request(request, &()).await;
 
-        assert!(matches!(form, Err(LoginErrorResponse::MalformedRequest)));
+        assert!(matches!(form, Err(LoginError::MalformedRequest)));
     }
 
     #[tokio::test]
@@ -53,6 +53,6 @@ mod tests {
 
         let form = LoginFormSubmitRequest::from_request(request, &()).await;
 
-        assert!(matches!(form, Err(LoginErrorResponse::MalformedRequest)));
+        assert!(matches!(form, Err(LoginError::MalformedRequest)));
     }
 }

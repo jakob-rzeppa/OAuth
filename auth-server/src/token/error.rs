@@ -1,11 +1,9 @@
 use axum::extract::rejection::FormRejection;
 
-use crate::{
-    error::{InternalError, api::ApiError, into_response_via, oauth_code::OAuthErrorCode},
-};
+use crate::error::{InternalError, api::ApiError, into_response_via, oauth_code::OAuthErrorCode};
 
 #[derive(Debug)]
-pub enum TokenErrorResponse {
+pub enum TokenError {
     InvalidRequestBody,
     InvalidClientId,
     ClientNotFound,
@@ -18,9 +16,9 @@ pub enum TokenErrorResponse {
     ServerError(InternalError),
 }
 
-impl From<TokenErrorResponse> for ApiError {
-    fn from(error: TokenErrorResponse) -> Self {
-        use TokenErrorResponse::*;
+impl From<TokenError> for ApiError {
+    fn from(error: TokenError) -> Self {
+        use TokenError::*;
         match error {
             InvalidRequestBody => {
                 ApiError::new(OAuthErrorCode::InvalidRequest, "Invalid request body.")
@@ -59,16 +57,16 @@ impl From<TokenErrorResponse> for ApiError {
     }
 }
 
-into_response_via!(TokenErrorResponse => ApiError);
+into_response_via!(TokenError => ApiError);
 
-impl From<InternalError> for TokenErrorResponse {
+impl From<InternalError> for TokenError {
     fn from(error: InternalError) -> Self {
-        TokenErrorResponse::ServerError(error)
+        TokenError::ServerError(error)
     }
 }
 
-impl From<FormRejection> for TokenErrorResponse {
+impl From<FormRejection> for TokenError {
     fn from(_: FormRejection) -> Self {
-        TokenErrorResponse::InvalidRequestBody
+        TokenError::InvalidRequestBody
     }
 }

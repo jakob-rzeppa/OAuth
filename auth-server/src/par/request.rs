@@ -1,10 +1,10 @@
 use axum::{Form, extract::FromRequest};
 use serde::Deserialize;
 
-use crate::par::error_response::ParErrorResponse;
+use crate::par::error::ParError;
 
 #[derive(Deserialize, FromRequest)]
-#[from_request(via(Form), rejection(ParErrorResponse))]
+#[from_request(via(Form), rejection(ParError))]
 pub struct ParRequest {
     pub client_id: String,
     pub redirect_uri: String,

@@ -1,7 +1,7 @@
 use axum::extract::FromRequestParts;
 use serde::Deserialize;
 
-use crate::login::error_response::LoginErrorResponse;
+use crate::login::error::LoginError;
 
 #[derive(Deserialize)]
 pub struct ReturnToQuery {
@@ -9,17 +9,14 @@ pub struct ReturnToQuery {
 }
 
 impl<S: Send + Sync> FromRequestParts<S> for ReturnToQuery {
-    type Rejection = LoginErrorResponse;
+    type Rejection = LoginError;
 
     async fn from_request_parts(
         parts: &mut axum::http::request::Parts,
         _state: &S,
     ) -> Result<Self, Self::Rejection> {
-        let query = parts
-            .uri
-            .query()
-            .ok_or(LoginErrorResponse::InvalidReturnTo)?;
-        serde_urlencoded::from_str(query).map_err(|_| LoginErrorResponse::MalformedRequest)
+        let query = parts.uri.query().ok_or(LoginError::InvalidReturnTo)?;
+        serde_urlencoded::from_str(query).map_err(|_| LoginError::MalformedRequest)
     }
 }
 
@@ -37,7 +34,7 @@ mod tests {
 
     use super::*;
 
-    async fn extract(uri: &str) -> Result<ReturnToQuery, LoginErrorResponse> {
+    async fn extract(uri: &str) -> Result<ReturnToQuery, LoginError> {
         let (mut parts, _) = Request::get(uri).body(()).unwrap().into_parts();
         ReturnToQuery::from_request_parts(&mut parts, &()).await
     }
@@ -53,14 +50,14 @@ mod tests {
     async fn extractor_fails_with_invalid_return_to_without_a_query() {
         let query = extract("/login").await;
 
-        assert!(matches!(query, Err(LoginErrorResponse::InvalidReturnTo)));
+        assert!(matches!(query, Err(LoginError::InvalidReturnTo)));
     }
 
     #[tokio::test]
     async fn extractor_fails_with_malformed_request_without_return_to_in_the_query() {
         let query = extract("/login?other=1").await;
 
-        assert!(matches!(query, Err(LoginErrorResponse::MalformedRequest)));
+        assert!(matches!(query, Err(LoginError::MalformedRequest)));
     }
 
     #[test]

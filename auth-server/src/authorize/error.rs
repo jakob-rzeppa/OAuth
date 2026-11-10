@@ -10,7 +10,7 @@ use crate::{
 
 /// Errors of the consent page and its submit that are not redirected back to the client:
 /// they render the error page, or send the user to the login first.
-pub enum AuthorizeErrorPage {
+pub enum AuthorizeError {
     MalformedRequest,
     MissingClientId,
     InvalidClientId,
@@ -27,9 +27,9 @@ pub enum AuthorizeErrorPage {
     LoginRequired(LoginRedirect),
 }
 
-impl IntoResponse for AuthorizeErrorPage {
+impl IntoResponse for AuthorizeError {
     fn into_response(self) -> Response {
-        use AuthorizeErrorPage::*;
+        use AuthorizeError::*;
         let error = match self {
             LoginRequired(redirect) => return redirect.into_response(),
             MalformedRequest => {
@@ -66,31 +66,29 @@ impl IntoResponse for AuthorizeErrorPage {
     }
 }
 
-impl From<InternalError> for AuthorizeErrorPage {
+impl From<InternalError> for AuthorizeError {
     fn from(error: InternalError) -> Self {
-        AuthorizeErrorPage::ServerError(error)
+        AuthorizeError::ServerError(error)
     }
 }
 
-impl From<RequireLoginError> for AuthorizeErrorPage {
+impl From<RequireLoginError> for AuthorizeError {
     fn from(error: RequireLoginError) -> Self {
         match error {
-            RequireLoginError::LoginRequired(redirect) => {
-                AuthorizeErrorPage::LoginRequired(redirect)
-            }
-            RequireLoginError::Internal(error) => AuthorizeErrorPage::ServerError(error),
+            RequireLoginError::LoginRequired(redirect) => AuthorizeError::LoginRequired(redirect),
+            RequireLoginError::Internal(error) => AuthorizeError::ServerError(error),
         }
     }
 }
 
-impl From<QueryRejection> for AuthorizeErrorPage {
+impl From<QueryRejection> for AuthorizeError {
     fn from(_: QueryRejection) -> Self {
-        AuthorizeErrorPage::MalformedRequest
+        AuthorizeError::MalformedRequest
     }
 }
 
-impl From<FormRejection> for AuthorizeErrorPage {
+impl From<FormRejection> for AuthorizeError {
     fn from(_: FormRejection) -> Self {
-        AuthorizeErrorPage::MalformedRequest
+        AuthorizeError::MalformedRequest
     }
 }

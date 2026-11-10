@@ -9,10 +9,10 @@ use chrono::Utc;
 use crate::{
     identity_provider::users::authorize::{AuthorizeUserError, authorize_user},
     login::{
-        error_response::LoginErrorResponse,
-        login_page::render_login_page,
+        error::LoginError,
         return_to::{ReturnToQuery, is_local_path},
         submit::request::LoginFormSubmitRequest,
+        template::render_login_page,
     },
     session::{self, user_session::UserSession},
 };
@@ -21,7 +21,7 @@ use crate::{
 pub async fn login_submit_endpoint(
     ReturnToQuery { return_to }: ReturnToQuery,
     request: LoginFormSubmitRequest,
-) -> Result<Response, LoginErrorResponse> {
+) -> Result<Response, LoginError> {
     let LoginFormSubmitRequest {
         user_name,
         password,
@@ -31,7 +31,7 @@ pub async fn login_submit_endpoint(
     // served with.
     if !is_local_path(&return_to) {
         tracing::warn!("login submit rejected: return_to is not a local path");
-        return Err(LoginErrorResponse::InvalidReturnTo);
+        return Err(LoginError::InvalidReturnTo);
     }
 
     let authorize_res = authorize_user(&user_name, &password).await;

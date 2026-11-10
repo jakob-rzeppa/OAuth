@@ -3,15 +3,14 @@ use axum::{Router, middleware::map_response, routing::post};
 use crate::{
     config::Config,
     introspection::{
-        error_response::IntrospectionErrorResponse, request::IntrospectionRequest,
-        response::IntrospectionResponse,
+        error::IntrospectionError, request::IntrospectionRequest, response::IntrospectionResponse,
     },
     persistence::access_tokens::find_by_token_hash::find_access_token_by_token_hash,
     security::cache_control::no_store,
     util::token::hash_token,
 };
 
-mod error_response;
+mod error;
 mod request;
 mod response;
 
@@ -24,7 +23,7 @@ pub fn router() -> Router {
 #[axum::debug_handler]
 pub async fn introspection_endpoint(
     IntrospectionRequest { token }: IntrospectionRequest,
-) -> Result<IntrospectionResponse, IntrospectionErrorResponse> {
+) -> Result<IntrospectionResponse, IntrospectionError> {
     let token_hash = hash_token(&token);
     let access_token = find_access_token_by_token_hash(&token_hash).await?;
 

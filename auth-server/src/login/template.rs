@@ -4,7 +4,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 
-use crate::{login::error_response::LoginErrorResponse, util::html::render_html};
+use crate::{login::error::LoginError, util::html::render_html};
 
 /// Builds the login form.
 /// `user_name` pre-fills the user name field, e.g. after a failed login attempt.
@@ -12,7 +12,7 @@ pub(super) async fn render_login_page(
     return_to: String,
     user_name: Option<String>,
     error_message: Option<String>,
-) -> Result<LoginPageResponse, LoginErrorResponse> {
+) -> Result<LoginPageResponse, LoginError> {
     Ok(LoginPageResponse {
         return_to,
         user_name,

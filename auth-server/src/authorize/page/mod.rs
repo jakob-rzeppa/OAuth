@@ -7,12 +7,12 @@ use uuid::Uuid;
 
 use crate::{
     authorize::{
-        error_page::AuthorizeErrorPage,
+        error::AuthorizeError,
         page::{request::AuthorizePageQuery, response::AuthorizePageResponse},
     },
     persistence::{clients::find_by_id::find_client_by_id, pars::peek::peek_par},
-    session::require_login::require_login,
     session::SessionToken,
+    session::require_login::require_login,
 };
 
 /// Displays the authorization confirmation page for a previously
@@ -27,33 +27,33 @@ use crate::{
 pub async fn authorize_page_endpoint(
     session_token: Option<SessionToken>,
     query: AuthorizePageQuery,
-) -> Result<AuthorizePageResponse, AuthorizeErrorPage> {
+) -> Result<AuthorizePageResponse, AuthorizeError> {
     let AuthorizePageQuery {
         client_id,
         request_uri,
     } = query;
 
-    let client_id = client_id.ok_or(AuthorizeErrorPage::MissingClientId)?;
-    let client_id = Uuid::from_str(&client_id).map_err(|_| AuthorizeErrorPage::InvalidClientId)?;
+    let client_id = client_id.ok_or(AuthorizeError::MissingClientId)?;
+    let client_id = Uuid::from_str(&client_id).map_err(|_| AuthorizeError::InvalidClientId)?;
 
-    let request_uri = request_uri.ok_or(AuthorizeErrorPage::MissingRequestUri)?;
+    let request_uri = request_uri.ok_or(AuthorizeError::MissingRequestUri)?;
 
     // Only the user themselves may see (and later submit) the request, so log in before showing it.
     require_login(session_token, client_id, &request_uri).await?;
 
     let par = peek_par(&request_uri).await?.ok_or_else(|| {
             tracing::warn!(%client_id, "authorize page requested for an unknown, expired or already used request_uri");
-            AuthorizeErrorPage::RequestNotFound
+            AuthorizeError::RequestNotFound
         })?;
 
     if par.client_id() != &client_id {
         tracing::warn!(%client_id, "authorize page client_id does not match the pushed request");
-        return Err(AuthorizeErrorPage::ClientIdMismatch);
+        return Err(AuthorizeError::ClientIdMismatch);
     }
 
     let client = find_client_by_id(&client_id).ok_or_else(|| {
         tracing::warn!(%client_id, "authorize page requested for an unknown client");
-        AuthorizeErrorPage::ClientNotFound
+        AuthorizeError::ClientNotFound
     })?;
 
     let scope = par.scope().to_string();
@@ -70,7 +70,8 @@ pub async fn authorize_page_endpoint(
 mod tests {
     use super::*;
     use crate::{
-        config::Config, error::InternalError,
+        config::Config,
+        error::InternalError,
         session::{persistence::access::access_session_fake, require_login::LoginRedirect},
     };
     use axum::response::IntoResponse;
@@ -92,7 +93,7 @@ mod tests {
 
         let result = authorize_page_endpoint(None, query(client_id)).await;
 
-        let Err(AuthorizeErrorPage::LoginRequired(LoginRedirect {
+        let Err(AuthorizeError::LoginRequired(LoginRedirect {
             client_id: login_client_id,
             request_uri,
         })) = result
@@ -110,7 +111,7 @@ mod tests {
 
         let result = authorize_page_endpoint(session_token(), query(Uuid::new_v4())).await;
 
-        assert!(matches!(result, Err(AuthorizeErrorPage::LoginRequired(_))));
+        assert!(matches!(result, Err(AuthorizeError::LoginRequired(_))));
     }
 
     #[tokio::test]
@@ -120,12 +121,12 @@ mod tests {
 
         let result = authorize_page_endpoint(session_token(), query(Uuid::new_v4())).await;
 
-        assert!(matches!(result, Err(AuthorizeErrorPage::ServerError(_))));
+        assert!(matches!(result, Err(AuthorizeError::ServerError(_))));
     }
 
     #[tokio::test]
     async fn login_redirect_response_is_a_redirect_to_the_login() {
-        let response = AuthorizeErrorPage::LoginRequired(LoginRedirect {
+        let response = AuthorizeError::LoginRequired(LoginRedirect {
             client_id: Uuid::new_v4(),
             request_uri: "urn:authorize:request_uri:test".to_string(),
         })

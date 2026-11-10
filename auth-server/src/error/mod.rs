@@ -14,7 +14,7 @@ pub mod page;
 pub mod redirect;
 
 /// Implements `IntoResponse` for an endpoint's error enum by converting it into one of the global
-/// error types: `into_response_via!(TokenErrorResponse => ApiError);`.
+/// error types: `into_response_via!(TokenError => ApiError);`.
 macro_rules! into_response_via {
     ($error:ty => $via:ty) => {
         impl axum::response::IntoResponse for $error {

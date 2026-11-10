@@ -6,7 +6,7 @@ use crate::{
 };
 
 #[derive(Debug)]
-pub enum ParErrorResponse {
+pub enum ParError {
     InvalidRequestBody,
     InvalidClientId,
     ClientNotFound,
@@ -18,9 +18,9 @@ pub enum ParErrorResponse {
     ServerError(InternalError),
 }
 
-impl From<ParErrorResponse> for ApiError {
-    fn from(error: ParErrorResponse) -> Self {
-        use ParErrorResponse::*;
+impl From<ParError> for ApiError {
+    fn from(error: ParError) -> Self {
+        use ParError::*;
         match error {
             InvalidRequestBody => {
                 ApiError::new(OAuthErrorCode::InvalidRequest, "Invalid request body.")
@@ -38,21 +38,21 @@ impl From<ParErrorResponse> for ApiError {
     }
 }
 
-into_response_via!(ParErrorResponse => ApiError);
+into_response_via!(ParError => ApiError);
 
-impl From<InternalError> for ParErrorResponse {
+impl From<InternalError> for ParError {
     fn from(error: InternalError) -> Self {
-        ParErrorResponse::ServerError(error)
+        ParError::ServerError(error)
     }
 }
 
-impl From<FormRejection> for ParErrorResponse {
+impl From<FormRejection> for ParError {
     fn from(_: FormRejection) -> Self {
-        ParErrorResponse::InvalidRequestBody
+        ParError::InvalidRequestBody
     }
 }
 
-impl From<ValidationError> for ParErrorResponse {
+impl From<ValidationError> for ParError {
     fn from(error: ValidationError) -> Self {
         match error {
             // The request is built from the client it is validated against.
@@ -62,7 +62,7 @@ impl From<ValidationError> for ParErrorResponse {
                 "a pushed authorization request was validated against another client",
             )
             .into(),
-            error => ParErrorResponse::InvalidAuthorizationRequest {
+            error => ParError::InvalidAuthorizationRequest {
                 code: error.oauth_code(),
                 description: error.description(),
             },

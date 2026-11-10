@@ -1,7 +1,7 @@
 use axum::response::{IntoResponse, Redirect, Response};
 use url::Url;
 
-use crate::{authorize::error_page::AuthorizeErrorPage, error::InternalError};
+use crate::{authorize::error::AuthorizeError, error::InternalError};
 
 pub struct AuthorizeSubmitResponse {
     pub code: String,
@@ -13,7 +13,7 @@ pub struct AuthorizeSubmitResponse {
 impl IntoResponse for AuthorizeSubmitResponse {
     fn into_response(self) -> Response {
         let Ok(mut url) = Url::parse(&self.redirect_uri) else {
-            return AuthorizeErrorPage::ServerError(InternalError::Invariant(
+            return AuthorizeError::ServerError(InternalError::Invariant(
                 "a validated redirect_uri is not a valid URL",
             ))
             .into_response();
