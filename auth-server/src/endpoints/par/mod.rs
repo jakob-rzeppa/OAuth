@@ -1,0 +1,290 @@
+use axum::{Router, middleware::map_response, routing::post};
+use uuid::Uuid;
+
+use crate::{
+    config::Config,
+    domain::authorization_code::request::AuthorizationRequest,
+    endpoints::par::{error::ParError, request::ParRequest, response::ParResponse},
+    persistence::{clients::find_by_id::find_client_by_id, pars::save::save_par},
+    security::cache_control::no_store,
+};
+
+mod error;
+mod request;
+mod response;
+
+pub fn router() -> Router {
+    Router::new()
+        .route("/par", post(par_endpoint))
+        .layer(map_response(no_store))
+}
+
+pub async fn par_endpoint(
+    ParRequest {
+        client_id,
+        redirect_uri,
+        response_type,
+        scope,
+        state,
+        code_challenge,
+        code_challenge_method,
+        nonce,
+    }: ParRequest,
+) -> Result<ParResponse, ParError> {
+    let Ok(client_id) = Uuid::parse_str(&client_id) else {
+        return Err(ParError::InvalidClientId);
+    };
+
+    let client = find_client_by_id(&client_id).ok_or_else(|| {
+        tracing::warn!(%client_id, "pushed authorization request for an unknown client");
+        ParError::ClientNotFound
+    })?;
+
+    let request = AuthorizationRequest::new(
+        client_id,
+        redirect_uri,
+        response_type,
+        scope,
+        state,
+        code_challenge,
+        code_challenge_method,
+        nonce,
+    );
+
+    request.validate_against_client(&client)?;
+
+    let request_uri = generate_request_uri();
+    let ttl_seconds = Config::par_ttl();
+
+    save_par(&request_uri, request, ttl_seconds).await?;
+
+    Ok(ParResponse {
+        request_uri,
+        expires_in: ttl_seconds,
+    })
+}
+
+const REQUEST_URI_PREFIX: &str = "urn:authorize:request_uri:";
+
+/// Generate a unique request URI for the pushed authorization request.
+///
+/// Per RFC 9126, the `request_uri` must be hard to guess (a "https" or "urn" scheme
+/// value containing a cryptographically random component). We use a UUIDv4, which is
+/// generated from a CSPRNG, appended to a URN prefix.
+#[fnmock::fakeable]
+fn generate_request_uri() -> String {
+    format!("{REQUEST_URI_PREFIX}{}", Uuid::new_v4())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        domain::client::Client,
+        error::{InternalError, oauth_code::OAuthErrorCode},
+        persistence::{clients::find_by_id::find_client_by_id_fake, pars::save::save_par_fake},
+    };
+
+    const PAR_TTL_SECONDS: u64 = 180;
+
+    fn make_client(id: Uuid) -> Client {
+        Client::new(
+            id,
+            "Test Client".to_string(),
+            vec!["https://example.com/callback".to_string()],
+            vec![
+                "read".to_string(),
+                "write".to_string(),
+                "openid".to_string(),
+            ],
+        )
+    }
+
+    fn valid_request(client_id: Uuid) -> ParRequest {
+        ParRequest {
+            client_id: client_id.to_string(),
+            redirect_uri: "https://example.com/callback".to_string(),
+            response_type: "code".to_string(),
+            scope: "read write".to_string(),
+            state: "some-state".to_string(),
+            code_challenge: "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM".to_string(),
+            code_challenge_method: "S256".to_string(),
+            nonce: Some("some-nonce".to_string()),
+        }
+    }
+
+    #[tokio::test]
+    async fn succeeds_and_returns_request_uri_with_ttl_for_a_valid_request() {
+        let client_id = Uuid::new_v4();
+        let client = make_client(client_id);
+
+        find_client_by_id_fake().setup(move |_| Some(client.clone()));
+        save_par_fake().setup(move |request_uri, par, ttl_seconds| {
+            assert!(request_uri.starts_with(REQUEST_URI_PREFIX));
+            assert_eq!(ttl_seconds, PAR_TTL_SECONDS);
+            assert_eq!(par.client_id(), &client_id);
+            assert_eq!(par.redirect_uri(), "https://example.com/callback");
+            assert_eq!(par.state(), "some-state");
+            assert_eq!(par.nonce(), Some("some-nonce"));
+            Ok(())
+        });
+        generate_request_uri_fake().setup(|| "urn:authorize:request_uri:test".to_string());
+        Config::par_ttl_fake().setup(|| PAR_TTL_SECONDS);
+
+        let result = par_endpoint(valid_request(client_id)).await;
+
+        let Ok(response) = result else {
+            panic!("expected a successful result");
+        };
+        assert_eq!(response.request_uri, "urn:authorize:request_uri:test");
+        assert_eq!(response.expires_in, PAR_TTL_SECONDS);
+    }
+
+    #[tokio::test]
+    async fn stores_no_nonce_when_the_request_has_none() {
+        let client_id = Uuid::new_v4();
+        let client = make_client(client_id);
+
+        find_client_by_id_fake().setup(move |_| Some(client.clone()));
+        save_par_fake().setup(move |_, par, _| {
+            assert_eq!(par.nonce(), None);
+            Ok(())
+        });
+        generate_request_uri_fake().setup(|| "urn:authorize:request_uri:test".to_string());
+        Config::par_ttl_fake().setup(|| PAR_TTL_SECONDS);
+
+        let mut request = valid_request(client_id);
+        request.nonce = None;
+        let result = par_endpoint(request).await;
+
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn fails_with_invalid_client_id_when_client_id_is_not_a_uuid() {
+        let mut request = valid_request(Uuid::new_v4());
+        request.client_id = "not-a-uuid".to_string();
+
+        let result = par_endpoint(request).await;
+
+        assert!(matches!(result, Err(ParError::InvalidClientId)));
+    }
+
+    #[tokio::test]
+    async fn fails_when_client_is_not_found() {
+        find_client_by_id_fake().setup(|_| None);
+
+        let result = par_endpoint(valid_request(Uuid::new_v4())).await;
+
+        assert!(matches!(result, Err(ParError::ClientNotFound)));
+    }
+
+    #[tokio::test]
+    async fn fails_when_redirect_uri_is_not_registered() {
+        let client_id = Uuid::new_v4();
+        let client = make_client(client_id);
+        find_client_by_id_fake().setup(move |_| Some(client.clone()));
+
+        let mut request = valid_request(client_id);
+        request.redirect_uri = "https://evil.example.com/callback".to_string();
+        let result = par_endpoint(request).await;
+
+        assert!(matches!(
+            result,
+            Err(ParError::InvalidAuthorizationRequest {
+                code: OAuthErrorCode::InvalidRequest,
+                ..
+            })
+        ));
+    }
+
+    #[tokio::test]
+    async fn fails_with_server_error_when_save_par_fails() {
+        let client_id = Uuid::new_v4();
+        let client = make_client(client_id);
+
+        find_client_by_id_fake().setup(move |_| Some(client.clone()));
+        save_par_fake().setup(|_, _, _| Err(InternalError::Invariant("redis is down")));
+        generate_request_uri_fake().setup(|| "urn:authorize:request_uri:test".to_string());
+        Config::par_ttl_fake().setup(|| PAR_TTL_SECONDS);
+
+        let result = par_endpoint(valid_request(client_id)).await;
+
+        assert!(matches!(result, Err(ParError::ServerError(_))));
+    }
+}
+
+#[cfg(test)]
+mod cache_control_tests {
+    use axum::{
+        body::Body,
+        http::{Request, header},
+    };
+    use tower::ServiceExt;
+
+    #[tokio::test]
+    async fn sends_no_store() {
+        // An invalid body is rejected before touching any persistence.
+        let request = Request::post("/par")
+            .body(Body::from("not a form"))
+            .unwrap();
+
+        let response = super::router().oneshot(request).await.unwrap();
+
+        assert_eq!(
+            response.headers().get(header::CACHE_CONTROL).unwrap(),
+            "no-store"
+        );
+    }
+}
+
+#[cfg(test)]
+mod body_format_tests {
+    use axum::{
+        body::Body,
+        http::{Request, StatusCode, header},
+    };
+    use tower::ServiceExt;
+
+    async fn post(content_type: &str, body: &'static str) -> (StatusCode, serde_json::Value) {
+        let request = Request::post("/par")
+            .header(header::CONTENT_TYPE, content_type)
+            .body(Body::from(body))
+            .unwrap();
+
+        let response = super::router().oneshot(request).await.unwrap();
+
+        let status = response.status();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        (status, serde_json::from_slice(&body).unwrap())
+    }
+
+    #[tokio::test]
+    async fn reads_a_form_urlencoded_body() {
+        // The malformed client_id is rejected before touching any persistence, but only after the
+        // body was read.
+        let (status, body) = post(
+            "application/x-www-form-urlencoded",
+            "client_id=not-a-uuid&redirect_uri=r&response_type=code&scope=openid&state=s\
+             &code_challenge=cc&code_challenge_method=S256",
+        )
+        .await;
+
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert_eq!(
+            body["error_description"],
+            "The client_id parameter is missing or invalid."
+        );
+    }
+
+    #[tokio::test]
+    async fn rejects_a_json_body_as_invalid_request() {
+        let (status, body) = post("application/json", r#"{"client_id":"not-a-uuid"}"#).await;
+
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert_eq!(body["error"], "invalid_request");
+        assert_eq!(body["error_description"], "Invalid request body.");
+    }
+}

@@ -8,6 +8,7 @@ use crate::config::Config;
 
 mod config;
 mod domain;
+mod endpoints;
 mod error;
 mod identity_provider;
 mod logging;
@@ -17,22 +18,13 @@ mod session;
 mod tls;
 mod util;
 
-mod authorize;
-mod discovery;
-mod introspection;
-mod jwks;
-mod login;
-mod par;
-mod token;
-mod userinfo;
-
 #[tokio::main]
 async fn main() {
     logging::init(Config::log_level());
 
     tracing::info!("application starting");
     Config::init();
-    jwks::init();
+    endpoints::jwks::init();
     let app = app();
 
     // Specify the address to bind to (0.0.0.0 to listen on all interfaces)
@@ -53,14 +45,7 @@ async fn main() {
 fn app() -> Router {
     Router::new()
         .route("/health", get(|| async { "ok" }))
-        .merge(par::router())
-        .merge(token::router())
-        .merge(introspection::router())
-        .merge(discovery::router())
-        .merge(jwks::router())
-        .merge(userinfo::router())
-        .merge(authorize::router())
-        .merge(login::router())
+        .merge(endpoints::router())
         // Outermost, so it sees the final response. Only the method and path are recorded: the
         // query string of `/authorize` carries the `request_uri`, which must not end up in the log.
         .layer(
