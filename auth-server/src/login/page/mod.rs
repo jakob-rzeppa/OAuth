@@ -5,10 +5,6 @@ use crate::login::{
 };
 
 /// Displays the login form.
-///
-/// Starts a login session: the CSRF token is stored server side under the hash of a fresh session
-/// token, which is handed to the browser as a cookie. The CSRF token is also embedded in the form,
-/// so the submit endpoint can check that the form was served together with that cookie.
 pub async fn login_page_endpoint(
     ReturnToQuery { return_to }: ReturnToQuery,
 ) -> Result<LoginPageResponse, LoginErrorResponse> {

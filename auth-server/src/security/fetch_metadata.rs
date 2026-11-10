@@ -14,7 +14,8 @@ use crate::{
 const SEC_FETCH_SITE: &str = "sec-fetch-site";
 
 /// Request layer for the browser forms: rejects state-changing requests that did not come from
-/// the auth-server's own pages, as a second CSRF layer next to the form tokens.
+/// the auth-server's own pages. This is the CSRF protection of the forms, which carry no CSRF
+/// tokens (see `docs/security-considerations/CSRF.md`).
 ///
 /// Browsers set `Sec-Fetch-Site` and `Origin` themselves and scripts cannot override them.
 /// Requests carrying neither header are rejected too: every current browser sends at least one of

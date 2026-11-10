@@ -6,7 +6,7 @@ use axum::{
 
 use crate::{login::error_response::LoginErrorResponse, util::html::render_html};
 
-/// Starts a login session and builds the login form for it.
+/// Builds the login form.
 /// `user_name` pre-fills the user name field, e.g. after a failed login attempt.
 pub(super) async fn render_login_page(
     return_to: String,

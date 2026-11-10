@@ -40,8 +40,8 @@ pub async fn authorize_submit_endpoint(
     let user_id = session.user_id();
     let auth_time = session.authenticated_at();
 
-    // Consume the pushed authorization request always, even if the user denied the request or the CSRF token is invalid.
-    // Every invalid request is treated as a attack and the request is consumed.
+    // Consume the pushed authorization request always, even if the user denied the request or it is invalid.
+    // Every invalid request is treated as an attack and the request is consumed.
     let request = take_par(&request_uri).await?.ok_or_else(|| {
         tracing::warn!(%client_id, "authorization submitted for an unknown, expired or already used request_uri");
         AuthorizeErrorPage::RequestNotFound

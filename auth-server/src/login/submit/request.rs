@@ -28,7 +28,7 @@ mod tests {
     async fn form_is_read_from_the_urlencoded_body() {
         let request = form_request(
             "application/x-www-form-urlencoded",
-            "csrf_token=c%2Bsrf&user_name=alice&password=p%26ss",
+            "user_name=alice&password=p%26ss",
         );
 
         let form = LoginFormSubmitRequest::from_request(request, &()).await;
@@ -42,7 +42,7 @@ mod tests {
     async fn form_fails_when_a_field_is_missing() {
         let request = form_request(
             "application/x-www-form-urlencoded",
-            "csrf_token=c&user_name=alice",
+            "user_name=alice",
         );
 
         let form = LoginFormSubmitRequest::from_request(request, &()).await;
