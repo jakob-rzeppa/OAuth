@@ -18,11 +18,14 @@ pub struct LoginRedirect {
 
 impl IntoResponse for LoginRedirect {
     fn into_response(self) -> Response {
-        let return_to = format!(
-            "/authorize?client_id={}&request_uri={}",
-            self.client_id, self.request_uri
-        );
-        match serde_urlencoded::to_string([("return_to", return_to)]) {
+        let authorize_query = serde_urlencoded::to_string([
+            ("client_id", self.client_id.to_string()),
+            ("request_uri", self.request_uri),
+        ]);
+        let login_query = authorize_query.and_then(|authorize_query| {
+            serde_urlencoded::to_string([("return_to", format!("/authorize?{authorize_query}"))])
+        });
+        match login_query {
             Ok(query) => Redirect::to(&format!("/login?{query}")).into_response(),
             Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
         }
@@ -149,14 +152,42 @@ mod tests {
         .into_response();
 
         assert_eq!(response.status(), axum::http::StatusCode::SEE_OTHER);
+        assert_eq!(
+            authorize_params(response),
+            vec![
+                ("client_id".to_string(), client_id.to_string()),
+                ("request_uri".to_string(), REQUEST_URI.to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn login_redirect_encodes_the_request_uri_so_it_cannot_add_parameters() {
+        let client_id = Uuid::new_v4();
+
+        let response = LoginRedirect {
+            client_id,
+            request_uri: "x&client_id=other&foo=bar".to_string(),
+        }
+        .into_response();
+
+        assert_eq!(
+            authorize_params(response),
+            vec![
+                ("client_id".to_string(), client_id.to_string()),
+                ("request_uri".to_string(), "x&client_id=other&foo=bar".to_string()),
+            ]
+        );
+    }
+
+    /// The query parameters of the `/authorize` URL the login returns to.
+    fn authorize_params(response: Response) -> Vec<(String, String)> {
         let location = response.headers()[axum::http::header::LOCATION]
             .to_str()
             .unwrap();
         let query = location.strip_prefix("/login?").unwrap();
         let LoginQuery { return_to } = serde_urlencoded::from_str(query).unwrap();
-        assert_eq!(
-            return_to,
-            format!("/authorize?client_id={client_id}&request_uri={REQUEST_URI}")
-        );
+        let authorize_query = return_to.strip_prefix("/authorize?").unwrap();
+        serde_urlencoded::from_str(authorize_query).unwrap()
     }
 }
