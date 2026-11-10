@@ -66,7 +66,9 @@ impl ValidationError {
                 }
                 RedirectableValidationError::InvalidScope => OAuthErrorCode::InvalidScope,
                 RedirectableValidationError::InvalidCodeChallengeMethod
-                | RedirectableValidationError::InvalidCodeChallenge => OAuthErrorCode::InvalidRequest,
+                | RedirectableValidationError::InvalidCodeChallenge => {
+                    OAuthErrorCode::InvalidRequest
+                }
             },
         }
     }

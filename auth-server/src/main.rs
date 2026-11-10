@@ -1,11 +1,6 @@
 use std::net::SocketAddr;
 
-use axum::{
-    Router,
-    body::Body,
-    http::Request,
-    routing::get,
-};
+use axum::{Router, body::Body, http::Request, routing::get};
 use tower_http::trace::{DefaultOnFailure, DefaultOnRequest, DefaultOnResponse, TraceLayer};
 use tracing::Level;
 
@@ -14,6 +9,7 @@ use crate::config::Config;
 mod config;
 mod domain;
 mod error;
+mod identity_provider;
 mod logging;
 mod persistence;
 mod security;

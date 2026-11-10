@@ -1,7 +1,9 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{config::Config, error::InternalError, security::issue_self_token::issue_self_token};
+use crate::{
+    config::Config, error::InternalError, identity_provider::self_token::issue_self_token,
+};
 
 /// The user an identity-provider `authenticate` call vouched for.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -106,7 +108,9 @@ mod tests {
     use tokio::net::TcpListener;
 
     use super::*;
-    use crate::{logging::testing::LogCapture, security::issue_self_token::issue_self_token_fake};
+    use crate::{
+        identity_provider::self_token::issue_self_token_fake, logging::testing::LogCapture,
+    };
 
     const SELF_TOKEN: &str = "the-self-token";
 
@@ -119,17 +123,19 @@ mod tests {
     async fn identity_provider(status: StatusCode, body: Value) -> String {
         let app = Router::new().route(
             "/v1/users/authenticate",
-            post(move |headers: HeaderMap, Json(request): Json<Value>| async move {
-                // Check what was sent: the self token and the credentials.
-                if status.is_success() {
-                    assert_eq!(
-                        headers.get(header::AUTHORIZATION).unwrap(),
-                        &format!("Bearer {SELF_TOKEN}")
-                    );
-                    assert_eq!(request, json!({"user_name": "alice", "password": "secret"}));
-                }
-                (status, Json(body))
-            }),
+            post(
+                move |headers: HeaderMap, Json(request): Json<Value>| async move {
+                    // Check what was sent: the self token and the credentials.
+                    if status.is_success() {
+                        assert_eq!(
+                            headers.get(header::AUTHORIZATION).unwrap(),
+                            &format!("Bearer {SELF_TOKEN}")
+                        );
+                        assert_eq!(request, json!({"user_name": "alice", "password": "secret"}));
+                    }
+                    (status, Json(body))
+                },
+            ),
         );
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();

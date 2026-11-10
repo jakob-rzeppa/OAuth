@@ -6,8 +6,11 @@ use crate::{
         authorization_codes::take::take_authorization_code, clients::find_by_id::find_client_by_id,
     },
     token::{
-        access_token::generate_access_token, error_response::TokenErrorResponse,
-        grant::IssuedTokens, id_token::generate_id_token, pkce::{is_valid_code_verifier, verify_code_challenge},
+        access_token::generate_access_token,
+        error_response::TokenErrorResponse,
+        grant::IssuedTokens,
+        id_token::generate_id_token,
+        pkce::{is_valid_code_verifier, verify_code_challenge},
         request::TokenRequest,
     },
 };

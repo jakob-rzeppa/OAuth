@@ -1,9 +1,6 @@
 use uuid::Uuid;
 
-use crate::domain::{
-    authorization_code::request::AuthorizationRequest,
-    client::Client,
-};
+use crate::domain::{authorization_code::request::AuthorizationRequest, client::Client};
 
 pub struct ValidatedAuthorizationRequest {
     pub client_id: Uuid,

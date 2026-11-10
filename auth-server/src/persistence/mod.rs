@@ -7,4 +7,3 @@ mod redis;
 pub mod self_client;
 pub mod self_token;
 pub mod user_sessions;
-pub mod users;

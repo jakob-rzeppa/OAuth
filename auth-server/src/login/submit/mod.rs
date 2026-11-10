@@ -8,13 +8,13 @@ use chrono::Utc;
 
 use crate::{
     domain::user_session::UserSession,
+    identity_provider::users::authorize::{AuthorizeUserError, authorize_user},
     login::{
         error_response::LoginErrorResponse,
         login_page::render_login_page,
         return_to::{ReturnToQuery, is_local_path},
         submit::request::LoginFormSubmitRequest,
     },
-    persistence::users::authorize::{AuthorizeUserError, authorize_user},
     session,
 };
 
@@ -77,11 +77,9 @@ mod tests {
     use super::*;
     use crate::{
         config::Config,
+        identity_provider::users::authorize::{AuthorizedUser, authorize_user_mock},
         logging::testing::LogCapture,
-        persistence::{
-            user_sessions::save::save_session_mock,
-            users::authorize::{AuthorizedUser, authorize_user_mock},
-        },
+        persistence::user_sessions::save::save_session_mock,
         util::token::hash_token,
     };
 

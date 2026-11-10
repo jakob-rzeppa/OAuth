@@ -7,10 +7,8 @@ use axum::{
 
 use crate::{
     domain::authorization_code::openid::{has_openid_scope, has_profile_scope},
-    persistence::{
-        access_tokens::find_by_token_hash::find_access_token_by_token_hash,
-        users::find_by_id::find_user_by_id,
-    },
+    identity_provider::users::find_by_id::find_user_by_id,
+    persistence::access_tokens::find_by_token_hash::find_access_token_by_token_hash,
     security::cache_control::no_store,
     userinfo::{error_response::UserInfoErrorResponse, response::UserInfoResponse},
     util::token::hash_token,
@@ -81,10 +79,8 @@ mod tests {
     use crate::{
         domain::access_token::AccessToken,
         error::InternalError,
-        persistence::{
-            access_tokens::find_by_token_hash::find_access_token_by_token_hash_mock,
-            users::find_by_id::{User, find_user_by_id_mock},
-        },
+        identity_provider::users::find_by_id::{User, find_user_by_id_mock},
+        persistence::access_tokens::find_by_token_hash::find_access_token_by_token_hash_mock,
     };
     use axum::{http::HeaderValue, response::IntoResponse};
     use fnmock::predicate;

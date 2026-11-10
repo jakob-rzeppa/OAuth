@@ -97,7 +97,10 @@ pub fn router() -> Router {
 
 pub async fn jwks_endpoint() -> Response {
     (
-        [(header::CACHE_CONTROL, HeaderValue::from_static(CACHE_CONTROL))],
+        [(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static(CACHE_CONTROL),
+        )],
         Json(signing_key().jwks()),
     )
         .into_response()

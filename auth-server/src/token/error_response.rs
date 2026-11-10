@@ -23,18 +23,16 @@ impl From<TokenErrorResponse> for ApiError {
     fn from(error: TokenErrorResponse) -> Self {
         use TokenErrorResponse::*;
         match error {
-            InvalidRequestBody => ApiError::new(
-                OAuthErrorCode::InvalidRequest,
-                "Invalid request body.",
-            ),
+            InvalidRequestBody => {
+                ApiError::new(OAuthErrorCode::InvalidRequest, "Invalid request body.")
+            }
             InvalidClientId => ApiError::new(
                 OAuthErrorCode::InvalidRequest,
                 "The client_id parameter is missing or invalid.",
             ),
-            ClientNotFound => ApiError::new(
-                OAuthErrorCode::InvalidClient,
-                "The client was not found.",
-            ),
+            ClientNotFound => {
+                ApiError::new(OAuthErrorCode::InvalidClient, "The client was not found.")
+            }
             UnsupportedGrantType => ApiError::new(
                 OAuthErrorCode::UnsupportedGrantType,
                 "Unsupported grant type.",
@@ -43,10 +41,9 @@ impl From<TokenErrorResponse> for ApiError {
                 OAuthErrorCode::InvalidRequest,
                 "Missing authorization code.",
             ),
-            MissingCodeVerifier => ApiError::new(
-                OAuthErrorCode::InvalidRequest,
-                "Missing code verifier.",
-            ),
+            MissingCodeVerifier => {
+                ApiError::new(OAuthErrorCode::InvalidRequest, "Missing code verifier.")
+            }
             MalformedCodeVerifier => ApiError::new(
                 OAuthErrorCode::InvalidRequest,
                 "The code_verifier parameter is malformed.",
@@ -55,10 +52,9 @@ impl From<TokenErrorResponse> for ApiError {
                 OAuthErrorCode::InvalidGrant,
                 "Invalid or expired authorization code.",
             ),
-            InvalidCodeVerifier => ApiError::new(
-                OAuthErrorCode::InvalidGrant,
-                "Invalid code verifier.",
-            ),
+            InvalidCodeVerifier => {
+                ApiError::new(OAuthErrorCode::InvalidGrant, "Invalid code verifier.")
+            }
             ServerError(source) => ApiError::Server(source),
         }
     }

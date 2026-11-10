@@ -175,7 +175,10 @@ mod tests {
             authorize_params(response),
             vec![
                 ("client_id".to_string(), client_id.to_string()),
-                ("request_uri".to_string(), "x&client_id=other&foo=bar".to_string()),
+                (
+                    "request_uri".to_string(),
+                    "x&client_id=other&foo=bar".to_string()
+                ),
             ]
         );
     }

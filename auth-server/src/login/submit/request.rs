@@ -40,10 +40,7 @@ mod tests {
 
     #[tokio::test]
     async fn form_fails_when_a_field_is_missing() {
-        let request = form_request(
-            "application/x-www-form-urlencoded",
-            "user_name=alice",
-        );
+        let request = form_request("application/x-www-form-urlencoded", "user_name=alice");
 
         let form = LoginFormSubmitRequest::from_request(request, &()).await;
 

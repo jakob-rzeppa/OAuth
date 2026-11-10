@@ -10,11 +10,11 @@ use crate::{
 
 mod access_token;
 mod error_response;
+mod grant;
 mod id_token;
 mod pkce;
 mod request;
 mod response;
-mod grant;
 
 pub fn router() -> Router {
     Router::new()
@@ -261,7 +261,10 @@ mod tests {
 
         let result = token_endpoint(request).await;
 
-        assert!(matches!(result, Err(TokenErrorResponse::InvalidCodeVerifier)));
+        assert!(matches!(
+            result,
+            Err(TokenErrorResponse::InvalidCodeVerifier)
+        ));
         let log = capture.contents();
         assert!(log.contains("WARN"), "{log}");
         assert!(log.contains("code_verifier does not match"), "{log}");
@@ -338,7 +341,10 @@ mod tests {
             panic!("expected an error");
         };
 
-        assert!(matches!(error, TokenErrorResponse::MissingAuthorizationCode));
+        assert!(matches!(
+            error,
+            TokenErrorResponse::MissingAuthorizationCode
+        ));
         assert_eq!(error_code(error).await, "invalid_request");
     }
 

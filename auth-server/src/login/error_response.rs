@@ -15,10 +15,9 @@ pub enum LoginErrorResponse {
 impl From<LoginErrorResponse> for PageError {
     fn from(error: LoginErrorResponse) -> Self {
         match error {
-            LoginErrorResponse::MalformedRequest => PageError::new(
-                OAuthErrorCode::InvalidRequest,
-                "The request is malformed.",
-            ),
+            LoginErrorResponse::MalformedRequest => {
+                PageError::new(OAuthErrorCode::InvalidRequest, "The request is malformed.")
+            }
             LoginErrorResponse::InvalidReturnTo => PageError::new(
                 OAuthErrorCode::InvalidRequest,
                 "The return_to parameter is missing or is not a path on this server.",

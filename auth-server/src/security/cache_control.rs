@@ -17,13 +17,7 @@ pub async fn no_store(mut response: Response) -> Response {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::{
-        Router,
-        body::Body,
-        http::Request,
-        middleware::map_response,
-        routing::get,
-    };
+    use axum::{Router, body::Body, http::Request, middleware::map_response, routing::get};
     use tower::ServiceExt;
 
     #[tokio::test]

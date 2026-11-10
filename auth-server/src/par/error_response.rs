@@ -23,18 +23,16 @@ impl From<ParErrorResponse> for ApiError {
     fn from(error: ParErrorResponse) -> Self {
         use ParErrorResponse::*;
         match error {
-            InvalidRequestBody => ApiError::new(
-                OAuthErrorCode::InvalidRequest,
-                "Invalid request body.",
-            ),
+            InvalidRequestBody => {
+                ApiError::new(OAuthErrorCode::InvalidRequest, "Invalid request body.")
+            }
             InvalidClientId => ApiError::new(
                 OAuthErrorCode::InvalidRequest,
                 "The client_id parameter is missing or invalid.",
             ),
-            ClientNotFound => ApiError::new(
-                OAuthErrorCode::InvalidClient,
-                "The client was not found.",
-            ),
+            ClientNotFound => {
+                ApiError::new(OAuthErrorCode::InvalidClient, "The client was not found.")
+            }
             InvalidAuthorizationRequest { code, description } => ApiError::new(code, description),
             ServerError(source) => ApiError::Server(source),
         }

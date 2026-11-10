@@ -33,10 +33,9 @@ impl IntoResponse for AuthorizeErrorPage {
         use AuthorizeErrorPage::*;
         let error = match self {
             LoginRequired(redirect) => return redirect.into_response(),
-            MalformedRequest => PageError::new(
-                OAuthErrorCode::InvalidRequest,
-                "The request is malformed.",
-            ),
+            MalformedRequest => {
+                PageError::new(OAuthErrorCode::InvalidRequest, "The request is malformed.")
+            }
             MissingClientId => PageError::new(
                 OAuthErrorCode::InvalidRequest,
                 "The client_id parameter is missing.",

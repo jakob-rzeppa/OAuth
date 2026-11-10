@@ -2,8 +2,7 @@ use crate::{
     authorize::{
         error_page::AuthorizeErrorPage,
         submit::{
-            error_response::AuthorizeSubmitErrorResponse,
-            request::AuthorizeSubmitRequest,
+            error_response::AuthorizeSubmitErrorResponse, request::AuthorizeSubmitRequest,
             response::AuthorizeSubmitResponse,
         },
     },
@@ -11,12 +10,12 @@ use crate::{
     domain::authorization_code::{
         code::AuthorizationCode, request::validate::ValidatedAuthorizationRequest,
     },
+    error::redirect::RedirectError,
     persistence::{
         authorization_codes::save::save_authorization_code, clients::find_by_id::find_client_by_id,
         pars::take::take_par,
     },
     security::require_login::require_login,
-    error::redirect::RedirectError,
     session::SessionToken,
     util::{oauth_error::OAuthErrorCode, token::random_token},
 };

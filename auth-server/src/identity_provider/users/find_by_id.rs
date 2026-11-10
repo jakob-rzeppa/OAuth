@@ -1,7 +1,9 @@
 use serde::Deserialize;
 use uuid::Uuid;
 
-use crate::{config::Config, error::InternalError, security::issue_self_token::issue_self_token};
+use crate::{
+    config::Config, error::InternalError, identity_provider::self_token::issue_self_token,
+};
 
 /// The profile data of a user, as far as the auth-server needs it.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -73,7 +75,7 @@ mod tests {
     use tokio::net::TcpListener;
 
     use super::*;
-    use crate::security::issue_self_token::issue_self_token_fake;
+    use crate::identity_provider::self_token::issue_self_token_fake;
 
     const SELF_TOKEN: &str = "the-self-token";
 
@@ -86,16 +88,18 @@ mod tests {
     async fn identity_provider(status: StatusCode, body: Value) -> String {
         let app = Router::new().route(
             "/v1/users/{user_id}",
-            get(move |headers: HeaderMap, Path(_): Path<String>| async move {
-                // Check that the self token was sent.
-                if status.is_success() {
-                    assert_eq!(
-                        headers.get(header::AUTHORIZATION).unwrap(),
-                        &format!("Bearer {SELF_TOKEN}")
-                    );
-                }
-                (status, Json(body))
-            }),
+            get(
+                move |headers: HeaderMap, Path(_): Path<String>| async move {
+                    // Check that the self token was sent.
+                    if status.is_success() {
+                        assert_eq!(
+                            headers.get(header::AUTHORIZATION).unwrap(),
+                            &format!("Bearer {SELF_TOKEN}")
+                        );
+                    }
+                    (status, Json(body))
+                },
+            ),
         );
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
