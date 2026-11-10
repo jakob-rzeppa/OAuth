@@ -15,6 +15,7 @@ mod logging;
 mod persistence;
 mod security;
 mod session;
+mod signing_key;
 mod tls;
 mod util;
 
@@ -24,7 +25,7 @@ async fn main() {
 
     tracing::info!("application starting");
     Config::init();
-    endpoints::jwks::init();
+    signing_key::init();
     let app = app();
 
     // Specify the address to bind to (0.0.0.0 to listen on all interfaces)

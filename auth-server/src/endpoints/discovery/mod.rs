@@ -10,7 +10,7 @@ use serde::Serialize;
 use crate::{
     config::Config,
     domain::authorization_code::openid::{OPENID_SCOPE, PROFILE_SCOPE},
-    endpoints::jwks::SIGNING_ALGORITHM,
+    signing_key::SIGNING_ALGORITHM,
 };
 
 /// The metadata only changes with a deployment, so clients may cache it like the key set.

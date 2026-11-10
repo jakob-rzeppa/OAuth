@@ -4,7 +4,7 @@ use uuid::Uuid;
 
 use crate::{
     config::Config, domain::authorization_code::code::AuthorizationCode, error::InternalError,
-    endpoints::jwks::signing_key,
+    signing_key::signing_key,
 };
 
 /// The claims of an OpenID Connect ID token (OpenID Connect Core 1.0, section 2).
@@ -53,7 +53,7 @@ pub(super) fn generate_id_token(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::endpoints::jwks::{TEST_SIGNING_KEY, signing_key_fake};
+    use crate::signing_key::{TEST_SIGNING_KEY, signing_key_fake};
     use jsonwebtoken::{Algorithm, DecodingKey, Validation};
 
     const ISSUER: &str = "https://auth.example.com";

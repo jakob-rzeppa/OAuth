@@ -10,7 +10,7 @@ use axum::Router;
 mod authorize;
 mod discovery;
 mod introspection;
-pub mod jwks;
+mod jwks;
 mod login;
 mod par;
 mod token;
